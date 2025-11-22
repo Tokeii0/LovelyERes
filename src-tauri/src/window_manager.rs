@@ -167,7 +167,7 @@ impl WindowManager {
         label: &str,
         icon_path: &str,
     ) -> Result<(), String> {
-        if let Some(window) = app.get_webview_window(label) {
+        if let Some(_window) = app.get_webview_window(label) {
             // 注释掉图标设置，因为 API 已更改
             // let icon = tauri::Icon::File(std::path::PathBuf::from(icon_path));
             // window.set_icon(icon).map_err(|e| format!("设置窗口图标失败: {}", e))?;

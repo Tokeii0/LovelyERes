@@ -1644,6 +1644,9 @@ export class ModernUIRenderer {
                             ${FileText({ theme: 'outline', size: '14', fill: 'currentColor' })}
                         </div>
                     </div>
+                    <button type="button" class="modern-btn secondary" style="padding: 0 12px;" onclick="window.selectPrivateKeyFile()" title="选择文件">
+                        ${FolderOpen({ theme: 'outline', size: '16', fill: 'currentColor' })}
+                    </button>
                 </div>
               </div>
               <div class="form-group">
@@ -1714,28 +1717,37 @@ export class ModernUIRenderer {
           <div class="form-actions" style="
             display: flex;
             gap: var(--spacing-md);
-            justify-content: flex-end;
+            justify-content: space-between;
             margin-top: var(--spacing-xl);
             padding-top: var(--spacing-lg);
             border-top: 1px solid var(--border-color);
           ">
-            <button type="button" class="cancel-btn modern-btn secondary" style="
+            <button type="button" id="test-connection-btn" class="modern-btn secondary" style="
               padding: 10px 20px;
               font-size: 13px;
-              width: 100px;
               justify-content: center;
-            " onclick="window.hideAddServerForm()">
-              取消
+            " onclick="window.testConnection()">
+              测试连接
             </button>
-            <button type="submit" class="save-btn modern-btn primary" style="
-              padding: 10px 24px;
-              font-size: 13px;
-              width: 120px;
-              justify-content: center;
-              box-shadow: 0 4px 12px var(--primary-color-alpha-30);
-            ">
-              保存配置
-            </button>
+            <div style="display: flex; gap: var(--spacing-md);">
+              <button type="button" class="cancel-btn modern-btn secondary" style="
+                padding: 10px 20px;
+                font-size: 13px;
+                width: 100px;
+                justify-content: center;
+              " onclick="window.hideAddServerForm()">
+                取消
+              </button>
+              <button type="submit" class="save-btn modern-btn primary" style="
+                padding: 10px 24px;
+                font-size: 13px;
+                width: 120px;
+                justify-content: center;
+                box-shadow: 0 4px 12px var(--primary-color-alpha-30);
+              ">
+                保存配置
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -1756,7 +1768,7 @@ export class ModernUIRenderer {
           
           <div class="prompt-header-content">
             <h2 class="prompt-title">Welcome to Lovely<span class="luxe-text">Res</span></h2>
-            <p class="prompt-subtitle">专业的 Linux 应急响应与管理工具</p>
+            <p class="prompt-subtitle">Linux 应急响应与管理工具</p>
           </div>
 
           <div class="prompt-actions-container">
@@ -1769,7 +1781,7 @@ export class ModernUIRenderer {
                <button class="modern-btn secondary" onclick="window.showSettingsOverlay()" title="设置">
                  ${SettingTwo({ theme: 'outline', size: '16', fill: 'currentColor' })} 设置
                </button>
-               <button class="modern-btn secondary" onclick="window.open('https://github.com/tokeii/LovelyRes', '_blank')" title="帮助文档">
+               <button class="modern-btn secondary" onclick="window.open('https://github.com/tokeii0/LovelyERes', '_blank')" title="帮助文档">
                  ${BookOpen({ theme: 'outline', size: '16', fill: 'currentColor' })} 文档
                </button>
             </div>
@@ -2566,7 +2578,7 @@ export class ModernUIRenderer {
         </div>
 
         <div class="status-right">
-          <span>LovelyRes v0.52</span>
+          <span>LovelyRes v0.53</span>
         </div>
       </div>
     `;

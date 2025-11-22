@@ -306,7 +306,7 @@ impl SSHDebugger {
         }
 
         // Check stale sessions
-        let now = Instant::now();
+        let _now = Instant::now();
         for (session_id, stats) in session_stats.iter() {
             if stats.last_activity.elapsed() > Duration::from_secs(300) { // 5 minutes
                 warnings.push(format!("Session {} appears stale (no activity for {:.1}s)", 

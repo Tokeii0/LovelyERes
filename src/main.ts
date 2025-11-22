@@ -154,115 +154,6 @@ import { FileContextMenu } from './modules/ui/fileContextMenu';
 // 移除旧的SSH连接状态变量，现在由模块化管理器处理
 
 /**
- * 应用认证守卫到所有功能
- */
-import { authGuard } from './modules/auth/authGuard';
-
-function applyAuthGuard() {
-  // 延迟执行，确保 DOM 已渲染
-  setTimeout(() => {
-    console.log('🔒 开始应用认证守卫...');
-
-    // 保护所有导航按钮（排除用户相关按钮）
-    const navButtons = document.querySelectorAll<HTMLElement>('.nav-btn, .nav-item');
-    console.log(`找到 ${navButtons.length} 个导航按钮`);
-    navButtons.forEach(btn => {
-      // 不保护用户头像和主题切换按钮
-      if (!btn.classList.contains('user-avatar-btn') &&
-        !btn.classList.contains('theme-toggle-btn')) {
-        authGuard.protectElement(btn, '请先登录以使用此功能');
-        console.log('保护导航按钮:', btn.textContent?.trim());
-      }
-    });
-
-    // 保护所有操作按钮（排除用户相关按钮）
-    const modernButtons = document.querySelectorAll<HTMLElement>('.modern-btn');
-    console.log(`找到 ${modernButtons.length} 个操作按钮`);
-    modernButtons.forEach(btn => {
-      // 不保护主题切换、用户头像、登录/注册相关按钮
-      if (!btn.classList.contains('theme-toggle-btn') &&
-        !btn.classList.contains('user-avatar-btn') &&
-        !btn.id.includes('login') &&
-        !btn.id.includes('register') &&
-        !btn.closest('.user-dropdown') &&
-        !btn.closest('#login-modal')) {
-        authGuard.protectElement(btn, '请先登录以使用此功能');
-        console.log('保护操作按钮:', btn.textContent?.trim());
-      }
-    });
-
-    // 保护特定功能按钮
-    const protectedSelectors = [
-      '[onclick*="showSSHConnectionDialog"]',
-      '[onclick*="openSSHTerminalWindow"]',
-      '[onclick*="sftpRefresh"]',
-      '[onclick*="sftpOpenUpload"]',
-      '[onclick*="sftpOpenCreateFolder"]',
-      '[onclick*="showSettingsOverlay"]',
-      '[onclick*="showServerModal"]',  // 保护服务器管理
-      '[onclick*="showAddServerForm"]',  // 保护添加服务器
-      '[onclick*="connectServer"]',  // 保护连接服务器
-      '[onclick*="toggleConnectionDropdown"]',  // 保护连接下拉菜单
-    ];
-
-    protectedSelectors.forEach(selector => {
-      const elements = document.querySelectorAll<HTMLElement>(selector);
-      console.log(`选择器 ${selector} 找到 ${elements.length} 个元素`);
-      elements.forEach(el => {
-        // 确保不是用户相关的元素
-        if (!el.closest('.user-dropdown') && !el.closest('#login-modal')) {
-          authGuard.protectElement(el, '请先登录以使用此功能');
-          console.log('保护特定按钮:', el.textContent?.trim());
-        }
-      });
-    });
-
-    // 保护全局函数
-    const originalShowServerModal = (window as any).showServerModal;
-    if (originalShowServerModal) {
-      (window as any).showServerModal = function () {
-        if (authGuard.requireAuth('请先登录以管理服务器')) {
-          return originalShowServerModal.apply(this, arguments);
-        }
-      };
-      console.log('保护全局函数: showServerModal');
-    }
-
-    const originalShowAddServerForm = (window as any).showAddServerForm;
-    if (originalShowAddServerForm) {
-      (window as any).showAddServerForm = function () {
-        if (authGuard.requireAuth('请先登录以添加服务器')) {
-          return originalShowAddServerForm.apply(this, arguments);
-        }
-      };
-      console.log('保护全局函数: showAddServerForm');
-    }
-
-    const originalConnectServer = (window as any).connectServer;
-    if (originalConnectServer) {
-      (window as any).connectServer = function () {
-        if (authGuard.requireAuth('请先登录以连接服务器')) {
-          return originalConnectServer.apply(this, arguments);
-        }
-      };
-      console.log('保护全局函数: connectServer');
-    }
-
-    const originalToggleConnectionDropdown = (window as any).toggleConnectionDropdown;
-    if (originalToggleConnectionDropdown) {
-      (window as any).toggleConnectionDropdown = function () {
-        if (authGuard.requireAuth('请先登录以查看服务器列表')) {
-          return originalToggleConnectionDropdown.apply(this, arguments);
-        }
-      };
-      console.log('保护全局函数: toggleConnectionDropdown');
-    }
-
-    console.log('✅ 认证守卫已应用到所有功能');
-  }, 1000); // 增加延迟时间，确保 DOM 完全渲染
-}
-
-/**
  * 应用初始化
  */
 // 通知动画样式已移除
@@ -398,9 +289,6 @@ async function initializeApp() {
     // 初始化设置管理器
     await settingsManager.initialize();
 
-    // 应用认证守卫到所有功能
-    console.log('🔒 应用认证守卫...');
-    applyAuthGuard();
 
     // 将管理器暴露到全局，供HTML调用
     (window as any).remoteOperationsManager = remoteOperationsManager;
@@ -2146,47 +2034,114 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
     try {
       console.log('🔌 断开服务器连接:', serverId);
 
-      // 触发断开连接卡片翻转动画
-      const connectionCard = document.querySelector('.connection-card');
-      if (connectionCard) {
-        connectionCard.classList.add('status-change');
-        setTimeout(() => {
-          connectionCard.classList.remove('status-change');
-        }, 600);
-      }
-
       const sshManager = (window as any).app?.sshManager;
       if (sshManager) {
-        const connection = sshManager.getConnection(serverId);
-        if (connection) {
-          // 同步断开所有连接通道
-          await sshManager.disconnect();
-          await sshConnectionManager.disconnect();
-
-          // 更新应用状态
-          if (app) {
-            app.getStateManager().setConnected(false);
-          }
-
-          // 刷新UI
-          const cache = (window as any).systemInfoCache;
-          if (cache) {
-            cache.detailedInfo = null;
-            cache.lastUpdate = null;
-            cache.isLoading = false;
-          }
-          (window as any).stopDashboardAutoRefresh?.();
-          (window as any).refreshServerList();
-          (window as any).refreshSidebar();
-          (window as any).refreshDashboard();
-
-          console.log('✅ 服务器断开成功');
-        }
+        await sshManager.disconnect(serverId);
+        console.log('✅ 服务器已断开连接');
+        
+        // 更新UI
+        (window as any).refreshServerList();
+        (window as any).refreshSidebar();
+        (window as any).refreshDashboard();
+        (window as any).showNotification('服务器已断开连接', 'info');
       } else {
         console.error('❌ SSH管理器未初始化');
       }
     } catch (error) {
       console.error('❌ 断开服务器失败:', error);
+      (window as any).showNotification(`断开连接失败: ${error}`, 'error');
+    }
+  };
+
+  // 测试连接
+  (window as any).testConnection = async () => {
+    const form = document.getElementById('add-server-form-element') as HTMLFormElement;
+    if (!form) return;
+
+    const formData = new FormData(form);
+    const host = formData.get('host') as string;
+    const port = parseInt(formData.get('port') as string);
+    const username = formData.get('username') as string;
+    const authType = formData.get('authType') as string;
+    const password = formData.get('password') as string;
+    const keyPath = formData.get('keyPath') as string;
+    const keyPassphrase = formData.get('keyPassphrase') as string;
+
+    if (!host || !username) {
+      (window as any).showNotification('请填写主机地址和用户名', 'warning');
+      return;
+    }
+
+    // 显示加载状态
+    const testBtn = document.getElementById('test-connection-btn');
+    const originalText = testBtn ? testBtn.innerHTML : '测试连接';
+    if (testBtn) {
+      testBtn.innerHTML = '连接中...';
+      (testBtn as HTMLButtonElement).disabled = true;
+    }
+
+    try {
+      console.log('🔄 测试连接中...');
+      console.log('连接参数:', { host, port, username, authType, hasPassword: !!password, hasKeyPath: !!keyPath });
+      
+      const result = await (window as any).__TAURI__.core.invoke('ssh_test_connection', {
+        host,
+        port,
+        username,
+        authType,
+        password: password || null,
+        keyPath: keyPath || null,
+        keyPassphrase: keyPassphrase || null,
+        certificatePath: null
+      });
+
+      console.log('测试连接结果:', result);
+      
+      if (result) {
+        (window as any).showNotification('✅ 连接测试成功', 'success');
+      } else {
+        (window as any).showNotification('❌ 连接测试失败', 'error');
+      }
+    } catch (error) {
+      console.error('测试连接失败:', error);
+      (window as any).showNotification(`连接测试失败: ${error}`, 'error');
+    } finally {
+      // 恢复按钮状态
+      if (testBtn) {
+        testBtn.innerHTML = originalText;
+        (testBtn as HTMLButtonElement).disabled = false;
+      }
+    }
+  };
+
+  // 选择私钥文件
+  (window as any).selectPrivateKeyFile = async () => {
+    try {
+      if (!(window as any).__TAURI__?.dialog) {
+        (window as any).showNotification('文件选择功能不可用', 'error');
+        return;
+      }
+      
+      const selected = await (window as any).__TAURI__.dialog.open({
+        multiple: false,
+        filters: [{
+          name: 'SSH Key',
+          extensions: ['pem', 'ppk', 'key', 'id_rsa', 'id_ed25519']
+        }]
+      });
+
+      if (selected) {
+        const input = document.querySelector('input[name="keyPath"]') as HTMLInputElement;
+        if (input) {
+          input.value = selected as string;
+        }
+        
+        // 如果是在额外账号中
+        // 这里简化处理，目前只支持主表单的文件选择
+      }
+    } catch (error) {
+      console.error('选择文件失败:', error);
+      (window as any).showNotification('选择文件失败: ' + error, 'error');
     }
   };
 

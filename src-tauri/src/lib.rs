@@ -626,6 +626,12 @@ async fn ssh_test_connection(
     key_passphrase: Option<String>,
     certificate_path: Option<String>,
 ) -> Result<bool, String> {
+    println!("🔍 [ssh_test_connection] 开始测试连接:");
+    println!("  Host: {}", host);
+    println!("  Port: {}", port);
+    println!("  Username: {}", username);
+    println!("  Auth Type: {}", auth_type);
+    
     let account = types::SSHAccountCredential {
         username: username.clone(),
         auth_type: auth_type.clone(),
@@ -655,8 +661,16 @@ async fn ssh_test_connection(
         tags: None,
     };
 
-    ssh_client::SSHClient::test_connection(&connection, password.as_deref())
-        .map_err(|e| e.to_string())
+    match ssh_client::SSHClient::test_connection(&connection, password.as_deref()) {
+        Ok(success) => {
+            println!("✅ [ssh_test_connection] 测试结果: {}", success);
+            Ok(success)
+        }
+        Err(e) => {
+            println!("❌ [ssh_test_connection] 测试失败: {}", e);
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]

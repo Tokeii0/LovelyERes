@@ -124,7 +124,7 @@ impl SSHManager {
     ) -> LovelyResResult<()> {
         use std::net::{TcpStream, ToSocketAddrs, SocketAddr};
 
-        let connect_start = std::time::Instant::now();
+        let _connect_start = std::time::Instant::now();
         println!("[SSH] 开始建立SSH连接到 {}@{}:{}", username, host, port);
 
         // 建立TCP连接 - 使用改进的地址解析策略
@@ -189,7 +189,7 @@ impl SSHManager {
         };
 
         // 设置TCP_NODELAY以减少延迟
-        let nodelay_start = std::time::Instant::now();
+        let _nodelay_start = std::time::Instant::now();
         let _ = tcp.set_nodelay(true);
         //println!("[PERF] TCP_NODELAY设置耗时: {:?}", nodelay_start.elapsed());
 
@@ -197,36 +197,36 @@ impl SSHManager {
         let tcp_clone = tcp.try_clone().ok();
 
         // 创建SSH会话
-        let session_start = std::time::Instant::now();
+        let _session_start = std::time::Instant::now();
         let mut session = Session::new()
             .map_err(|e| LovelyResError::ConnectionError(format!("创建SSH会话失败: {}", e)))?;
         //println!("[PERF] SSH会话创建耗时: {:?}", session_start.elapsed());
 
-        let stream_start = std::time::Instant::now();
+        let _stream_start = std::time::Instant::now();
         session.set_tcp_stream(tcp);
         //println!("[PERF] 设置TCP流耗时: {:?}", stream_start.elapsed());
 
         // 记录 TCP 副本
         self.current_tcp = tcp_clone;
 
-        let handshake_start = std::time::Instant::now();
+        let _handshake_start = std::time::Instant::now();
         session
             .handshake()
             .map_err(|e| LovelyResError::ConnectionError(format!("SSH握手失败: {}", e)))?;
         //println!("[PERF] SSH握手耗时: {:?}", handshake_start.elapsed());
 
         // 完全禁用 keepalive，避免干扰快速输入
-        let keepalive_start = std::time::Instant::now();
+        let _keepalive_start = std::time::Instant::now();
         let _ = session.set_keepalive(false, 0);
         //println!("[PERF] Keepalive禁用耗时: {:?}", keepalive_start.elapsed());
 
         // 设置SSH会话超时时间为0（完全禁用超时）
-        let timeout_start = std::time::Instant::now();
+        let _timeout_start = std::time::Instant::now();
         session.set_timeout(0);
         //println!("[PERF] SSH超时禁用耗时: {:?}", timeout_start.elapsed());
 
         // 用户名密码认证
-        let auth_start = std::time::Instant::now();
+        let _auth_start = std::time::Instant::now();
         session
             .userauth_password(username, password)
             .map_err(|e| LovelyResError::AuthenticationError(format!("SSH认证失败: {}", e)))?;
@@ -2585,9 +2585,9 @@ impl SSHManager {
 
             let mut ch = channel; // 拿到独占的通道用于读写
             let mut buf = [0u8; 8192];
-            let mut error_count = 0;
-            let max_errors = 50; // 进一步放宽最大连续错误次数，特别是对超时错误
-            let mut last_error_time = std::time::Instant::now();
+            let _error_count = 0;
+            let _max_errors = 50; // 进一步放宽最大连续错误次数，特别是对超时错误
+            let _last_error_time = std::time::Instant::now();
 
             // 非阻塞写入函数 - 分块写入并处理WouldBlock
             let write_all_nonblocking = |channel: &mut ssh2::Channel, data: &[u8]| -> std::io::Result<()> {

@@ -307,7 +307,7 @@ impl SSHThreadManager {
             let mut threads_guard = threads.write().unwrap();
             for thread_id in stale_threads {
                 if let Some(thread_arc) = threads_guard.remove(&thread_id) {
-                    if let Ok(mut terminal_thread) = thread_arc.try_lock() {
+                    if let Ok(terminal_thread) = thread_arc.try_lock() {
                         terminal_thread.signal_shutdown();
                         terminal_thread.set_state(TerminalThreadState::Stopped);
                     }

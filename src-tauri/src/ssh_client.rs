@@ -2,7 +2,7 @@
 // 负责实际的SSH连接和命令执行
 
 use crate::types::{LovelyResError, LovelyResResult, SSHConnection};
-use ssh2::Session;
+use ssh2::{Session, MethodType};
 use std::io::prelude::*;
 use std::net::TcpStream;
 use std::path::Path;
@@ -47,6 +47,33 @@ impl SSHClient {
         // 创建SSH会话
         let mut session = Session::new()
             .map_err(|e| LovelyResError::SSHError(format!("创建SSH会话失败: {}", e)))?;
+
+        // 配置支持的算法以提高兼容性，解决 "Unable to exchange encryption keys" 错误
+        // 显式启用旧算法和新算法
+        let _ = session.method_pref(
+            MethodType::Kex,
+            "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1,diffie-hellman-group-exchange-sha1"
+        );
+        let _ = session.method_pref(
+            MethodType::HostKey,
+            "ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa,ssh-dss"
+        );
+        let _ = session.method_pref(
+            MethodType::CryptCs,
+            "chacha20-poly1305@openssh.com,aes128-gcm@openssh.com,aes256-gcm@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-cbc,aes192-cbc,aes256-cbc,3des-cbc,blowfish-cbc,cast128-cbc,arcfour,arcfour128"
+        );
+        let _ = session.method_pref(
+            MethodType::CryptSc,
+            "chacha20-poly1305@openssh.com,aes128-gcm@openssh.com,aes256-gcm@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-cbc,aes192-cbc,aes256-cbc,3des-cbc,blowfish-cbc,cast128-cbc,arcfour,arcfour128"
+        );
+        let _ = session.method_pref(
+            MethodType::MacCs,
+            "hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1,hmac-md5,hmac-sha1-96,hmac-md5-96,hmac-ripemd160,hmac-ripemd160@openssh.com"
+        );
+        let _ = session.method_pref(
+            MethodType::MacSc,
+            "hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1,hmac-md5,hmac-sha1-96,hmac-md5-96,hmac-ripemd160,hmac-ripemd160@openssh.com"
+        );
 
         session.set_tcp_stream(tcp);
         session
@@ -123,13 +150,19 @@ impl SSHClient {
         connection: &SSHConnection,
         password: Option<&str>,
     ) -> LovelyResResult<bool> {
+        println!("🔄 开始测试SSH连接: {}@{}:{}", connection.username, connection.host, connection.port);
+        
         let mut client = SSHClient::new();
         match client.connect(connection, password) {
             Ok(_) => {
+                println!("✅ SSH连接测试成功");
                 client.disconnect();
                 Ok(true)
             }
-            Err(_) => Ok(false),
+            Err(e) => {
+                println!("❌ SSH连接测试失败: {}", e);
+                Ok(false)
+            }
         }
     }
 

@@ -321,7 +321,7 @@ impl ThemeManager {
     /// 获取主题的对比色
     pub fn get_contrast_color(theme_name: &str, color_key: &str) -> Option<String> {
         let theme_config = Self::get_theme_config(theme_name)?;
-        let color = theme_config.colors.get(color_key)?;
+        let _color = theme_config.colors.get(color_key)?;
 
         // 简单的对比色计算（这里可以实现更复杂的算法）
         if theme_config.is_dark {

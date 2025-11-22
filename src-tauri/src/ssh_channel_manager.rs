@@ -2,7 +2,6 @@ use ssh2::{Channel, Session};
 use std::sync::{Arc, Mutex, RwLock};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use std::io::Write;
 use crate::types::{LovelyResResult, LovelyResError};
 
 /// SSH Channel state tracking
@@ -149,11 +148,11 @@ impl SSHChannelManager {
     }
 
     /// Safe write operation with state validation
-    pub fn safe_write(&self, session_id: &str, data: &[u8]) -> LovelyResResult<usize> {
+    pub fn safe_write(&self, session_id: &str, _data: &[u8]) -> LovelyResResult<usize> {
         // Validate channel state first
         self.validate_channel_for_write(session_id)?;
 
-        if let Some(managed_channel) = self.get_channel(session_id) {
+        if let Some(_managed_channel) = self.get_channel(session_id) {
             // We need to get a mutable reference to the channel
             // Since we can't get a mutable reference through Arc, we'll need to restructure this
             // For now, let's return an error indicating this needs to be handled differently

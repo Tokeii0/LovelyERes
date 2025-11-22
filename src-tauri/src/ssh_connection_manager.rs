@@ -65,7 +65,7 @@ impl SSHConnectionManager {
             }
         }
 
-        println!("✅ 成功加载 {} 个SSH连接配置", connections.len());
+        //println!("✅ 成功加载 {} 个SSH连接配置", connections.len());
         Ok(connections)
     }
 
