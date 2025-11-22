@@ -13,8 +13,17 @@ import {
   Robot,
   ListBottom,
   Caution,
-  Stopwatch
+  Stopwatch,
+  Code
 } from '@icon-park/svg';
+
+// 评分规则常量
+const SCORING_RULES = {
+  CRITICAL_DEDUCTION: 40,
+  HIGH_DEDUCTION: 20,
+  MEDIUM_DEDUCTION: 10,
+  LOW_DEDUCTION: 5
+};
 
 // 检测项目类型
 export interface DetectionItem {
@@ -34,6 +43,7 @@ export interface DetectionResult {
   findings: Finding[];
   duration: number; // 执行时间（毫秒）
   timestamp: Date;
+  rawOutput?: any; // 原始命令返回结果
 }
 
 // 检测发现
@@ -308,7 +318,8 @@ export class QuickDetectionManager {
         severity,
         findings,
         duration: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        rawOutput: scanResult
       };
     } catch (error) {
       console.error('端口扫描失败:', error);
@@ -371,7 +382,8 @@ export class QuickDetectionManager {
         severity,
         findings,
         duration: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        rawOutput: auditResult
       };
     } catch (error) {
       console.error('用户审计失败:', error);
@@ -446,7 +458,8 @@ export class QuickDetectionManager {
         severity,
         findings,
         duration: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        rawOutput: scanResult
       };
     } catch (error) {
       console.error('后门检测失败:', error);
@@ -498,7 +511,8 @@ export class QuickDetectionManager {
         severity,
         findings,
         duration: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        rawOutput: analysisResult
       };
     } catch (error) {
       console.error('进程分析失败:', error);
@@ -545,7 +559,8 @@ export class QuickDetectionManager {
         severity,
         findings,
         duration: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        rawOutput: checkResult
       };
     } catch (error) {
       console.error('文件权限检测失败:', error);
@@ -604,7 +619,8 @@ export class QuickDetectionManager {
         severity,
         findings,
         duration: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        rawOutput: auditResult
       };
     } catch (error) {
       console.error('SSH 审计失败:', error);
@@ -652,7 +668,8 @@ export class QuickDetectionManager {
         severity,
         findings,
         duration: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        rawOutput: analysisResult
       };
     } catch (error) {
       console.error('日志分析失败:', error);
@@ -700,7 +717,8 @@ export class QuickDetectionManager {
         severity,
         findings,
         duration: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        rawOutput: checkResult
       };
     } catch (error) {
       console.error('防火墙检查失败:', error);
@@ -730,7 +748,8 @@ export class QuickDetectionManager {
         severity: 'info',
         findings,
         duration: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        rawOutput: testResult
       };
     } catch (error) {
       console.error('CPU 测试失败:', error);
@@ -760,7 +779,8 @@ export class QuickDetectionManager {
         severity: 'info',
         findings,
         duration: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        rawOutput: testResult
       };
     } catch (error) {
       console.error('内存测试失败:', error);
@@ -790,7 +810,8 @@ export class QuickDetectionManager {
         severity: 'info',
         findings,
         duration: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        rawOutput: testResult
       };
     } catch (error) {
       console.error('磁盘测试失败:', error);
@@ -820,7 +841,8 @@ export class QuickDetectionManager {
         severity: 'info',
         findings,
         duration: 0,
-        timestamp: new Date()
+        timestamp: new Date(),
+        rawOutput: testResult
       };
     } catch (error) {
       console.error('网络测试失败:', error);
@@ -1017,16 +1039,16 @@ export class QuickDetectionManager {
         // 根据严重程度扣分
         switch (issue.severity) {
           case 'critical':
-            score -= 25;
+            score -= SCORING_RULES.CRITICAL_DEDUCTION;
             break;
           case 'high':
-            score -= 15;
+            score -= SCORING_RULES.HIGH_DEDUCTION;
             break;
           case 'medium':
-            score -= 10;
+            score -= SCORING_RULES.MEDIUM_DEDUCTION;
             break;
           case 'low':
-            score -= 5;
+            score -= SCORING_RULES.LOW_DEDUCTION;
             break;
         }
       });
@@ -1038,7 +1060,8 @@ export class QuickDetectionManager {
       severity: findings.length > 0 ? findings[0].severity : 'info',
       findings,
       duration: 0,
-      timestamp: new Date()
+      timestamp: new Date(),
+      rawOutput: result
     };
   }
 
@@ -1071,16 +1094,16 @@ export class QuickDetectionManager {
     findings.forEach(finding => {
       switch (finding.severity) {
         case 'critical':
-          deduction += 25;
+          deduction += SCORING_RULES.CRITICAL_DEDUCTION;
           break;
         case 'high':
-          deduction += 15;
+          deduction += SCORING_RULES.HIGH_DEDUCTION;
           break;
         case 'medium':
-          deduction += 8;
+          deduction += SCORING_RULES.MEDIUM_DEDUCTION;
           break;
         case 'low':
-          deduction += 3;
+          deduction += SCORING_RULES.LOW_DEDUCTION;
           break;
         case 'info':
           deduction += 0;
@@ -1094,14 +1117,29 @@ export class QuickDetectionManager {
   /**
    * 工具方法：计算总体评分
    */
+  /**
+   * 工具方法：计算总体评分
+   */
   private calculateOverallScore(report: DetectionReport): number {
     if (report.items.length === 0) return 0;
+
+    // 检查是否有严重问题
+    const hasCriticalIssues = report.items.some(item =>
+      item.result?.findings.some(f => f.severity === 'critical')
+    );
 
     const totalScore = report.items.reduce((sum, item) => {
       return sum + (item.result?.score || 0);
     }, 0);
 
-    return Math.round(totalScore / report.items.length);
+    let overallScore = Math.round(totalScore / report.items.length);
+
+    // 如果有严重问题，总分不能超过 60 分
+    if (hasCriticalIssues && overallScore > 60) {
+      overallScore = 60;
+    }
+
+    return overallScore;
   }
 
   /**
@@ -1667,8 +1705,8 @@ export class QuickDetectionManager {
     const statusIcon = item.status === 'completed'
       ? CheckOne({ theme: 'outline', size: '16', fill: statusColor })
       : item.status === 'failed'
-      ? CloseOne({ theme: 'outline', size: '16', fill: statusColor })
-      : Time({ theme: 'outline', size: '16', fill: statusColor });
+        ? CloseOne({ theme: 'outline', size: '16', fill: statusColor })
+        : Time({ theme: 'outline', size: '16', fill: statusColor });
 
     let html = `
       <div style="
@@ -1682,9 +1720,22 @@ export class QuickDetectionManager {
             <span style="color: ${statusColor}; font-size: 16px;">${statusIcon}</span>
             <span style="font-weight: 500; color: var(--text-primary);">${item.name}</span>
           </div>
-          <span style="font-size: 14px; font-weight: 600; color: ${statusColor};">
-            ${item.result ? `${item.result.score}分` : '未完成'}
-          </span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            ${item.result?.rawOutput ? `
+              <button 
+                class="modern-btn secondary" 
+                style="font-size: 12px; padding: 4px 8px; height: 24px;"
+                onclick="window.quickDetection?.showRawOutput('${item.id}')"
+                title="查看原始结果"
+              >
+                ${Code({ theme: 'outline', size: '14', fill: 'currentColor' })}
+                <span style="margin-left: 4px;">详情</span>
+              </button>
+            ` : ''}
+            <span style="font-size: 14px; font-weight: 600; color: ${statusColor};">
+              ${item.result ? `${item.result.score}分` : '未完成'}
+            </span>
+          </div>
         </div>
     `;
 
@@ -1694,7 +1745,7 @@ export class QuickDetectionManager {
       item.result.findings.forEach((finding, findingIndex) => {
         const severityColor = this.getSeverityColor(finding.severity, 1);
         const severityBg = this.getSeverityColor(finding.severity, 0.1);
-        
+
         // 生成唯一的容器ID，使用item.id + 索引
         const uniqueContainerId = `ai-solution-${item.id}-${findingIndex}`;
 
@@ -1805,6 +1856,158 @@ export class QuickDetectionManager {
     if (modal) {
       modal.style.display = 'none';
     }
+  }
+
+  /**
+   * UI 方法：显示原始输出
+   */
+  showRawOutput(itemId: string): void {
+    if (!this.currentReport) return;
+
+    const item = this.currentReport.items.find(i => i.id === itemId);
+    if (!item || !item.result || !item.result.rawOutput) return;
+
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10002;
+      padding: 20px;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    const jsonStr = JSON.stringify(item.result.rawOutput, null, 2);
+
+    modal.innerHTML = `
+      <div style="
+        background: var(--bg-primary);
+        border-radius: 12px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        max-width: 800px;
+        width: 100%;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        animation: slideUp 0.3s ease-out;
+      ">
+        <div style="
+          padding: 16px 20px;
+          border-bottom: 1px solid var(--border-color);
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        ">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">${item.name} - 原始结果</h3>
+          </div>
+          <button class="raw-output-close-btn" style="
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">×</button>
+        </div>
+        <div style="padding: 0; overflow: hidden; flex: 1; position: relative;">
+          <pre style="
+            margin: 0;
+            padding: 20px;
+            overflow: auto;
+            height: 100%;
+            font-family: var(--font-mono, monospace);
+            font-size: 12px;
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+            tab-size: 2;
+          ">${this.syntaxHighlight(jsonStr)}</pre>
+          <button class="copy-btn" style="
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          ">复制 JSON</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // 绑定事件
+    const closeBtn = modal.querySelector('.raw-output-close-btn');
+    const copyBtn = modal.querySelector('.copy-btn');
+
+    const cleanup = (e?: Event) => {
+      if (e) e.stopPropagation(); // 阻止事件冒泡，防止触发全局关闭
+      modal.style.opacity = '0';
+      setTimeout(() => {
+        if (document.body.contains(modal)) {
+          document.body.removeChild(modal);
+        }
+      }, 200);
+    };
+
+    closeBtn?.addEventListener('click', cleanup);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) cleanup();
+    });
+
+    copyBtn?.addEventListener('click', () => {
+      navigator.clipboard.writeText(jsonStr).then(() => {
+        const originalText = copyBtn.textContent;
+        copyBtn.textContent = '已复制!';
+        setTimeout(() => {
+          copyBtn.textContent = originalText;
+        }, 2000);
+      });
+    });
+  }
+
+  /**
+   * 工具方法：JSON 语法高亮
+   */
+  private syntaxHighlight(json: string): string {
+    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, (match) => {
+      let cls = 'number';
+      let style = 'color: #f59e0b;'; // number - orange
+
+      if (/^"/.test(match)) {
+        if (/:$/.test(match)) {
+          cls = 'key';
+          style = 'color: #3b82f6;'; // key - blue
+        } else {
+          cls = 'string';
+          style = 'color: #10b981;'; // string - green
+        }
+      } else if (/true|false/.test(match)) {
+        cls = 'boolean';
+        style = 'color: #ef4444;'; // boolean - red
+      } else if (/null/.test(match)) {
+        cls = 'null';
+        style = 'color: #6b7280;'; // null - gray
+      }
+      return `<span class="${cls}" style="${style}">${match}</span>`;
+    });
   }
 
   /**
@@ -1987,7 +2190,7 @@ export class QuickDetectionManager {
 
     // 解析内容，识别命令块
     const parts = text.split(/```/);
-    
+
     parts.forEach((part, index) => {
       if (index % 2 === 0) {
         // 普通文本
@@ -2000,17 +2203,17 @@ export class QuickDetectionManager {
       } else {
         // 命令块 - 处理可能的语言标识符（如 bash, sh, shell 等）
         let commandText = part.trim();
-        
+
         // 去除第一行的语言标识符（如果存在）
         const lines = commandText.split('\n');
         if (lines.length > 0 && /^(bash|sh|shell|zsh|powershell|cmd|console)$/i.test(lines[0].trim())) {
           lines.shift(); // 移除语言标识符行
           commandText = lines.join('\n').trim();
         }
-        
+
         // 过滤掉命令提示符（如 $, #, > 等）
         commandText = commandText.replace(/^[\$#>]\s*/gm, '');
-        
+
         if (commandText) {
           const commandContainer = document.createElement('div');
           commandContainer.style.cssText = `
@@ -2249,7 +2452,7 @@ export class QuickDetectionManager {
   private async executeCommand(command: string): Promise<void> {
     // 自定义二级确认对话框
     const confirmed = await this.showConfirmDialog(command);
-    
+
     if (!confirmed) {
       return;
     }
@@ -2333,25 +2536,25 @@ export class QuickDetectionManager {
     try {
       // 调用 Tauri 后端命令执行
       const result = await invoke('execute_detection_command', { command });
-      
+
       // 显示执行结果
       if (result && typeof result === 'object') {
-        const output = result as { 
-          command: string; 
-          output: string; 
+        const output = result as {
+          command: string;
+          output: string;
           exit_code: number | null;
           timestamp: string;
         };
-        
+
         let outputHtml = '';
-        
+
         // 显示命令输出
         if (output.output) {
           outputHtml += `<div style="color: var(--text-primary);">${this.escapeHtml(output.output)}</div>`;
         } else {
           outputHtml += `<div style="color: var(--text-secondary);">命令执行完成，无输出</div>`;
         }
-        
+
         // 显示退出码
         if (output.exit_code !== null) {
           const exitCodeColor = output.exit_code === 0 ? '#22c55e' : '#ef4444';
@@ -2360,7 +2563,7 @@ export class QuickDetectionManager {
             ${exitCodeText} (退出码: ${output.exit_code})
           </div>`;
         }
-        
+
         outputElement.innerHTML = outputHtml;
       } else {
         outputElement.innerHTML = `<div style="color: var(--text-secondary);">命令执行完成</div>`;
@@ -2821,14 +3024,14 @@ export class QuickDetectionManager {
   toggleAllChecks(category: 'security' | 'performance'): void {
     const checkboxes = document.querySelectorAll(`.detection-item[data-category="${category}"] input[type="checkbox"]`);
     if (checkboxes.length === 0) return;
-    
+
     const firstCheckbox = checkboxes[0] as HTMLInputElement;
     const newState = !firstCheckbox.checked;
 
     checkboxes.forEach(cb => {
       const checkbox = cb as HTMLInputElement;
       checkbox.checked = newState;
-      
+
       // 更新父元素的视觉样式
       const item = checkbox.closest('.detection-item') as HTMLElement;
       if (item) {
