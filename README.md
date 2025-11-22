@@ -24,6 +24,13 @@
 
 基于 **Tauri v2** 框架构建，它结合了轻量级的原生占用和 **Vue 3** 带来的现代化 UI 体验。
 
+## 支持
+
+**如果觉得好用请支持我一下**
+
+<img width="228" height="312" alt="image" src="https://github.com/user-attachments/assets/1c71bb97-0a40-41ad-8012-7af5d736883f" />
+
+
 ## ✨ 功能截图
 
 ### 仪表盘界面
