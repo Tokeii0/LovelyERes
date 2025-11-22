@@ -1,0 +1,204 @@
+/**
+ * SFTP Page Styles
+ * Modern, aesthetic, and theme-compatible
+ */
+
+/* Container Layout */
+.sftp-page-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+/* Header */
+.sftp-header {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+}
+
+.sftp-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.sftp-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+/* Toolbar & Navigation */
+.sftp-toolbar {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  height: 50px;
+}
+
+.sftp-nav-controls {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.sftp-breadcrumb-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 4px 12px;
+  height: 32px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sftp-breadcrumb-bar:focus-within {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px var(--primary-color-alpha-20);
+}
+
+.sftp-path-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* File List */
+.sftp-file-list-container {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  position: relative;
+}
+
+.sftp-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.sftp-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-tertiary);
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  z-index: 10;
+  backdrop-filter: blur(8px);
+}
+
+.sftp-table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--border-color-light);
+  color: var(--text-primary);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.2s ease;
+}
+
+.sftp-file-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.sftp-file-row:hover {
+  background-color: var(--bg-secondary);
+}
+
+.sftp-file-row.selected {
+  background-color: var(--primary-color-alpha-10);
+}
+
+.file-icon-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-icon {
+  font-size: 18px;
+  width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-name {
+  font-weight: 500;
+}
+
+/* Status Bar */
+.sftp-status-bar {
+  height: 32px;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-color);
+  padding: 0 var(--spacing-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Scrollbar Customization */
+.sftp-file-list-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.sftp-file-list-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sftp-file-list-container::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+.sftp-file-list-container::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sftp-file-row {
+  animation: fadeIn 0.2s ease forwards;
+  animation-delay: calc(var(--row-index, 0) * 0.02s);
+}

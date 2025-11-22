@@ -1,0 +1,109 @@
+/* 浅色主题 - LovelyRes */
+/* 清新明亮的浅色主题配色 */
+
+[data-theme="light"] {
+  /* 主色调 */
+  --primary-color: #4299e1;
+  --secondary-color: #63b3ed;
+  --accent-color: #81e6d9;
+  --success-color: #48bb78;
+  --warning-color: #ed8936;
+  --error-color: #f56565;
+  --info-color: #4299e1;
+
+  /* 背景色 */
+  --bg-primary: #fafbfc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f4f6f8;
+  --bg-dark: #2d3748;
+  --bg-glass: rgba(255, 255, 255, 0.15);
+
+  /* 文字颜色 */
+  --text-primary: #2d3748;
+  --text-secondary: #718096;
+  --text-light: #a0aec0;
+  --text-white: #ffffff;
+
+  /* 边框和阴影 */
+  --border-color: rgba(148, 163, 184, 0.2);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* 浅色主题特定样式 */
+[data-theme="light"] .modern-title-bar {
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+  border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="light"] .modern-sidebar {
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+}
+
+[data-theme="light"] .main-workspace {
+  background: var(--bg-primary);
+}
+
+[data-theme="light"] .workspace-header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="light"] .status-bar {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+[data-theme="light"] .modern-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="light"] .modern-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-color);
+}
+
+[data-theme="light"] .modern-input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .modern-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
+[data-theme="light"] .control-button:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* 浅色主题特有的装饰效果 */
+[data-theme="light"] .luxe-text {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 浅色主题的连接状态指示器 */
+[data-theme="light"] .connection-status {
+  background: var(--success-color);
+  color: white;
+}
+
+/* 浅色主题的模态框样式 */
+[data-theme="light"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"] .modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+}

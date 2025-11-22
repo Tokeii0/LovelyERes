@@ -1,0 +1,90 @@
+/* SFTP 右键菜单样式 */
+
+.sftp-ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  display: none;
+  min-width: 180px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--border-radius);
+  overflow: visible;
+}
+
+.sftp-ctx-menu .ctx-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.sftp-ctx-menu .ctx-item:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.sftp-ctx-menu .ctx-parent {
+  justify-content: space-between;
+}
+
+/* 子菜单默认隐藏 */
+.sftp-ctx-menu .ctx-submenu {
+  position: absolute;
+  left: 100%;
+  top: -1px; /* 稍微向上偏移，确保与父菜单对齐 */
+  min-width: 200px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--border-radius);
+  display: none;
+  margin-left: -1px; /* 负值让子菜单与父菜单重叠1px，避免间隙 */
+  overflow: visible;
+}
+
+/* 子菜单显示在左侧（当右侧空间不足时） */
+.sftp-ctx-menu .ctx-submenu.show-left {
+  left: auto;
+  right: 100%;
+  margin-left: 0;
+  margin-right: -1px;
+}
+
+/* 子菜单向上调整（当底部空间不足时） */
+.sftp-ctx-menu .ctx-submenu.adjust-top {
+  top: auto;
+  bottom: -1px;
+}
+
+/* 二级菜单 */
+.sftp-ctx-menu .ctx-submenu-level2 {
+  z-index: 10000;
+  min-width: 180px;
+}
+
+/* 三级菜单 */
+.sftp-ctx-menu .ctx-submenu-level3 {
+  z-index: 10001;
+  min-width: 160px;
+}
+
+/* 当鼠标悬停在父菜单项上时，显示子菜单 */
+.sftp-ctx-menu .ctx-parent:hover > .ctx-submenu {
+  display: block !important;
+}
+
+/* 当鼠标在子菜单上时，保持子菜单显示 */
+.sftp-ctx-menu .ctx-submenu:hover {
+  display: block !important;
+}
+
+/* 当鼠标悬停在父菜单项或其子菜单上时，保持子菜单显示 */
+.sftp-ctx-menu .ctx-parent:hover > .ctx-submenu,
+.sftp-ctx-menu .ctx-parent:hover > .ctx-submenu:hover {
+  display: block !important;
+}
+

@@ -1,0 +1,137 @@
+/* 深色主题 - LovelyRes */
+/* 护眼舒适的深色主题配色 */
+
+[data-theme="dark"] {
+  /* 主色调 */
+  --primary-color: #4299e1;
+  --secondary-color: #63b3ed;
+  --accent-color: #81e6d9;
+  --success-color: #48bb78;
+  --warning-color: #ed8936;
+  --error-color: #f56565;
+  --info-color: #4299e1;
+
+  /* 背景色 */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-dark: #475569;
+  --bg-glass: rgba(0, 0, 0, 0.3);
+
+  /* 文字颜色 */
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-light: #94a3b8;
+  --text-white: #ffffff;
+
+  /* 边框和阴影 */
+  --border-color: rgba(148, 163, 184, 0.2);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* 深色主题特定样式 */
+[data-theme="dark"] .modern-title-bar {
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+  border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .modern-sidebar {
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .main-workspace {
+  background: var(--bg-primary);
+}
+
+[data-theme="dark"] .workspace-header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .status-bar {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .modern-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .modern-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-color);
+}
+
+[data-theme="dark"] .modern-input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .modern-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+}
+
+[data-theme="dark"] .control-button:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* 深色主题特有的装饰效果 */
+[data-theme="dark"] .luxe-text {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 深色主题的连接状态指示器 */
+[data-theme="dark"] .connection-status {
+  background: var(--success-color);
+  color: white;
+}
+
+/* 深色主题的模态框样式 */
+[data-theme="dark"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="dark"] .modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+}
+
+/* 深色主题特有的发光效果 */
+[data-theme="dark"] .modern-btn.primary {
+  box-shadow: 0 0 10px rgba(66, 153, 225, 0.3);
+}
+
+[data-theme="dark"] .modern-btn.primary:hover {
+  box-shadow: 0 0 15px rgba(66, 153, 225, 0.4);
+}
+
+/* 深色主题的滚动条样式 */
+[data-theme="dark"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-dark);
+}

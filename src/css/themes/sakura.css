@@ -1,0 +1,161 @@
+/* 樱花主题 - LovelyRes */
+/* 温柔浪漫的樱花主题配色 */
+
+[data-theme="sakura"] {
+  /* 主色调 - 樱花粉色系 */
+  --primary-color: #ff9bb3;
+  --secondary-color: #ffb3c1;
+  --accent-color: #ffc0cb;
+  --success-color: #f8bbd9;
+  --warning-color: #ffc1cc;
+  --error-color: #ffb3ba;
+  --info-color: #ff9eb5;
+
+  /* 背景色 - 温柔的粉色调 */
+  --bg-primary: #fef9f9;
+  --bg-secondary: #fffefe;
+  --bg-tertiary: #fef5f7;
+  --bg-dark: #c53030;
+  --bg-glass: rgba(255, 192, 203, 0.12);
+
+  /* 文字颜色 - 温暖的棕色调 */
+  --text-primary: #744c4c;
+  --text-secondary: #a0616d;
+  --text-light: #d69e9e;
+  --text-white: #ffffff;
+
+  /* 边框和阴影 - 柔和的粉色调 */
+  --border-color: rgba(255, 155, 179, 0.2);
+  --shadow-sm: 0 2px 4px rgba(255, 155, 179, 0.1);
+  --shadow-md: 0 4px 8px rgba(255, 155, 179, 0.15);
+  --shadow-lg: 0 8px 16px rgba(255, 155, 179, 0.2);
+}
+
+/* 樱花主题特定样式 */
+[data-theme="sakura"] .modern-title-bar {
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+  border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="sakura"] .modern-sidebar {
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+}
+
+[data-theme="sakura"] .main-workspace {
+  background: var(--bg-primary);
+}
+
+[data-theme="sakura"] .workspace-header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="sakura"] .status-bar {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+[data-theme="sakura"] .modern-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="sakura"] .modern-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-color);
+}
+
+[data-theme="sakura"] .modern-input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+[data-theme="sakura"] .modern-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(255, 155, 179, 0.2);
+}
+
+[data-theme="sakura"] .control-button:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* 樱花主题特有的装饰效果 */
+[data-theme="sakura"] .luxe-text {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 樱花主题的连接状态指示器 */
+[data-theme="sakura"] .connection-status {
+  background: var(--success-color);
+  color: var(--text-primary);
+}
+
+/* 樱花主题的模态框样式 */
+[data-theme="sakura"] .modal-overlay {
+  background: rgba(255, 192, 203, 0.3);
+}
+
+[data-theme="sakura"] .modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+}
+
+/* 樱花主题特有的渐变按钮效果 */
+[data-theme="sakura"] .modern-btn.primary {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="sakura"] .modern-btn.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* 樱花主题的樱花花瓣动画效果 */
+[data-theme="sakura"] .app-logo::before {
+  content: ' 🌸 ';
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  font-size: 12px;
+  opacity: 0.7;
+  animation: sakuraPetal 3s ease-in-out infinite;
+}
+
+@keyframes sakuraPetal {
+  0%, 100% {
+    transform: rotate(0deg) scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: rotate(10deg) scale(1.1);
+    opacity: 1;
+  }
+}
+
+/* 樱花主题的特殊滚动条 */
+[data-theme="sakura"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-theme="sakura"] ::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+[data-theme="sakura"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  border-radius: 4px;
+}
+
+[data-theme="sakura"] ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, var(--secondary-color), var(--accent-color));
+}

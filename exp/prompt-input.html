@@ -1,0 +1,499 @@
+<style scoped>
+  .ai-chat-input {
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 1.5em;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  .chat-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border-radius: 1.25em;
+    background: linear-gradient(
+      135deg,
+      rgba(39, 39, 42, 0.8),
+      rgba(9, 9, 11, 0.9)
+    );
+    border: 1px solid rgba(113, 113, 122, 0.5);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(20px);
+    overflow: hidden;
+  }
+
+  .chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1em 1.5em 0.5em;
+  }
+
+  .status-section {
+    display: flex;
+    align-items: center;
+    gap: 0.375em;
+  }
+
+  .status-indicator {
+    width: 0.5em;
+    height: 0.5em;
+    border-radius: 50%;
+    background-color: #22c55e;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .status-text {
+    font-size: 0.75em;
+    font-weight: 500;
+    color: #a1a1aa;
+  }
+
+  .badges {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+  }
+
+  .badge {
+    padding: 0.25em 0.5em;
+    font-size: 0.75em;
+    font-weight: 500;
+    border-radius: 1em;
+  }
+
+  .badge-gpt {
+    background-color: rgba(39, 39, 42, 0.6);
+    color: #d4d4d8;
+  }
+
+  .badge-pro {
+    background-color: rgba(59, 130, 246, 0.1);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
+  .input-section {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .main-input {
+    width: 100%;
+    padding: 1em 1.5em;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    font-size: 1em;
+    font-weight: normal;
+    line-height: 1.6;
+    min-height: 7.5em;
+    color: #f4f4f5;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .main-input::-webkit-scrollbar {
+    display: none;
+  }
+
+  .main-input::placeholder {
+    color: #71717a;
+  }
+
+  .gradient-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(39, 39, 42, 0.05), transparent);
+    pointer-events: none;
+  }
+
+  .controls-section {
+    padding: 0 1em 1em;
+  }
+
+  .controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .left-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+  }
+
+  .attachment-group {
+    display: flex;
+    align-items: center;
+    gap: 0.375em;
+    padding: 0.25em;
+    background-color: rgba(39, 39, 42, 0.4);
+    border-radius: 0.75em;
+    border: 1px solid rgba(63, 63, 70, 0.5);
+  }
+
+  .control-btn {
+    position: relative;
+    padding: 0.625em;
+    background: transparent;
+    border: none;
+    border-radius: 0.5em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #71717a;
+  }
+
+  .control-btn:hover {
+    color: #d4d4d8;
+    background-color: rgba(63, 63, 70, 0.5);
+  }
+
+  .control-btn:hover .btn-icon {
+    transform: scale(1.1);
+  }
+
+  .link-btn:hover {
+    color: #60a5fa;
+    background-color: rgba(59, 130, 246, 0.1);
+  }
+
+  .code-btn:hover {
+    color: #4ade80;
+    background-color: rgba(34, 197, 94, 0.1);
+  }
+
+  .design-btn:hover {
+    color: #a78bfa;
+    background-color: rgba(147, 51, 234, 0.1);
+  }
+
+  .voice-btn {
+    border: 1px solid rgba(63, 63, 70, 0.3);
+  }
+
+  .voice-btn:hover {
+    color: #f87171;
+    background-color: rgba(239, 68, 68, 0.1);
+  }
+
+  .btn-icon {
+    width: 1em;
+    height: 1em;
+    transition: transform 0.2s ease;
+  }
+
+  .tooltip {
+    position: absolute;
+    top: -2em;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5em;
+    background-color: #27272a;
+    color: #d4d4d8;
+    font-size: 0.75em;
+    border-radius: 0.25em;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+  }
+
+  .control-btn:hover .tooltip {
+    opacity: 1;
+  }
+
+  .right-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75em;
+  }
+
+  .counter {
+    font-size: 0.75em;
+    font-weight: 500;
+    color: #71717a;
+  }
+
+  .counter-max {
+    color: #a1a1aa;
+  }
+
+  .send-btn {
+    position: relative;
+    padding: 0.75em;
+    background: linear-gradient(to right, #2563eb, #3b82f6);
+    border: none;
+    border-radius: 0.75em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: white;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  }
+
+  .send-btn:hover {
+    background: linear-gradient(to right, #3b82f6, #60a5fa);
+    transform: scale(1.05);
+    box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.25);
+  }
+
+  .send-btn:hover .send-icon {
+    transform: translateY(-0.125em) translateX(0.125em);
+  }
+
+  .send-icon {
+    width: 1.25em;
+    height: 1.25em;
+    transition: transform 0.2s ease;
+  }
+
+  .footer-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.75em;
+    padding-top: 0.75em;
+    border-top: 1px solid rgba(39, 39, 42, 0.5);
+    font-size: 0.75em;
+    color: #71717a;
+  }
+
+  .shortcut-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+  }
+
+  .info-icon {
+    width: 0.75em;
+    height: 0.75em;
+  }
+
+  .shortcut-key {
+    padding: 0.375em 0.375em;
+    background-color: #27272a;
+    border: 1px solid #3f3f46;
+    border-radius: 0.25em;
+    color: #a1a1aa;
+    font-family: monospace;
+    font-size: 0.75em;
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  .system-status {
+    display: flex;
+    align-items: center;
+    gap: 0.25em;
+  }
+
+  .system-indicator {
+    width: 0.375em;
+    height: 0.375em;
+    background-color: #22c55e;
+    border-radius: 50%;
+  }
+
+  .floating-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 1.25em;
+    background: linear-gradient(
+      135deg,
+      rgba(59, 130, 246, 0.05),
+      transparent,
+      rgba(147, 51, 234, 0.05)
+    );
+    pointer-events: none;
+  }
+</style>
+
+<template>
+  <div class="ai-chat-input">
+    <div class="chat-container">
+      <div class="chat-header">
+        <div class="status-section">
+          <div class="status-indicator"></div>
+          <span class="status-text">AI Assistant</span>
+        </div>
+        <div class="badges">
+          <span class="badge badge-gpt">GPT-4</span>
+          <span class="badge badge-pro">Pro</span>
+        </div>
+      </div>
+
+      <div class="input-section">
+        <textarea
+          rows="4"
+          class="main-input"
+          placeholder="What would you like to explore today? Ask anything, share ideas, or request assistance..."
+        ></textarea>
+        <div class="gradient-overlay"></div>
+      </div>
+
+      <div class="controls-section">
+        <div class="controls-row">
+          <div class="left-controls">
+            <div class="attachment-group">
+              <button
+                class="control-btn file-btn"
+                aria-label="Upload files"
+                type="button"
+              >
+                <svg
+                  class="btn-icon"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                  ></path>
+                </svg>
+                <div class="tooltip">Upload files</div>
+              </button>
+
+              <button
+                class="control-btn link-btn"
+                aria-label="Add web link"
+                type="button"
+              >
+                <svg
+                  class="btn-icon"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                  ></path>
+                </svg>
+                <div class="tooltip">Web link</div>
+              </button>
+
+              <button
+                class="control-btn code-btn"
+                aria-label="Add code repository"
+                type="button"
+              >
+                <svg
+                  class="btn-icon"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                  ></path>
+                </svg>
+                <div class="tooltip">Code repo</div>
+              </button>
+
+              <button
+                class="control-btn design-btn"
+                aria-label="Add design file"
+                type="button"
+              >
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M15.852 8.981h-4.588V0h4.588c2.476 0 4.49 2.014 4.49 4.49s-2.014 4.491-4.49 4.491zM12.735 7.51h3.117c1.665 0 3.019-1.355 3.019-3.019s-1.354-3.019-3.019-3.019h-3.117V7.51zm0 1.471H8.148c-2.476 0-4.49-2.015-4.49-4.49S5.672 0 8.148 0h4.588v8.981zm-4.587-7.51c-1.665 0-3.019 1.355-3.019 3.019s1.354 3.02 3.019 3.02h3.117V1.471H8.148zm4.587 15.019H8.148c-2.476 0-4.49-2.014-4.49-4.49s2.014-4.49 4.49-4.49h4.588v8.98zM8.148 8.981c-1.665 0-3.019 1.355-3.019 3.019s1.355 3.019 3.019 3.019h3.117v-6.038H8.148zm7.704 0c-2.476 0-4.49 2.015-4.49 4.49s2.014 4.49 4.49 4.49 4.49-2.015 4.49-4.49-2.014-4.49-4.49-4.49zm0 7.509c-1.665 0-3.019-1.355-3.019-3.019s1.355-3.019 3.019-3.019 3.019 1.354 3.019 3.019-1.354 3.019-3.019 3.019zM8.148 24c-2.476 0-4.49-2.015-4.49-4.49s2.014-4.49 4.49-4.49h4.588V24H8.148zm3.117-1.471V16.49H8.148c-1.665 0-3.019 1.355-3.019 3.019s1.355 3.02 3.019 3.02h3.117z"
+                  ></path>
+                </svg>
+                <div class="tooltip">Design file</div>
+              </button>
+            </div>
+
+            <button
+              class="control-btn voice-btn"
+              aria-label="Voice input"
+              type="button"
+            >
+              <svg
+                class="btn-icon"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                ></path>
+              </svg>
+              <div class="tooltip">Voice input</div>
+            </button>
+          </div>
+
+          <div class="right-controls">
+            <div class="counter">
+              <span>0</span>/<span class="counter-max">2000</span>
+            </div>
+
+            <button class="send-btn" aria-label="Send message" type="button">
+              <svg
+                class="send-icon"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                ></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="footer-info">
+          <div class="shortcut-info">
+            <svg class="info-icon" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                fill-rule="evenodd"
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                clip-rule="evenodd"
+              ></path>
+            </svg>
+            <span
+              >Press <kbd class="shortcut-key">Shift + Enter</kbd> for new
+              line</span
+            >
+          </div>
+
+          <div class="system-status">
+            <div class="system-indicator"></div>
+            <span>All systems operational</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="floating-overlay"></div>
+    </div>
+  </div>
+</template>

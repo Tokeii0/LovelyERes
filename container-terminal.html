@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>容器终端 - LovelyRes</title>
+    <link rel="stylesheet" href="/src/css/themes/index.css">
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        background: var(--bg-primary, #1a1a1a);
+        color: var(--text-primary, #e0e0e0);
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      .container-terminal {
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-primary, #1a1a1a);
+      }
+
+      .terminal-header {
+        background: var(--bg-secondary, #2d2d2d);
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--border-color, #444);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 40px;
+        -webkit-app-region: drag;
+        user-select: none;
+      }
+
+      .terminal-title {
+        color: var(--text-primary, #e0e0e0);
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .terminal-controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        -webkit-app-region: no-drag;
+      }
+
+      .shell-selector {
+        background: var(--bg-tertiary, #3d3d3d);
+        border: 1px solid var(--border-color, #555);
+        color: var(--text-primary, #e0e0e0);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-family: inherit;
+      }
+
+      .terminal-btn {
+        background: var(--primary-color, #4299e1);
+        border: none;
+        color: var(--text-white, #ffffff);
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      .terminal-btn:hover {
+        background: var(--secondary-color, #63b3ed);
+      }
+
+      .terminal-btn.danger {
+        background: var(--error-color, #e53e3e);
+        color: var(--text-white, #ffffff);
+      }
+
+      .terminal-btn.danger:hover {
+        background: #c53030;
+      }
+
+      .terminal-input-section {
+        background: var(--bg-secondary, #2d2d2d);
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-color, #444);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .terminal-input {
+        flex: 1;
+        background: var(--bg-primary, #1a1a1a);
+        border: 1px solid var(--border-color, #555);
+        color: var(--text-primary, #e0e0e0);
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 13px;
+      }
+
+      .terminal-input:focus {
+        outline: none;
+        border-color: var(--primary-color, #4299e1);
+      }
+
+      .terminal-output {
+        flex: 1;
+        padding: 16px;
+        overflow-y: auto;
+        background: var(--bg-primary, #1a1a1a);
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      .command-line {
+        margin: 8px 0 4px 0;
+        color: var(--success-color, #4ade80);
+        font-weight: bold;
+      }
+
+      .command-output {
+        color: var(--text-primary, #e0e0e0);
+        white-space: pre-wrap;
+        word-break: break-all;
+        margin: 4px 0 12px 0;
+      }
+
+      .command-error {
+        color: var(--error-color, #f87171);
+        margin: 4px 0 8px 0;
+        font-size: 12px;
+      }
+
+      .loading-indicator {
+        color: var(--text-light, #888);
+        margin: 4px 0;
+        font-style: italic;
+      }
+
+      .system-message {
+        color: var(--text-light, #888);
+        margin: 8px 0;
+        font-style: italic;
+      }
+
+      .terminal-output::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .terminal-output::-webkit-scrollbar-track {
+        background: var(--bg-secondary, #2d2d2d);
+      }
+
+      .terminal-output::-webkit-scrollbar-thumb {
+        background: var(--border-color, #555);
+        border-radius: 4px;
+      }
+
+      .terminal-output::-webkit-scrollbar-thumb:hover {
+        background: var(--bg-dark, #666);
+      }
+
+      .loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--bg-primary, #1a1a1a);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+
+      .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid var(--border-color, #444);
+        border-top: 3px solid var(--primary-color, #4299e1);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 16px;
+      }
+
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+
+      .loading-text {
+        color: var(--text-light, #888);
+        font-size: 14px;
+      }
+    </style>
+  </head>
+
+  <body data-theme="dark">
+    <div class="loading-screen" id="loading-screen">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">初始化容器终端...</div>
+    </div>
+
+    <div class="container-terminal" id="container-terminal" style="display: none;">
+      <div class="terminal-header">
+        <div class="terminal-title" id="terminal-title">容器终端</div>
+        <div class="terminal-controls">
+          <select class="shell-selector" id="shell-selector">
+            <option value="bash">bash</option>
+            <option value="sh">sh</option>
+            <option value="zsh">zsh</option>
+          </select>
+          <button class="terminal-btn" id="clear-btn">清空</button>
+          <button class="terminal-btn danger" id="close-btn">关闭</button>
+        </div>
+      </div>
+
+      <div class="terminal-input-section">
+        <input type="text" class="terminal-input" id="command-input" placeholder="输入要在容器内执行的命令...">
+        <button class="terminal-btn" id="execute-btn">执行</button>
+      </div>
+
+      <div class="terminal-output" id="terminal-output">
+        <div class="system-message">容器终端已就绪。选择 shell 类型并输入命令。</div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/container-terminal.ts"></script>
+  </body>
+</html>

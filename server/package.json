@@ -1,0 +1,65 @@
+{
+  "name": "lovelyres-server",
+  "version": "1.0.0",
+  "description": "LovelyRes API Server",
+  "main": "dist/app.js",
+  "scripts": {
+    "dev": "nodemon --exec ts-node src/app.ts",
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "test": "jest",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "db:init": "ts-node scripts/init-db-simple.ts",
+    "db:update": "ts-node scripts/update-database.ts",
+    "db:update-max-devices": "ts-node scripts/update-max-devices.ts",
+    "deploy": "node -e \"console.log('请使用: .\\\\scripts\\\\build-and-deploy.ps1 (Windows) 或 ./scripts/build-and-deploy.sh (Linux/Mac)')\"",
+    "deploy:win": "powershell -ExecutionPolicy Bypass -File ./scripts/build-and-deploy.ps1",
+    "deploy:unix": "bash ./scripts/build-and-deploy.sh"
+  },
+  "keywords": [
+    "lovelyres",
+    "api",
+    "express",
+    "typescript"
+  ],
+  "author": "LovelyRes Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "pg": "^8.11.3",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "morgan": "^1.10.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.6",
+    "@types/pg": "^8.10.9",
+    "@types/bcrypt": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/cors": "^2.8.17",
+    "@types/morgan": "^1.9.9",
+    "@types/uuid": "^9.0.7",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2",
+    "nodemon": "^3.0.2",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.17.0",
+    "@typescript-eslint/parser": "^6.17.0",
+    "prettier": "^3.1.1",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.11"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
+
