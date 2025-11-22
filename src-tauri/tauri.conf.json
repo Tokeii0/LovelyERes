@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "LovelyRes",
+  "productName": "LovelyERes",
   "version": "1.0.1",
   "identifier": "com.lovelyres.app",
   "build": {
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "LovelyRes - Linux Emergency Response Tool",
+        "title": "LovelyERes - Linux Emergency Response Tool",
         "width": 1200,
         "height": 800,
         "decorations": true,

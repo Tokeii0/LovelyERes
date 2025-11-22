@@ -23,3 +23,26 @@ dist-ssr
 *.sln
 *.sw?
 doc/*
+
+# Security - prevent sensitive data from being committed
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+*.p12
+*.pfx
+config/secrets.json
+**/config/secrets.json
+secrets/
+**/secrets/
+
+# API keys and passwords (backup protection)
+**/*api-key*
+**/*apikey*
+**/*api_key*
+**/*password*
+**/*secret*
+**/*token*
