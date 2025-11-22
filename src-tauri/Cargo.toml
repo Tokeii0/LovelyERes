@@ -1,6 +1,6 @@
 [package]
 name = "lovelyres"
-version = "1.0.0"
+version = "0.52.0"
 description = "LovelyRes - Linux Emergency Response Tool"
 authors = ["LovelyRes Team"]
 edition = "2021"

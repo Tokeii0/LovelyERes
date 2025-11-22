@@ -2566,7 +2566,7 @@ export class ModernUIRenderer {
         </div>
 
         <div class="status-right">
-          <span>LovelyRes v0.4</span>
+          <span>LovelyRes v0.52</span>
         </div>
       </div>
     `;

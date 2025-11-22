@@ -1,7 +1,7 @@
 {
   "name": "lovelyres",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.52.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
