@@ -874,6 +874,27 @@ async function initializeApp() {
   });
   console.log('✅ SSH终端按钮事件监听器已添加（事件委托方式）');
 
+  // 数据库管理相关全局函数
+  (window as any).switchDatabaseView = (viewType: string) => {
+    console.log('切换数据库视图:', viewType);
+    // update active class in sidebar
+    const items = document.querySelectorAll('.database-sidebar .db-list-item');
+    items.forEach(item => {
+        item.classList.remove('active');
+        if (item.getAttribute('onclick')?.includes(`'${viewType}'`)) {
+            item.classList.add('active');
+        }
+    });
+    
+    // TODO: Filter content based on viewType
+    (window as any).showNotification && (window as any).showNotification(`切换到视图: ${viewType}`, 'info');
+  };
+
+  (window as any).showAddDatabaseModal = () => {
+    console.log('打开添加数据库模态框');
+    (window as any).showNotification && (window as any).showNotification('添加数据库连接功能即将上线', 'info');
+  };
+
   // 全局点击事件：清除表格选中状态
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
@@ -3518,7 +3539,7 @@ async function loadLogFileList() {
     const journalUnit = state.journalUnit || '';
     const dateFilter = state.date || '';
 
-    let result;
+    let result: any;
     
     if (useJournalctl) {
       // 使用 journalctl
@@ -3754,7 +3775,6 @@ function escapeHtml(text: string): string {
   // 更新渲染器状态以保持同步
   const app = (window as any).app;
   if (app) {
-    const renderer = app.getStateManager().getUIRenderer();
     // 只是简单更新显示，不需要完全重渲染
     const pageDisplay = document.querySelector('.page-display');
     if (pageDisplay) pageDisplay.textContent = `第 ${currentPage} 页`;

@@ -9,6 +9,7 @@ import { DashboardRenderer } from './dashboardRenderer';
 import { KubernetesRenderer } from './kubernetesRenderer';
 import { SftpContextMenuRenderer } from './sftpContextMenu';
 import { LogAnalysisRenderer } from './logAnalysisRenderer';
+import { DatabaseRenderer } from './databaseRenderer';
 import { emergencyCategories } from '../emergency/commands';
 import {
   List,
@@ -51,7 +52,8 @@ import {
   Speed,
   LinkCloud,
   BookOpen,
-  Log
+  Log,
+  Data
 } from '@icon-park/svg';
 
 // 添加系统信息页面的样式
@@ -136,6 +138,7 @@ export class ModernUIRenderer {
   private logAnalysisRenderer: LogAnalysisRenderer;
 
   public sftpContextMenuRenderer: SftpContextMenuRenderer;
+  public databaseRenderer: DatabaseRenderer;
 
   constructor(stateManager: StateManager) {
     this.stateManager = stateManager;
@@ -144,6 +147,7 @@ export class ModernUIRenderer {
     this.kubernetesRenderer = new KubernetesRenderer();
     this.logAnalysisRenderer = new LogAnalysisRenderer();
     this.sftpContextMenuRenderer = new SftpContextMenuRenderer();
+    this.databaseRenderer = new DatabaseRenderer();
 
     // 注入系统信息页面样式
     if (!document.querySelector('#system-info-styles')) {
@@ -442,6 +446,12 @@ export class ModernUIRenderer {
         active: currentPage === 'kubernetes'
       },
       {
+        id: 'database',
+        icon: Data({ theme: 'outline', size: '18', fill: 'currentColor' }),
+        title: '数据库',
+        active: currentPage === 'database'
+      },
+      {
         id: 'log-analysis',
         icon: Log({ theme: 'outline', size: '18', fill: 'currentColor' }),
         title: '日志审计',
@@ -678,6 +688,8 @@ export class ModernUIRenderer {
         return this.renderQuickDetectionPage();
       case 'kubernetes':
         return this.renderKubernetesPage();
+      case 'database':
+        return this.databaseRenderer.render();
       case 'log-analysis':
         return this.renderLogAnalysisPage();
       case 'settings':
@@ -2707,7 +2719,7 @@ export class ModernUIRenderer {
         </div>
 
         <div class="status-right">
-          <span>LovelyRes v0.54.0</span>
+          <span>LovelyRes v0.54.1</span>
         </div>
       </div>
     `;
