@@ -260,7 +260,7 @@ export class QuickDetectionManager {
       case 'memory-test':
         result = await this.runMemoryTest();
         break;
-      case 'ditest':
+      case 'disk-test':
         result = await this.runDiskTest();
         break;
       case 'network-test':
@@ -2873,7 +2873,7 @@ export class QuickDetectionManager {
       'firewall-check': '防火墙状态检查',
       'cpu-test': 'CPU 压力测试',
       'memory-test': '内存性能测试',
-      'ditest': '磁盘 I/O 测试',
+      'disk-test': '磁盘 I/O 测试',
       'network-test': '网络性能测试'
     };
     return names[id] || id;
@@ -2894,7 +2894,7 @@ export class QuickDetectionManager {
       'firewall-check': '检查防火墙规则配置',
       'cpu-test': '测试 CPU 性能和频率',
       'memory-test': '测试内存读写速度',
-      'ditest': '测试磁盘读写性能',
+      'disk-test': '测试磁盘读写性能',
       'network-test': '测试带宽和延迟'
     };
     return descriptions[id] || '';
@@ -2904,7 +2904,7 @@ export class QuickDetectionManager {
    * 工具方法：获取检测项分类
    */
   private getCheckCategory(id: string): 'security' | 'performance' {
-    const performanceChecks = ['cpu-test', 'memory-test', 'ditest', 'network-test'];
+    const performanceChecks = ['cpu-test', 'memory-test', 'disk-test', 'network-test'];
     return performanceChecks.includes(id) ? 'performance' : 'security';
   }
 

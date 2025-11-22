@@ -1369,7 +1369,7 @@ export class CommandHintsManager {
           'journalctl --until "2023-12-25" # 查看指定日期前日志',
           'journalctl -p err              # 只显示错误级别日志',
           'journalctl -n 50               # 显示最近50条日志',
-          'journalctl --diusage        # 显示日志占用空间',
+          'journalctl --disk-usage        # 显示日志占用空间',
           'journalctl --vacuum-time=2d    # 清理2天前的日志',
           'journalctl -k                  # 显示内核日志'
         ],

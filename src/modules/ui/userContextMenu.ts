@@ -207,7 +207,7 @@ export class UserContextMenu {
               <span>查看用户进程</span>
             </span>
           </div>
-          <div class="menu-item" data-action="diusage">
+          <div class="menu-item" data-action="disk-usage">
             <span class="menu-label">
               ${IconPark.HardDisk({ theme: 'outline', size: '14', fill: 'currentColor' })}
               <span>查看磁盘使用</span>
@@ -772,7 +772,7 @@ export class UserContextMenu {
         actionName = '查看用户进程'
         break
 
-      case 'diusage':
+      case 'disk-usage':
         command = `home=$(eval echo ~${user}); echo "=== 主目录磁盘使用 ==="; echo ""; du -sh "$home" 2>/dev/null || echo "无法获取"; echo ""; echo "=== 详细统计 ==="; du -h --max-depth=1 "$home" 2>/dev/null | sort -hr | head -20 || echo "无法获取详细统计"`
         title = `磁盘使用 - ${user}`
         actionName = '查看磁盘使用'

@@ -2390,7 +2390,7 @@ body {
 }
 
 /* Disk Info Text */
-.diinfo-text {
+.disk-info-text {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -2399,14 +2399,14 @@ body {
   pointer-events: none;
 }
 
-.dipercentage {
+.disk-percentage {
   font-size: 24px;
   font-weight: 700;
   color: var(--text-primary);
   display: block;
 }
 
-.dilabel {
+.disk-label {
   font-size: 12px;
   color: var(--text-secondary);
 }

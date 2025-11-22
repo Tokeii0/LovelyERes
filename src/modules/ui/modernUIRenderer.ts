@@ -2140,7 +2140,7 @@ export class ModernUIRenderer {
     const performanceChecks = [
       { id: 'cpu-test', name: 'CPU 压力测试', description: '测试 CPU 性能和频率', iconFunc: Cpu },
       { id: 'memory-test', name: '内存性能测试', description: '测试内存读写速度', iconFunc: Memory },
-      { id: 'ditest', name: '磁盘 I/O 测试', description: '测试磁盘读写性能', iconFunc: System },
+      { id: 'disk-test', name: '磁盘 I/O 测试', description: '测试磁盘读写性能', iconFunc: System },
       { id: 'network-test', name: '网络性能测试', description: '测试带宽和延迟', iconFunc: Speed }
     ];
 

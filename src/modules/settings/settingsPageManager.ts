@@ -531,13 +531,13 @@ export class SettingsPageManager {
       if (apiKeyInput) {
         switch (currentProvider) {
           case 'openai':
-            apiKeyInput.placeholder = '输入您的OpenAI API Key (...)';
+            apiKeyInput.placeholder = '输入您的OpenAI API Key (sk-...)';
             break;
           case 'deepseek':
             apiKeyInput.placeholder = '输入您的DeepSeek API Key';
             break;
           case 'claude':
-            apiKeyInput.placeholder = '输入您的Claude API Key (ant-...)';
+            apiKeyInput.placeholder = '输入您的Claude API Key (sk-ant-...)';
             break;
           case 'custom':
             apiKeyInput.placeholder = '输入您的自定义 API Key';

@@ -120,9 +120,9 @@ export class DashboardRenderer {
             </div>
             <div class="card-content chart-container">
               <div id="chart-disk"></div>
-              <div class="diinfo-text">
-                 <span class="dipercentage">${systemInfo.diskUsage.percentage}</span>
-                 <span class="dilabel">已使用</span>
+              <div class="disk-info-text">
+                 <span class="disk-percentage">${systemInfo.diskUsage.percentage}</span>
+                 <span class="disk-label">已使用</span>
               </div>
             </div>
           </div>
