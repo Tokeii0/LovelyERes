@@ -1,5 +1,3 @@
-## 已知问题， openssh 版本过高会导致无法使用 正在修复
-
 <div align="center">
   <img src="public/logo.png" alt="LovelyERes Logo" width="250" height="250">
 
