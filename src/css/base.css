@@ -447,6 +447,7 @@ body {
   backdrop-filter: blur(10px);
   position: relative;
   z-index: 100;
+  overflow: visible;
 }
 
 .modern-sidebar.mini-sidebar {
@@ -561,6 +562,83 @@ body {
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* 设置下拉菜单 */
+.sidebar-settings-container {
+  position: relative;
+  width: 100%;
+}
+
+.settings-dropdown-menu {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: calc(100% + 12px);
+  width: 280px;
+  min-width: 280px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  padding: 12px;
+  animation: slideInLeft 0.2s ease-out;
+  backdrop-filter: blur(12px);
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-dropdown-menu.show {
+  display: flex;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-group-title {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  padding-left: 4px;
+  white-space: nowrap;
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.settings-item:hover {
+  background: var(--bg-hover);
+}
+
+.settings-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.settings-item:hover .settings-item-icon {
+  color: var(--primary-color);
 }
 
 .modern-sidebar.mini-sidebar {
@@ -761,6 +839,8 @@ body {
   cursor: pointer;
   color: var(--text-secondary);
   background: transparent;
+  border: none;
+  outline: none;
   transition: all 0.2s ease;
   position: relative;
   font-weight: 400;
@@ -810,14 +890,13 @@ body {
 }
 
 .workspace-header {
-  padding: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
 }
 
 .workspace-content {
   flex: 1;
-  padding: var(--spacing-lg);
   overflow-y: auto;
 }
 
@@ -3234,14 +3313,181 @@ body {
   align-items: center;
 }
 
-.dropdown-section-title .count-badge {
+.dropdown-section-title /* System Info Tabs */
+.tab-btn {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 4px 4px 0 0;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.tab-btn.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+  font-weight: 600;
+}
+
+/* System Info Tables */
+.info-table-container {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.table-header-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
   background: var(--bg-tertiary);
-  color: var(--text-tertiary);
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.table-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.search-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.system-select {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.system-select:focus {
+  border-color: var(--primary-color);
+}
+
+.system-input {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.system-input:focus {
+  border-color: var(--primary-color);
+}
+
+.system-btn {
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.system-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--primary-color);
+}
+
+.table-content {
+  overflow-x: auto;
+}
+
+.system-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.system-table th {
+  text-align: left;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.system-table td {
+  padding: 12px 16px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.system-table tr:last-child td {
+  border-bottom: none;
+}
+
+.system-table tr:hover td {
+  background: var(--bg-hover);
+}
+
+.process-row:hover td {
+  background: var(--bg-hover);
+}
+
+.process-row.selected td {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   font-size: 10px;
+  font-weight: 600;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 10px;
   min-width: 18px;
-  text-align: center;
+  height: 16px;
+  transition: var(--transition);
+  border: 1px solid var(--border-color);
+}
+
+.tab-btn.active .count-badge {
+  background: var(--primary-color);
+  color: var(--text-white);
+  border-color: var(--primary-color);
+}
+
+.tab-btn:hover .count-badge {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .dropdown-item {

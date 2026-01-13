@@ -20,6 +20,7 @@ export interface ServerInfo {
   host: string;
   port: number;
   username?: string;
+  detailedInfo?: any; // 用于存储系统详细信息
 }
 
 export interface AppState {
@@ -216,16 +217,40 @@ export class LovelyResApp {
    * 绑定事件
    */
   private bindEvents(): void {
-    // 主题切换事件 - 分段控制器
+    // 定义全局窗口函数
+    this.defineGlobalFunctions();
+
+    // 全局点击事件处理
     document.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
-      // 检查是否点击了主题切换按钮
+      
+      // 主题切换 - 分段控制器
       const themeBtn = target.closest('.segmented-btn');
       if (themeBtn && themeBtn.closest('.theme-switcher')) {
         const theme = themeBtn.getAttribute('data-theme-value');
         if (theme && ['light', 'dark', 'sakura'].includes(theme)) {
           this.setTheme(theme as 'light' | 'dark' | 'sakura');
         }
+      }
+
+      // 导航点击事件
+      const navItem = target.closest('.nav-item');
+      // 排除设置按钮（它也有nav-item类，但没有data-nav-id或id不同）
+      if (navItem && navItem.getAttribute('data-nav-id')) {
+        const navId = navItem.getAttribute('data-nav-id');
+        if (navId) {
+            this.stateManager.setCurrentPage(navId as any);
+            this.modernUIRenderer.updateState(this.stateManager.getState());
+            this.render(); // 重新渲染以更新视图
+        }
+      }
+
+      // 点击外部关闭下拉菜单
+      if (!target.closest('.sidebar-settings-container')) {
+        (window as any).hideSettingsDropdown && (window as any).hideSettingsDropdown();
+      }
+      if (!target.closest('.connection-card-wrapper')) {
+        (window as any).hideConnectionDropdown && (window as any).hideConnectionDropdown();
       }
     });
 
@@ -237,6 +262,59 @@ export class LovelyResApp {
     
     // Docker管理事件
     this.bindDockerEvents();
+  }
+
+  /**
+   * 定义全局窗口函数
+   */
+  private defineGlobalFunctions(): void {
+    // 设置下拉菜单
+    (window as any).toggleSettingsDropdown = () => {
+      const menu = document.getElementById('settings-dropdown-menu');
+      if (menu) {
+        menu.classList.toggle('show');
+      }
+    };
+
+    (window as any).hideSettingsDropdown = () => {
+      const menu = document.getElementById('settings-dropdown-menu');
+      if (menu) {
+        menu.classList.remove('show');
+      }
+    };
+
+    // 连接下拉菜单
+    (window as any).toggleConnectionDropdown = () => {
+      const menu = document.getElementById('connection-dropdown-menu');
+      if (menu) {
+        menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+      }
+    };
+
+    (window as any).hideConnectionDropdown = () => {
+      const menu = document.getElementById('connection-dropdown-menu');
+      if (menu) {
+        menu.style.display = 'none';
+      }
+    };
+
+    // Debug 工具
+    (window as any).toggleDevTools = async () => {
+      try {
+        await invoke('open_devtools');
+      } catch (e) {
+        console.error('Failed to open devtools:', e);
+      }
+    };
+
+    // 菜单操作
+    (window as any).handleUserMenuAction = (action: string) => {
+        if (action === 'settings') {
+            this.stateManager.setCurrentPage('settings');
+            this.modernUIRenderer.updateState(this.stateManager.getState());
+            this.render();
+        }
+    };
   }
 
   /**

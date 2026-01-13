@@ -2571,6 +2571,13 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
           const tabId = activeTab.getAttribute('data-tab') || 'processes';
           (window as any).loadSystemInfoTabData(tabId, cache.detailedInfo);
         }
+        
+        // 更新 Tab 计数
+        const app = (window as any).app;
+        if (app && app.modernUIRenderer && typeof app.modernUIRenderer.updateSystemInfoTabs === 'function') {
+          app.modernUIRenderer.updateSystemInfoTabs(cache.detailedInfo);
+        }
+
         return cache.detailedInfo;
       }
 
@@ -2608,6 +2615,11 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
           if (activeTab) {
             const tabId = activeTab.getAttribute('data-tab') || 'processes';
             (window as any).loadSystemInfoTabData(tabId, detailedInfo);
+          }
+          
+          // 更新 Tab 计数
+          if (app.modernUIRenderer && typeof app.modernUIRenderer.updateSystemInfoTabs === 'function') {
+            app.modernUIRenderer.updateSystemInfoTabs(detailedInfo);
           }
         }
 
@@ -2695,6 +2707,18 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
       // 重新获取所有系统信息
       const detailedInfo = await app.systemInfoManager.getDetailedSystemInfo();
       console.log('✅ 系统信息刷新完成');
+
+      // 将详细信息更新到状态中，以便 Tab 上的计数徽章能更新
+      const state = app.stateManager.getState();
+      if (state.serverInfo) {
+        state.serverInfo.detailedInfo = detailedInfo;
+        app.stateManager.setState(state);
+      }
+
+      // 更新 Tab 计数
+      if (app.modernUIRenderer && typeof app.modernUIRenderer.updateSystemInfoTabs === 'function') {
+        app.modernUIRenderer.updateSystemInfoTabs(detailedInfo);
+      }
 
       // 更新当前激活的标签页
       const activeTab = document.querySelector('.tab-btn.active');

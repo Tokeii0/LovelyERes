@@ -53,80 +53,15 @@ import {
   LinkCloud,
   BookOpen,
   Log,
-  Data
+  Data,
+  Left,
+  Right
 } from '@icon-park/svg';
 
 // 添加系统信息页面的样式
 const systemInfoStyles = `
   <style>
-    .system-info-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: var(--spacing-sm) var(--spacing-md);
-      border-bottom: 1px solid var(--border-color);
-      background: var(--bg-secondary);
-    }
-    
-    .system-info-tabs {
-      display: flex;
-      gap: var(--spacing-xs);
-      flex-wrap: wrap;
-    }
-    
-    .system-info-actions {
-      display: flex;
-      gap: var(--spacing-sm);
-      align-items: center;
-    }
-    
-    .refresh-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 12px;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--border-radius);
-      color: var(--text-primary);
-      cursor: pointer;
-      font-size: 13px;
-      transition: all 0.2s ease;
-    }
-    
-    .refresh-btn:hover {
-      background: var(--bg-tertiary);
-      border-color: var(--border-color-hover);
-      transform: translateY(-1px);
-    }
-    
-    .refresh-btn:active {
-      transform: translateY(0);
-    }
-    
-    .refresh-btn svg {
-      transition: transform 0.5s ease;
-    }
-    
-    .refresh-btn:hover svg {
-      transform: rotate(180deg);
-    }
-    
-    @media (max-width: 768px) {
-      .system-info-header {
-        flex-direction: column;
-        gap: var(--spacing-md);
-        align-items: stretch;
-      }
-      
-      .system-info-tabs {
-        justify-content: center;
-      }
-      
-      .system-info-actions {
-        justify-content: center;
-      }
-    }
+    /* 基础样式已移至 system-info.css */
   </style>
 `;
 
@@ -156,6 +91,29 @@ export class ModernUIRenderer {
       styleElement.innerHTML = systemInfoStyles;
       document.head.appendChild(styleElement.firstElementChild!);
     }
+
+    // 注册 System Info Header 切换函数
+    (window as any).toggleSystemInfoHeader = () => {
+      const header = document.querySelector('.system-info-header');
+      const content = document.querySelector('.system-info-content');
+      const toggleBtn = document.querySelector('.header-toggle-icon');
+      
+      if (header && content) {
+        header.classList.toggle('collapsed');
+        content.classList.toggle('expanded');
+        
+        // 保存状态到 localStorage
+        const isCollapsed = header.classList.contains('collapsed');
+        localStorage.setItem('system-info-header-collapsed', String(isCollapsed));
+        
+        // 更新按钮图标
+        if (toggleBtn) {
+          toggleBtn.innerHTML = isCollapsed 
+            ? Right({ theme: 'outline', size: '16', fill: 'currentColor' })
+            : Left({ theme: 'outline', size: '16', fill: 'currentColor' });
+        }
+      }
+    };
 
     // 注册Kubernetes Tab切换函数
     (window as any).switchKubernetesTab = (tabId: string) => {
@@ -265,10 +223,47 @@ export class ModernUIRenderer {
   }
 
   /**
+   * 更新系统信息标签页的计数
+   */
+  public updateSystemInfoTabs(detailedInfo: any): void {
+    if (!detailedInfo) return;
+
+    const counts = {
+      processes: detailedInfo.processes?.length || 0,
+      network: detailedInfo.networkDetails?.length || 0,
+      services: detailedInfo.services?.length || 0,
+      users: detailedInfo.users?.length || 0,
+      autostart: detailedInfo.autostart?.length || 0,
+      cron: detailedInfo.cronJobs?.length || 0,
+      firewall: detailedInfo.firewallRules?.length || 0
+    };
+
+    const tabNames: Record<string, string> = {
+      processes: '进程详情',
+      network: '网络详情',
+      services: '系统服务',
+      users: '用户列表',
+      autostart: '自启动',
+      cron: '计划任务',
+      firewall: '防火墙'
+    };
+
+    Object.keys(counts).forEach(key => {
+      const tabBtn = document.querySelector(`.tab-btn[data-tab="${key}"]`);
+      if (tabBtn) {
+        const count = counts[key as keyof typeof counts];
+        const name = tabNames[key] || key;
+        const badgeHtml = count > 0 ? `<span class="count-badge">${count}</span>` : '';
+        // 保持 active 类和其他属性不变，只更新内容
+        tabBtn.innerHTML = `${name} ${badgeHtml}`;
+      }
+    });
+  }
+
+  /**
    * 渲染标题栏
    */
   renderTitleBar(): string {
-    const currentTheme = this.state.theme;
     const isMac = this.isMacOS();
 
     return `
@@ -287,22 +282,8 @@ export class ModernUIRenderer {
         </div>
 
         <div class="title-bar-right">
-          <!-- Debug按钮 -->
-          <button class="debug-btn modern-btn secondary" style="padding: 6px 12px; font-size: 11px; margin-right: var(--spacing-sm);" title="打开开发者工具" onclick="window.toggleDevTools()">
-            🐛 Debug
-          </button>
-          
-          <div class="segmented-control theme-switcher" style="margin-right: var(--spacing-sm);">
-            <button class="segmented-btn ${currentTheme === 'light' ? 'active' : ''}" data-theme-value="light" title="切换到浅色主题">☀️ 浅色</button>
-            <button class="segmented-btn ${currentTheme === 'dark' ? 'active' : ''}" data-theme-value="dark" title="切换到深色主题">🌙 深色</button>
-            <button class="segmented-btn ${currentTheme === 'sakura' ? 'active' : ''}" data-theme-value="sakura" title="切换到粉色主题">🌸 粉色</button>
-          </div>
-
           <!-- SSH终端按钮 -->
           ${this.renderSSHTerminalTitleButton()}
-
-          <!-- 设置按钮 -->
-          ${this.renderUserAvatar()}
 
           ${!isMac ? `
           <div class="window-controls">
@@ -338,9 +319,63 @@ export class ModernUIRenderer {
           ${this.renderNavigationMenu()}
         </div>
         
+        <!-- 底部设置按钮 -->
+        <div class="sidebar-settings-container">
+            ${this.renderSettingsMenu()}
+            <button class="nav-item settings-btn" style="width: 100%; justify-content: center; margin-bottom: 8px;" onclick="window.toggleSettingsDropdown()" title="设置" data-tooltip="设置">
+                <span class="nav-item-icon">
+                    ${SettingTwo({ theme: 'outline', size: '18', fill: 'currentColor' })}
+                </span>
+            </button>
+        </div>
+
         <!-- 底部连接面板 -->
-        <div style="margin-top: auto;">
+        <div style="margin-top: 0;">
             ${this.renderConnectionPanel()}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * 渲染设置菜单
+   */
+  private renderSettingsMenu(): string {
+    const currentTheme = this.state.theme;
+    
+    return `
+      <div id="settings-dropdown-menu" class="settings-dropdown-menu">
+        <div class="settings-group">
+            <div class="settings-group-title">开发工具</div>
+            <button class="settings-item" onclick="window.toggleDevTools(); window.hideSettingsDropdown();">
+                <div class="settings-item-icon">
+                    🐛
+                </div>
+                <span>Debug 工具</span>
+            </button>
+        </div>
+
+        <div class="dropdown-divider"></div>
+
+        <div class="settings-group">
+            <div class="settings-group-title">主题设置</div>
+            <div class="segmented-control theme-switcher" style="width: 100%; padding: 3px;">
+                <button class="segmented-btn ${currentTheme === 'light' ? 'active' : ''}" style="flex: 1; padding: 6px;" data-theme-value="light" title="浅色">☀️ 浅色</button>
+                <button class="segmented-btn ${currentTheme === 'dark' ? 'active' : ''}" style="flex: 1; padding: 6px;" data-theme-value="dark" title="深色">🌙 深色</button>
+                <button class="segmented-btn ${currentTheme === 'sakura' ? 'active' : ''}" style="flex: 1; padding: 6px;" data-theme-value="sakura" title="粉色">🌸 粉色</button>
+            </div>
+        </div>
+
+        <div class="dropdown-divider"></div>
+
+        <div class="settings-group">
+            <div class="settings-group-title">通用</div>
+            <button class="settings-item" onclick="window.handleUserMenuAction('settings'); window.hideSettingsDropdown();">
+                 <div class="settings-item-icon">
+                    ${SettingConfig({ theme: 'outline', size: '16', fill: 'currentColor' })}
+                 </div>
+                 <span>基础设置</span>
+            </button>
         </div>
       </div>
     `;
@@ -590,31 +625,6 @@ export class ModernUIRenderer {
     return menuItems;
   }
 
-  /**
-   * 渲染设置按钮
-   */
-  private renderUserAvatar(): string {
-    return `
-      <div class="user-avatar-container" style="position: relative; margin-right: var(--spacing-sm);">
-        <button class="user-avatar-btn" title="设置" onclick="window.handleUserMenuAction('settings')">
-          <div class="user-avatar" style="
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: transparent;
-            color: var(--text-primary);
-            border: 1px solid var(--border-color);
-            transition: all 0.2s;
-          " onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='transparent'">
-            ${SettingTwo({ theme: 'outline', size: '18', fill: 'currentColor' })}
-          </div>
-        </button>
-      </div>
-    `;
-  }
 
 
   /**
@@ -662,27 +672,83 @@ export class ModernUIRenderer {
    * 渲染系统信息页面
    */
   private renderSystemInfo(): string {
+    const detailedInfo = this.state.serverInfo?.detailedInfo;
+    const counts = {
+      processes: detailedInfo?.processes?.length || 0,
+      network: detailedInfo?.networkDetails?.length || 0,
+      services: detailedInfo?.services?.length || 0,
+      users: detailedInfo?.users?.length || 0,
+      autostart: detailedInfo?.autostart?.length || 0,
+      cron: detailedInfo?.cronJobs?.length || 0,
+      firewall: detailedInfo?.firewallRules?.length || 0
+    };
+
+    // 读取折叠状态
+    const isCollapsed = localStorage.getItem('system-info-header-collapsed') === 'true';
+    const collapsedClass = isCollapsed ? 'collapsed' : '';
+    const contentExpandedClass = isCollapsed ? 'expanded' : '';
+    const toggleIcon = isCollapsed 
+      ? Right({ theme: 'outline', size: '16', fill: 'currentColor' })
+      : Left({ theme: 'outline', size: '16', fill: 'currentColor' });
+
     return `
       <div class="system-info-container">
-        <div class="system-info-header">
-          <div class="system-info-tabs">
-            <button class="tab-btn active" data-tab="processes">进程详情</button>
-            <button class="tab-btn" data-tab="network">网络详情</button>
-            <button class="tab-btn" data-tab="services">系统服务</button>
-            <button class="tab-btn" data-tab="users">用户列表</button>
-            <button class="tab-btn" data-tab="autostart">自启动</button>
-            <button class="tab-btn" data-tab="cron">计划任务</button>
-            <button class="tab-btn" data-tab="firewall">防火墙</button>
+        <div class="system-info-header ${collapsedClass}">
+          <div class="header-toggle-btn" onclick="window.toggleSystemInfoHeader()" title="切换菜单">
+            <span class="header-toggle-icon">${toggleIcon}</span>
           </div>
+          
+          <div class="system-info-menu-title">
+            <span>系统概览</span>
+          </div>
+
+          <div class="system-info-tabs">
+            <button class="tab-btn active" data-tab="processes">
+              <span class="tab-icon">${List({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
+              <span class="tab-label">进程详情</span>
+              ${counts.processes > 0 ? `<span class="count-badge">${counts.processes}</span>` : ''}
+            </button>
+            <button class="tab-btn" data-tab="network">
+              <span class="tab-icon">${Earth({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
+              <span class="tab-label">网络详情</span>
+              ${counts.network > 0 ? `<span class="count-badge">${counts.network}</span>` : ''}
+            </button>
+            <button class="tab-btn" data-tab="services">
+              <span class="tab-icon">${System({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
+              <span class="tab-label">系统服务</span>
+              ${counts.services > 0 ? `<span class="count-badge">${counts.services}</span>` : ''}
+            </button>
+            <button class="tab-btn" data-tab="users">
+              <span class="tab-icon">${User({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
+              <span class="tab-label">用户列表</span>
+              ${counts.users > 0 ? `<span class="count-badge">${counts.users}</span>` : ''}
+            </button>
+            <button class="tab-btn" data-tab="autostart">
+              <span class="tab-icon">${Rocket({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
+              <span class="tab-label">自启动</span>
+              ${counts.autostart > 0 ? `<span class="count-badge">${counts.autostart}</span>` : ''}
+            </button>
+            <button class="tab-btn" data-tab="cron">
+              <span class="tab-icon">${Time({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
+              <span class="tab-label">计划任务</span>
+              ${counts.cron > 0 ? `<span class="count-badge">${counts.cron}</span>` : ''}
+            </button>
+            <button class="tab-btn" data-tab="firewall">
+              <span class="tab-icon">${Shield({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
+              <span class="tab-label">防火墙</span>
+              ${counts.firewall > 0 ? `<span class="count-badge">${counts.firewall}</span>` : ''}
+            </button>
+          </div>
+          
           <div class="system-info-actions">
             <button class="refresh-btn" onclick="window.refreshAllSystemInfo()" title="刷新所有系统信息">
               ${Refresh({ theme: 'outline', size: '16', fill: 'currentColor' })}
-              <span>刷新</span>
+              <span>刷新数据</span>
             </button>
           </div>
         </div>
 
-        <div class="system-info-content" id="system-info-content">
+        <div class="system-info-content ${contentExpandedClass}" id="system-info-content">
           ${this.renderSystemInfoTab('processes')}
         </div>
       </div>
@@ -2626,7 +2692,7 @@ export class ModernUIRenderer {
         </div>
 
         <div class="status-right">
-          <span>LovelyRes v0.55</span>
+          <span>LovelyRes v0.60</span>
         </div>
       </div>
     `;
