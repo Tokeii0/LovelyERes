@@ -131,34 +131,50 @@ export class LovelyResApp {
   }
 
   /**
-   * 切换主题
+   * 设置主题
    */
-  async toggleTheme(): Promise<void> {
-    const newTheme = this.stateManager.toggleTheme();
+  async setTheme(theme: 'light' | 'dark' | 'sakura'): Promise<void> {
     const themeNames = {
       'light': '浅色',
       'dark': '深色',
       'sakura': '樱花粉',
     };
 
-    try {
-      // 保存主题设置到后端
-      await invoke('set_current_theme', { theme: newTheme });
-      console.log(`✅ 主题已保存到设置: ${newTheme}`);
-      
-      // 显示成功消息
-      this.showMessage(`已切换到${themeNames[newTheme as keyof typeof themeNames] || '未知'}模式`, 'success');
-    } catch (error) {
-      console.error('❌ 保存主题设置失败:', error);
-      this.showMessage('保存主题设置失败', 'error');
+    // 如果已经在该主题，不进行操作
+    if (this.stateManager.getState().theme === theme) {
+      return;
     }
 
+    try {
+      // 保存主题设置到后端
+      await invoke('set_current_theme', { theme });
+      console.log(`✅ 主题已保存到设置: ${theme}`);
+      
+      this.showMessage(`已切换到${themeNames[theme] || '未知'}模式`, 'success');
+    } catch (error) {
+      console.error('❌ 保存主题设置失败:', error);
+      // 即使保存失败也继续切换UI
+    }
+
+    // 更新状态管理器
+    this.stateManager.setTheme(theme);
+
     // 应用主题
-    this.themeManager.setTheme(newTheme);
+    this.themeManager.setTheme(theme);
     
     // 更新UI
     this.modernUIRenderer.updateState(this.stateManager.getState());
     this.updateTitleBar();
+  }
+
+  /**
+   * 切换主题
+   */
+  async toggleTheme(): Promise<void> {
+    const currentTheme = this.stateManager.getState().theme;
+    const themes: ('light' | 'dark' | 'sakura')[] = ['light', 'dark', 'sakura'];
+    const nextIndex = (themes.indexOf(currentTheme) + 1) % themes.length;
+    await this.setTheme(themes[nextIndex]);
   }
 
   /**
@@ -200,11 +216,16 @@ export class LovelyResApp {
    * 绑定事件
    */
   private bindEvents(): void {
-    // 主题切换事件
+    // 主题切换事件 - 分段控制器
     document.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
-      if (target.classList.contains('theme-toggle-btn')) {
-        this.toggleTheme();
+      // 检查是否点击了主题切换按钮
+      const themeBtn = target.closest('.segmented-btn');
+      if (themeBtn && themeBtn.closest('.theme-switcher')) {
+        const theme = themeBtn.getAttribute('data-theme-value');
+        if (theme && ['light', 'dark', 'sakura'].includes(theme)) {
+          this.setTheme(theme as 'light' | 'dark' | 'sakura');
+        }
       }
     });
 
@@ -347,14 +368,17 @@ export class LovelyResApp {
    * 更新主题切换按钮
    */
   private updateThemeToggleButton(): void {
-    const themeButton = document.querySelector('.theme-toggle-btn');
-    if (themeButton) {
-      const currentThemeConfig = this.stateManager.getThemeConfig();
-      const nextThemeConfig = this.stateManager.getNextThemeConfig();
-
-      themeButton.innerHTML = `${currentThemeConfig.icon} ${currentThemeConfig.name}`;
-      themeButton.setAttribute('title', `切换到${nextThemeConfig.name}主题`);
-    }
+    const currentTheme = this.stateManager.getState().theme;
+    const buttons = document.querySelectorAll('.theme-switcher .segmented-btn');
+    
+    buttons.forEach(btn => {
+      const themeValue = btn.getAttribute('data-theme-value');
+      if (themeValue === currentTheme) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
   }
 
   /**

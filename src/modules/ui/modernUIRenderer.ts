@@ -268,8 +268,7 @@ export class ModernUIRenderer {
    * 渲染标题栏
    */
   renderTitleBar(): string {
-    const currentThemeConfig = this.stateManager.getThemeConfig();
-    const nextThemeConfig = this.stateManager.getNextThemeConfig();
+    const currentTheme = this.state.theme;
     const isMac = this.isMacOS();
 
     return `
@@ -293,9 +292,11 @@ export class ModernUIRenderer {
             🐛 Debug
           </button>
           
-          <button class="theme-toggle-btn modern-btn secondary" style="padding: 6px 12px; font-size: 11px; margin-right: var(--spacing-sm);" title="切换到${nextThemeConfig.name}主题">
-            ${currentThemeConfig.icon} ${currentThemeConfig.name}
-          </button>
+          <div class="segmented-control theme-switcher" style="margin-right: var(--spacing-sm);">
+            <button class="segmented-btn ${currentTheme === 'light' ? 'active' : ''}" data-theme-value="light" title="切换到浅色主题">☀️ 浅色</button>
+            <button class="segmented-btn ${currentTheme === 'dark' ? 'active' : ''}" data-theme-value="dark" title="切换到深色主题">🌙 深色</button>
+            <button class="segmented-btn ${currentTheme === 'sakura' ? 'active' : ''}" data-theme-value="sakura" title="切换到粉色主题">🌸 粉色</button>
+          </div>
 
           <!-- SSH终端按钮 -->
           ${this.renderSSHTerminalTitleButton()}
@@ -332,7 +333,7 @@ export class ModernUIRenderer {
    */
   renderSidebar(): string {
     return `
-      <div class="modern-sidebar">
+      <div class="modern-sidebar mini-sidebar">
         <div class="sidebar-content">
           ${this.renderNavigationMenu()}
         </div>
@@ -367,7 +368,7 @@ export class ModernUIRenderer {
           ${this.renderConnectionDropdownContent()}
         </div>
 
-        <div class="connection-card ${isConnected ? 'connected' : ''}" onclick="window.toggleConnectionDropdown()">
+        <div class="connection-card ${isConnected ? 'connected' : ''}" onclick="window.toggleConnectionDropdown()" data-tooltip="${mainText}">
           
           <!-- Icon Area -->
           <div class="connection-card-icon">
@@ -465,7 +466,7 @@ export class ModernUIRenderer {
             const isActive = item.active;
             
             return `
-              <div class="nav-item ${isActive ? 'active' : ''}" data-nav-id="${item.id}">
+              <div class="nav-item ${isActive ? 'active' : ''}" data-nav-id="${item.id}" data-tooltip="${item.title}">
                 
                 ${isActive ? `<div class="nav-item-indicator"></div>` : ''}
                 
@@ -512,146 +513,63 @@ export class ModernUIRenderer {
     if (activeConnection) {
       const disconnectIcon = LinkInterrupt({ theme: 'outline', size: '16', fill: 'currentColor' });
       menuItems += `
-        <div class="dropdown-item" onclick="window.disconnectServer('${activeConnection.id}'); window.hideConnectionDropdown();" style="
-          padding: 10px 12px;
-          cursor: pointer;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-size: 13px;
-          color: var(--error-color);
-          font-weight: 500;
-          background: rgba(239, 68, 68, 0.05);
-          margin-bottom: 8px;
-          border: 1px dashed var(--error-color);
-          transition: all 0.2s;
-        " onmouseover="this.style.background='rgba(239, 68, 68, 0.1)'; this.style.transform='translateY(-1px)';" 
-           onmouseout="this.style.background='rgba(239, 68, 68, 0.05)'; this.style.transform='translateY(0)';">
-          <div style="
-              width: 24px; 
-              height: 24px; 
-              border-radius: 6px; 
-              background: var(--error-color); 
-              color: white; 
-              display: flex; 
-              align-items: center; 
-              justify-content: center;
-          ">
+        <div class="dropdown-item danger" onclick="window.disconnectServer('${activeConnection.id}'); window.hideConnectionDropdown();">
+          <div class="dropdown-item-icon danger">
               ${disconnectIcon}
           </div>
-          <span>断开当前连接</span>
+          <div class="dropdown-item-content">
+            <span class="dropdown-item-title">断开当前连接</span>
+            <span class="dropdown-item-subtitle">${activeConnection.name}</span>
+          </div>
         </div>
+        <div class="dropdown-divider"></div>
       `;
     }
 
     // 添加新连接选项 - 放在顶部作为主要操作
     menuItems += `
-      <div class="dropdown-item" onclick="window.showServerModal(); window.hideConnectionDropdown();" style="
-        padding: 10px 12px;
-        cursor: pointer;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 13px;
-        color: var(--primary-color);
-        font-weight: 500;
-        background: rgba(59, 130, 246, 0.05);
-        margin-bottom: 8px;
-        border: 1px dashed var(--primary-color);
-        transition: all 0.2s;
-      " onmouseover="this.style.background='rgba(59, 130, 246, 0.1)'; this.style.transform='translateY(-1px)';" 
-         onmouseout="this.style.background='rgba(59, 130, 246, 0.05)'; this.style.transform='translateY(0)';">
-        <div style="
-            width: 24px; 
-            height: 24px; 
-            border-radius: 6px; 
-            background: var(--primary-color); 
-            color: white; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center;
-        ">
+      <div class="dropdown-item primary" onclick="window.showServerModal(); window.hideConnectionDropdown();">
+        <div class="dropdown-item-icon primary">
             ${Plus({ theme: 'outline', size: '16', fill: 'currentColor' })}
         </div>
-        <span>添加新服务器</span>
+        <div class="dropdown-item-content">
+            <span class="dropdown-item-title">添加新服务器</span>
+            <span class="dropdown-item-subtitle">配置 SSH 连接</span>
+        </div>
       </div>
+      <div class="dropdown-divider"></div>
     `;
 
     if (connections.length > 0) {
       menuItems += `
-        <div style="
-            padding: 8px 12px 4px; 
-            font-size: 11px; 
-            color: var(--text-tertiary); 
-            font-weight: 600; 
-            text-transform: uppercase; 
-            letter-spacing: 0.5px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        ">
+        <div class="dropdown-section-title">
           <span>快速连接</span>
-          <span style="font-size: 10px; font-weight: normal; opacity: 0.7;">${connections.length} 个服务器</span>
+          <span class="count-badge">${connections.length}</span>
         </div>
-        <div style="max-height: 300px; overflow-y: auto; padding-right: 2px;">
+        <div class="dropdown-scroll-area">
       `;
 
       connections.forEach((conn: any) => {
         const isConnected = conn.isConnected;
         
         menuItems += `
-          <div class="dropdown-item" onclick="window.connectServer('${conn.id}'); window.hideConnectionDropdown();" style="
-            padding: 10px 12px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            border-radius: 8px;
-            margin-bottom: 2px;
-            transition: all 0.2s;
-            border: 1px solid transparent;
-          " onmouseover="this.style.background='var(--bg-secondary)'; this.style.borderColor='var(--border-color)';" 
-             onmouseout="this.style.background='transparent'; this.style.borderColor='transparent';">
+          <div class="dropdown-item ${isConnected ? 'active' : ''}" onclick="window.connectServer('${conn.id}'); window.hideConnectionDropdown();">
             
-            <div style="position: relative;">
-                <div style="
-                    width: 32px; 
-                    height: 32px; 
-                    border-radius: 8px; 
-                    background: ${isConnected ? 'rgba(34, 197, 94, 0.1)' : 'var(--bg-tertiary)'};
-                    display: flex; 
-                    align-items: center; 
-                    justify-content: center;
-                    color: ${isConnected ? 'var(--success-color)' : 'var(--text-secondary)'};
-                ">
-                    ${isConnected 
-                        ? CheckOne({ theme: 'filled', size: '16', fill: 'currentColor' }) 
-                        : System({ theme: 'outline', size: '16', fill: 'currentColor' })
-                    }
-                </div>
-                ${isConnected ? `
-                <div style="
-                    position: absolute;
-                    bottom: -2px;
-                    right: -2px;
-                    width: 8px;
-                    height: 8px;
-                    border-radius: 50%;
-                    background: var(--success-color);
-                    border: 2px solid var(--bg-primary);
-                "></div>
-                ` : ''}
+            <div class="dropdown-item-icon ${isConnected ? 'success' : 'default'}">
+                ${isConnected 
+                    ? CheckOne({ theme: 'filled', size: '16', fill: 'currentColor' }) 
+                    : System({ theme: 'outline', size: '16', fill: 'currentColor' })
+                }
+                ${isConnected ? `<div class="status-dot"></div>` : ''}
             </div>
 
-            <div style="flex: 1; overflow: hidden;">
-              <div style="font-weight: 500; color: var(--text-primary); font-size: 13px; margin-bottom: 2px;">${conn.name}</div>
-              <div style="font-size: 11px; color: var(--text-secondary); font-family: monospace; opacity: 0.8;">${conn.username}@${conn.host}</div>
+            <div class="dropdown-item-content">
+              <span class="dropdown-item-title">${conn.name}</span>
+              <span class="dropdown-item-subtitle">${conn.username}@${conn.host}</span>
             </div>
             
             ${isConnected ? `
-                <div style="font-size: 10px; color: var(--success-color); background: rgba(34, 197, 94, 0.1); padding: 2px 6px; border-radius: 4px;">运行中</div>
+                <div class="status-badge">运行中</div>
             ` : ''}
           </div>
         `;
@@ -660,11 +578,11 @@ export class ModernUIRenderer {
       menuItems += `</div>`; // Close scroll container
     } else {
       menuItems += `
-        <div style="padding: 20px 12px; text-align: center; color: var(--text-secondary);">
-          <div style="opacity: 0.3; margin-bottom: 8px;">
-            ${Connection({ theme: 'outline', size: '32', fill: 'currentColor' })}
+        <div class="dropdown-empty-state">
+          <div class="empty-icon">
+            ${Connection({ theme: 'outline', size: '24', fill: 'currentColor' })}
           </div>
-          <div style="font-size: 12px;">暂无已保存的服务器</div>
+          <div class="empty-text">暂无已保存的服务器</div>
         </div>
       `;
     }
@@ -1303,97 +1221,45 @@ export class ModernUIRenderer {
         opacity: 0;
         transition: opacity 0.2s ease;
       ">
-        <div class="modal-content" style="
-          background: var(--bg-secondary);
-          border-radius: var(--border-radius-lg);
-          width: 90%;
-          max-width: 800px;
-          max-height: 85vh;
-          display: flex;
-          flex-direction: column;
-          border: 1px solid var(--border-color);
-          box-shadow: var(--shadow-xl);
-          transform: scale(0.98);
-          transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        ">
-          <div class="modal-header" style="
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: var(--spacing-lg) var(--spacing-xl);
-            border-bottom: 1px solid var(--border-color);
-            background: var(--bg-tertiary);
-            border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
-          ">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="
-                    width: 36px; 
-                    height: 36px; 
-                    border-radius: 10px; 
-                    background: var(--primary-color-alpha-10); 
-                    color: var(--primary-color);
-                    display: flex; 
-                    align-items: center; 
-                    justify-content: center;
-                ">
-                    ${LinkCloud({ theme: 'filled', size: '20', fill: 'currentColor' })}
+        <div class="modal-content modern-modal-content">
+          <div class="modern-modal-header">
+            <div class="header-left">
+                <div class="header-icon-box">
+                    ${LinkCloud({ theme: 'filled', size: '18', fill: 'currentColor' })}
                 </div>
-                <div>
-                    <h2 style="margin: 0; color: var(--text-primary); font-size: 16px; font-weight: 600; line-height: 1.2;">服务器管理</h2>
-                    <p style="margin: 2px 0 0; color: var(--text-secondary); font-size: 12px;">管理 SSH 连接与服务器配置</p>
+                <div class="header-title-group">
+                    <h2>服务器管理</h2>
                 </div>
             </div>
-            <button class="close-modal-btn" style="
-              background: none;
-              border: none;
-              color: var(--text-secondary);
-              cursor: pointer;
-              padding: 6px;
-              border-radius: var(--border-radius);
-              transition: all 0.2s;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            " onclick="window.hideServerModal()" title="关闭" 
-              onmouseover="this.style.background='var(--bg-hover)'; this.style.color='var(--text-primary)'" 
-              onmouseout="this.style.background='transparent'; this.style.color='var(--text-secondary)'">
-              ${CloseOne({ theme: 'outline', size: '20', fill: 'currentColor' })}
+            <button class="close-modal-btn" onclick="window.hideServerModal()" title="关闭">
+              ${CloseOne({ theme: 'outline', size: '18', fill: 'currentColor' })}
             </button>
           </div>
 
-          <div class="modal-body" style="
-            padding: 0;
-            flex: 1;
-            overflow-y: auto;
-            position: relative;
-          ">
-            <div id="server-list-container" style="padding: var(--spacing-xl);">
-                <div class="server-actions" style="
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                  margin-bottom: var(--spacing-lg);
-                ">
-                  <div style="font-size: 13px; color: var(--text-secondary); font-weight: 500;">
-                    已保存的服务器
+          <div class="modal-body modern-modal-body">
+            <div id="server-list-container" class="server-list-container">
+                <div class="manager-toolbar">
+                  <div class="search-filter-area">
+                    <div class="modern-search-input-wrapper">
+                      <span class="search-icon">
+                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                      </span>
+                      <input type="text" placeholder="搜索服务器..." class="modern-search-input" oninput="window.filterServerList(this.value)">
+                    </div>
                   </div>
-                  <div style="display: flex; gap: var(--spacing-sm);">
-                      <button class="modern-btn secondary" style="padding: 8px 12px; font-size: 12px;" onclick="window.refreshServerList()">
-                        ${Refresh({ theme: 'outline', size: '14', fill: 'currentColor' })}
-                        <span style="margin-left: 6px;">刷新列表</span>
+
+                  <div class="toolbar-actions">
+                      <button class="icon-btn" onclick="window.refreshServerList()" title="刷新列表">
+                        ${Refresh({ theme: 'outline', size: '16', fill: 'currentColor' })}
                       </button>
-                      <button class="modern-btn primary" style="padding: 8px 16px; font-size: 12px;" onclick="window.showAddServerForm()">
+                      <button class="modern-btn primary compact" onclick="window.showAddServerForm()">
                         ${Plus({ theme: 'outline', size: '14', fill: 'currentColor' })}
-                        <span style="margin-left: 6px;">添加服务器</span>
+                        <span>添加服务器</span>
                       </button>
                   </div>
                 </div>
 
-                <div id="server-list" class="server-list-grid" style="
-                    display: grid; 
-                    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); 
-                    gap: var(--spacing-md);
-                ">
+                <div id="server-list" class="server-grid-modern">
                   ${this.renderServerList()}
                 </div>
             </div>
@@ -1406,6 +1272,7 @@ export class ModernUIRenderer {
       </div>
     `;
   }
+
 
   /**
    * 渲染服务器列表
