@@ -205,12 +205,15 @@ export class SSHConnectionManager {
       throw new Error('连接不存在');
     }
 
+    const originalConnection = this.connections[index];
+
     console.log('🔐 [更新连接] 开始处理:', {
       id,
       authType: updates.authType,
       hasPassword: !!(updates as any).password,
       passwordLength: (updates as any).password?.length || 0,
-      accountsCount: updates.accounts?.length || 0
+      accountsCount: updates.accounts?.length || 0,
+      originalHasEncryptedPassword: !!originalConnection.encryptedPassword
     });
 
     // 如果更新了密码，需要重新加密（主账号）
@@ -228,25 +231,42 @@ export class SSHConnectionManager {
         throw new Error('密码加密失败');
       }
     } else if ((updates as any).password === undefined || (updates as any).password === '') {
+      // 密码为空时，保留原有的加密密码
       console.log('ℹ️ [更新连接] 密码为空，保持原有密码不变');
+      if (originalConnection.encryptedPassword) {
+        updates.encryptedPassword = originalConnection.encryptedPassword;
+        console.log('✅ [更新连接] 已保留原有加密密码');
+      }
+      delete (updates as any).password; // 删除空密码字段
     }
 
     // 加密额外账号的密码
     if (updates.accounts && updates.accounts.length > 0) {
-      console.log('🔐 [更新连接] 正在加密额外账号密码...');
+      console.log('🔐 [更新连接] 正在处理额外账号密码...');
+      const originalAccounts = originalConnection.accounts || [];
+      
       for (const account of updates.accounts) {
         if (account.authType === 'password' && (account as any).password) {
+          // 有新密码，进行加密
           try {
             const encryptedPassword = await invoke('encrypt_password', {
               password: (account as any).password
             }) as string;
             account.encryptedPassword = encryptedPassword;
             delete (account as any).password; // 删除明文密码
-            console.log(`✅ 账号 ${account.username} 密码加密成功`);
+            console.log(`✅ 账号 ${account.username} 新密码加密成功`);
           } catch (error) {
             console.error(`❌ 账号 ${account.username} 密码加密失败:`, error);
             throw new Error(`账号 ${account.username} 密码加密失败`);
           }
+        } else if (account.authType === 'password' && (!(account as any).password || (account as any).password === '')) {
+          // 密码为空，尝试从原账号中保留加密密码
+          const originalAccount = originalAccounts.find(acc => acc.username === account.username);
+          if (originalAccount?.encryptedPassword) {
+            account.encryptedPassword = originalAccount.encryptedPassword;
+            console.log(`✅ 账号 ${account.username} 保留原有加密密码`);
+          }
+          delete (account as any).password; // 删除空密码字段
         }
       }
     }

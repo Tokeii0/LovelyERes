@@ -649,52 +649,53 @@ async fn ssh_test_connection(
     auth_type: String,
     password: Option<String>,
     key_path: Option<String>,
-    key_passphrase: Option<String>,
-    certificate_path: Option<String>,
+    _key_passphrase: Option<String>,
+    _certificate_path: Option<String>,
+    state: State<'_, AppState>,
 ) -> Result<bool, String> {
-    println!("🔍 [ssh_test_connection] 开始测试连接:");
+    println!("🔍 [ssh_test_connection] 开始测试连接 (使用 russh):");
     println!("  Host: {}", host);
     println!("  Port: {}", port);
     println!("  Username: {}", username);
     println!("  Auth Type: {}", auth_type);
     
-    let account = types::SSHAccountCredential {
-        username: username.clone(),
-        auth_type: auth_type.clone(),
-        encrypted_password: None,
-        key_path: key_path.clone(),
-        key_passphrase: key_passphrase.clone(),
-        certificate_path: certificate_path.clone(),
-        is_default: true,
-        description: None,
+    // 使用 russh 进行连接测试
+    let manager = state.ssh_manager.lock().unwrap();
+    
+    // 根据认证类型准备参数
+    let private_key = if auth_type == "key" {
+        // 读取密钥文件内容
+        if let Some(ref path) = key_path {
+            match std::fs::read_to_string(path) {
+                Ok(content) => Some(content),
+                Err(e) => {
+                    let err_msg = format!("读取密钥文件失败: {}", e);
+                    println!("❌ [ssh_test_connection] {}", err_msg);
+                    return Err(err_msg);
+                }
+            }
+        } else {
+            let err_msg = "密钥认证需要提供密钥路径".to_string();
+            println!("❌ [ssh_test_connection] {}", err_msg);
+            return Err(err_msg);
+        }
+    } else {
+        None
     };
-
-    let connection = types::SSHConnection {
-        id: uuid::Uuid::new_v4().to_string(),
-        name: format!("{}@{}", username, host),
-        host,
-        port,
-        username: username.clone(),
-        auth_type: auth_type.clone(),
-        encrypted_password: None,
-        key_path: key_path.clone(),
-        key_passphrase: key_passphrase.clone(),
-        certificate_path: certificate_path.clone(),
-        accounts: vec![account],
-        active_account: Some(username),
-        is_connected: false,
-        last_connected: None,
-        tags: None,
-    };
-
-    match ssh_client::SSHClient::test_connection(&connection, password.as_deref()) {
-        Ok(success) => {
-            println!("✅ [ssh_test_connection] 测试结果: {}", success);
-            Ok(success)
+    
+    // 尝试连接
+    match manager.connect(&host, port, &username, password.as_deref(), private_key.as_deref()) {
+        Ok(session_id) => {
+            println!("✅ [ssh_test_connection] 连接成功，session_id: {}", session_id);
+            // 连接成功后立即断开测试会话
+            if let Err(e) = manager.disconnect_session(&session_id) {
+                println!("⚠️ [ssh_test_connection] 断开连接时出错: {}", e);
+            }
+            Ok(true)
         }
         Err(e) => {
             println!("❌ [ssh_test_connection] 测试失败: {}", e);
-            Err(e.to_string())
+            Err(e)
         }
     }
 }

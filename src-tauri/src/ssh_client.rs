@@ -161,7 +161,8 @@ impl SSHClient {
             }
             Err(e) => {
                 println!("❌ SSH连接测试失败: {}", e);
-                Ok(false)
+                // 直接返回错误而不是 Ok(false)，这样前端可以获取详细错误信息
+                Err(e)
             }
         }
     }

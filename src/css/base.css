@@ -3843,6 +3843,14 @@ body {
   flex: 1;
 }
 
+/* 添加服务器表单容器 - 支持滚动 */
+.add-server-form {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg-secondary);
+}
+
 .server-card-modern {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);

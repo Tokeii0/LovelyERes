@@ -1274,8 +1274,9 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
     const addForm = document.getElementById('add-server-form');
 
     if (serverList && addForm) {
-      // 清除编辑模式标识
+      // 清除编辑模式标识和保存的加密密码
       (window as any).editingServerId = null;
+      (window as any).editingServerEncryptedPassword = null;
 
       serverList.style.display = 'block';
       addForm.style.display = 'none';
@@ -1878,8 +1879,9 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
           (window as any).showNotification?.('服务器配置保存成功', 'success');
         }
 
-        // 清除编辑模式标识
+        // 清除编辑模式标识和保存的加密密码
         (window as any).editingServerId = null;
+        (window as any).editingServerEncryptedPassword = null;
 
         // 隐藏表单并刷新列表
         (window as any).hideAddServerForm();
@@ -2153,14 +2155,35 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
 
     try {
       console.log('🔄 测试连接中...');
-      console.log('连接参数:', { host, port, username, authType, hasPassword: !!password, hasKeyPath: !!keyPath });
+      
+      // 编辑模式下，如果密码为空，尝试使用原有加密密码
+      let testPassword = password;
+      if (!testPassword && authType === 'password' && (window as any).editingServerId && (window as any).editingServerEncryptedPassword) {
+        console.log('📝 编辑模式下密码为空，使用原有加密密码...');
+        try {
+          testPassword = await (window as any).__TAURI__.core.invoke('decrypt_password', {
+            encryptedPassword: (window as any).editingServerEncryptedPassword
+          });
+          console.log('✅ 原有密码解密成功');
+        } catch (decryptError) {
+          console.error('❌ 解密原有密码失败:', decryptError);
+          (window as any).showNotification('无法解密原有密码，请重新输入密码', 'warning');
+          if (testBtn) {
+            testBtn.innerHTML = originalText;
+            (testBtn as HTMLButtonElement).disabled = false;
+          }
+          return;
+        }
+      }
+      
+      console.log('连接参数:', { host, port, username, authType, hasPassword: !!testPassword, hasKeyPath: !!keyPath });
 
       const result = await (window as any).__TAURI__.core.invoke('ssh_test_connection', {
         host,
         port,
         username,
         authType,
-        password: password || null,
+        password: testPassword || null,
         keyPath: keyPath || null,
         keyPassphrase: keyPassphrase || null,
         certificatePath: null
@@ -2171,11 +2194,43 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
       if (result) {
         (window as any).showNotification('✅ 连接测试成功', 'success');
       } else {
-        (window as any).showNotification('❌ 连接测试失败', 'error');
+        (window as any).showNotification('❌ 连接测试失败：服务器拒绝连接', 'error');
       }
     } catch (error) {
       console.error('测试连接失败:', error);
-      (window as any).showNotification(`连接测试失败: ${error}`, 'error');
+      
+      // 提取并格式化错误信息
+      let errorMessage = '未知错误';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      // 根据错误类型提供更友好的中文提示
+      let friendlyMessage = errorMessage;
+      if (errorMessage.includes('Unable to exchange encryption keys') || errorMessage.includes('encryption keys')) {
+        friendlyMessage = 'SSH密钥交换失败：服务器不支持当前加密算法，请检查SSH服务器配置';
+      } else if (errorMessage.includes('Authentication failed') || errorMessage.includes('认证失败')) {
+        friendlyMessage = '认证失败：用户名或密码错误';
+      } else if (errorMessage.includes('Connection refused') || errorMessage.includes('连接被拒绝')) {
+        friendlyMessage = '连接被拒绝：请检查服务器地址和端口是否正确';
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('超时') || errorMessage.includes('Timeout')) {
+        friendlyMessage = '连接超时：请检查网络连接和防火墙设置';
+      } else if (errorMessage.includes('Network') || errorMessage.includes('网络') || errorMessage.includes('network')) {
+        friendlyMessage = '网络错误：无法连接到目标服务器';
+      } else if (errorMessage.includes('Host key') || errorMessage.includes('host key')) {
+        friendlyMessage = '主机密钥验证失败：服务器身份无法确认';
+      } else if (errorMessage.includes('Permission denied') || errorMessage.includes('权限')) {
+        friendlyMessage = '权限被拒绝：用户名或密码错误';
+      } else if (errorMessage.includes('No route to host') || errorMessage.includes('无法路由')) {
+        friendlyMessage = '无法访问目标主机：请检查网络连接';
+      } else if (errorMessage.includes('SSH握手失败')) {
+        // 解析更具体的握手失败原因
+        friendlyMessage = `SSH握手失败：${errorMessage.includes('encryption') ? '加密协商失败' : '协议协商失败'}`;
+      }
+      
+      (window as any).showNotification(`❌ 连接测试失败：${friendlyMessage}`, 'error');
     } finally {
       // 恢复按钮状态
       if (testBtn) {
@@ -2226,6 +2281,8 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
         if (connection) {
           // 设置编辑模式
           (window as any).editingServerId = serverId;
+          // 保存原有的加密密码，用于测试连接时使用
+          (window as any).editingServerEncryptedPassword = connection.encryptedPassword;
 
           // 填充编辑表单
           const form = document.getElementById('add-server-form-element') as HTMLFormElement;
