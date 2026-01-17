@@ -324,11 +324,12 @@ export class LovelyResApp {
     document.addEventListener('click', async (e) => {
       const target = e.target as HTMLElement;
       
-      if (target.classList.contains('minimize-btn')) {
+      // 使用 closest() 来处理事件冒泡，因为点击的可能是按钮内部的 SVG 图标
+      if (target.closest('.minimize-btn')) {
         await invoke('minimize_window');
-      } else if (target.classList.contains('maximize-btn')) {
+      } else if (target.closest('.maximize-btn')) {
         await invoke('toggle_maximize');
-      } else if (target.classList.contains('close-btn')) {
+      } else if (target.closest('.close-btn')) {
         await invoke('close_window');
       }
     });
