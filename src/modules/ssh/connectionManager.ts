@@ -43,9 +43,19 @@ export interface SSHConnection {
 export class SSHConnectionManager {
   private connections: SSHConnection[] = [];
   private activeConnection?: SSHConnection;
+  private loadPromise: Promise<void> | null = null;
 
   constructor() {
-    this.loadConnections();
+    this.loadPromise = this.loadConnections();
+  }
+
+  /**
+   * 确保连接列表已加载完成
+   */
+  private async ensureLoaded(): Promise<void> {
+    if (this.loadPromise) {
+      await this.loadPromise;
+    }
   }
 
   /**
@@ -135,6 +145,9 @@ export class SSHConnectionManager {
    * 添加新的SSH连接
    */
   async addConnection(connection: Omit<SSHConnection, 'id' | 'isConnected' | 'lastConnected'>): Promise<SSHConnection> {
+    // 确保连接列表已加载完成，防止覆盖原有数据
+    await this.ensureLoaded();
+
     console.log('🔐 [添加连接] 开始处理:', {
       name: connection.name,
       host: connection.host,
@@ -200,6 +213,9 @@ export class SSHConnectionManager {
    * 更新SSH连接
    */
   async updateConnection(id: string, updates: Partial<SSHConnection>): Promise<SSHConnection> {
+    // 确保连接列表已加载完成
+    await this.ensureLoaded();
+
     const index = this.connections.findIndex(conn => conn.id === id);
     if (index === -1) {
       throw new Error('连接不存在');
@@ -282,6 +298,9 @@ export class SSHConnectionManager {
    * 删除SSH连接
    */
   async deleteConnection(id: string): Promise<void> {
+    // 确保连接列表已加载完成
+    await this.ensureLoaded();
+
     const index = this.connections.findIndex(conn => conn.id === id);
     if (index === -1) {
       throw new Error('连接不存在');
