@@ -252,7 +252,7 @@ pub fn validate_settings(settings: &AppSettings) -> Result<(), String> {
     }
 
     // 验证端口范围
-    if settings.default_ssh_port == 0 || settings.default_ssh_port > 65535 {
+    if settings.default_ssh_port == 0 {
         return Err("无效的SSH端口设置".to_string());
     }
 
@@ -291,7 +291,7 @@ pub fn validate_settings(settings: &AppSettings) -> Result<(), String> {
         return Err("无效的SSH保活间隔设置".to_string());
     }
 
-    if settings.ssh.connection_timeout < 1000 || settings.ssh.connection_timeout > 600000 {
+    if settings.ssh.connection_timeout != 0 && (settings.ssh.connection_timeout < 1000 || settings.ssh.connection_timeout > 600000) {
         return Err("无效的SSH连接超时设置".to_string());
     }
 

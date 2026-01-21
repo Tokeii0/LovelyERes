@@ -438,9 +438,9 @@ impl SSHManager {
 
     /// 执行仪表盘命令（快速执行，使用专用 session）
     /// 仪表盘命令通常是快速的系统信息查询，应该尽可能快地返回结果
-    /// 使用专用的仪表盘 session（保持阻塞模式），避免与终端 session 冲突
+    // 使用专用的仪表盘 session（保持阻塞模式），避免与终端 session 冲突
     pub fn execute_dashboard_command(&mut self, command: &str) -> LovelyResResult<TerminalOutput> {
-        ///println!("📊 [仪表盘] 使用专用 session 快速执行: {}", command);
+        //println!("📊 [仪表盘] 使用专用 session 快速执行: {}", command);
         self.execute_with_dashboard_session(command)
     }
 
@@ -570,6 +570,7 @@ impl SSHManager {
 
     /// 判断是否为仪表盘/系统信息查询命令
     /// 这些命令需要快速执行，应该直接使用主连接而不是创建独立连接
+    #[allow(dead_code)]
     fn is_dashboard_command(&self, command: &str) -> bool {
         // 常见的系统信息查询命令关键词
         let dashboard_keywords = [
@@ -1081,101 +1082,12 @@ impl SSHManager {
         Ok(files)
     }
 
-    /// 使用独立SSH连接执行SFTP文件列表操作
-    fn list_sftp_files_with_independent_connection(&self, path: &str) -> LovelyResResult<Vec<SftpFileInfo>> {
-        let path = path.to_string(); // 克隆path以便在闭包中使用
-        self.with_independent_sftp(|sftp| {
-            self.read_sftp_directory(sftp, &path)
-        })
-    }
 
-    /// 使用主连接执行SFTP文件列表操作（仅在没有终端会话时使用）
-    fn list_sftp_files_with_main_connection(&mut self, path: &str) -> LovelyResResult<Vec<SftpFileInfo>> {
-        // 确保SSH会话存活，如果断开则自动重连
-        if let Err(_) = self.ensure_session_alive_and_reconnect_if_needed() {
-            return Err(LovelyResError::ConnectionError("SSH会话不可用且重连失败".to_string()));
-        }
 
-        // 检查是否有活跃的终端会话
-        let has_terminals = !self.terminal_senders.is_empty();
 
-        // 只有在没有终端会话时才设置阻塞模式
-        if has_terminals {
-            // 有终端会话时，不应该使用主连接执行SFTP操作
-            return Err(LovelyResError::SSHError(
-                "检测到活跃终端会话，应使用独立连接执行SFTP操作".to_string()
-            ));
-        }
-
-        let session = self
-            .current_session
-            .as_mut()
-            .ok_or_else(|| LovelyResError::ConnectionError("未建立SSH连接".to_string()))?;
-
-        session.set_blocking(true);
-
-        let sftp = session
-            .sftp()
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("创建SFTP会话失败: {}", e))
-            })?;
-
-        // 读取目录内容
-        let mut files = Vec::new();
-        let entries = sftp
-            .readdir(std::path::Path::new(path))
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("读取目录失败: {}", e))
-            })?;
-
-        for (file_path, stat) in entries {
-            let name = file_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("unknown")
-                .to_string();
-
-            let file_type = if stat.is_dir() {
-                "directory"
-            } else if stat.is_file() {
-                "file"
-            } else {
-                "symlink"
-            }
-            .to_string();
-
-            let permissions = format!("{:o}", stat.perm.unwrap_or(0o644));
-            let size = stat.size.unwrap_or(0);
-
-            // 统一路径格式为正斜杠（POSIX风格）
-            let normalized_path = file_path.to_string_lossy().to_string().replace('\\', "/");
-
-            files.push(SftpFileInfo {
-                name,
-                path: normalized_path,
-                file_type,
-                size,
-                permissions,
-                modified: stat.mtime.map(|t| {
-                    chrono::DateTime::from_timestamp(t as i64, 0)
-                        .unwrap_or_default()
-                        .format("%Y-%m-%d %H:%M:%S")
-                        .to_string()
-                }),
-                owner: None, // SSH2库不直接提供所有者信息
-                group: None, // SSH2库不直接提供组信息
-            });
-        }
-
-        // 恢复非阻塞模式
-        let _ = session.set_blocking(false);
-
-        Ok(files)
-    }
 
     /// 读取SFTP目录内容（共用逻辑）
+    #[allow(dead_code)]
     fn read_sftp_directory(&self, sftp: &ssh2::Sftp, path: &str) -> LovelyResResult<Vec<SftpFileInfo>> {
 
         let mut files = Vec::new();
@@ -1328,89 +1240,7 @@ impl SSHManager {
         self.read_sftp_file_content(&sftp, path, max_bytes)
     }
 
-    /// 使用主连接读取SFTP文件（仅在没有终端会话时使用）
-    fn read_sftp_file_with_main_connection(
-        &mut self,
-        path: &str,
-        max_bytes: Option<usize>,
-    ) -> LovelyResResult<String> {
-        // 确保SSH会话存活，如果断开则自动重连
-        if let Err(_) = self.ensure_session_alive_and_reconnect_if_needed() {
-            return Err(LovelyResError::ConnectionError("SSH会话不可用且重连失败".to_string()));
-        }
 
-        // 检查是否有活跃的终端会话
-        let has_terminals = !self.terminal_senders.is_empty();
-        if has_terminals {
-            return Err(LovelyResError::SSHError(
-                "检测到活跃终端会话，应使用独立连接执行SFTP操作".to_string()
-            ));
-        }
-
-        let session = self
-            .current_session
-            .as_mut()
-            .ok_or_else(|| LovelyResError::ConnectionError("未建立SSH连接".to_string()))?;
-
-        // SFTP操作需要阻塞模式
-        session.set_blocking(true);
-
-        let sftp = session
-            .sftp()
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("创建SFTP会话失败: {}", e))
-            })?;
-
-        // 直接在这里实现读取逻辑，避免借用冲突
-        use std::io::Read;
-
-        // 检查文件状态
-        let stat = sftp
-            .stat(std::path::Path::new(path))
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("获取文件状态失败: {}", e))
-            })?;
-
-        if stat.is_dir() {
-            let _ = session.set_blocking(false);
-            return Err(LovelyResError::InvalidInput("不能读取目录".to_string()));
-        }
-
-        let file_size = stat.size.unwrap_or(0) as usize;
-        let max_size = max_bytes.unwrap_or(1024 * 1024); // 默认最大1MB
-
-        if file_size > max_size {
-            let _ = session.set_blocking(false);
-            return Err(LovelyResError::InvalidInput(format!(
-                "文件过大 ({} bytes)，超过限制 ({} bytes)",
-                file_size, max_size
-            )));
-        }
-
-        // 读取文件内容
-        let mut file = sftp
-            .open(std::path::Path::new(path))
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("打开文件失败: {}", e))
-            })?;
-
-        let mut contents = Vec::new();
-        file.read_to_end(&mut contents)
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("读取文件失败: {}", e))
-            })?;
-
-        // 恢复非阻塞模式
-        let _ = session.set_blocking(false);
-
-        // 尝试转换为UTF-8字符串
-        String::from_utf8(contents)
-            .map_err(|_| LovelyResError::InvalidInput("文件不是有效的UTF-8文本".to_string()))
-    }
 
     /// 读取SFTP文件内容的共用逻辑
     fn read_sftp_file_content(
@@ -1470,47 +1300,7 @@ impl SSHManager {
         self.chmod_sftp_content(&sftp, path, mode)
     }
 
-    /// 使用主连接修改权限
-    fn chmod_sftp_with_main_connection(&mut self, path: &str, mode: u32) -> LovelyResResult<()> {
-        // 确保SSH会话存活，如果断开则自动重连
-        if let Err(_) = self.ensure_session_alive_and_reconnect_if_needed() {
-            return Err(LovelyResError::ConnectionError("SSH会话不可用且重连失败".to_string()));
-        }
 
-        let session = self
-            .current_session
-            .as_mut()
-            .ok_or_else(|| LovelyResError::ConnectionError("未建立SSH连接".to_string()))?;
-
-        // SFTP操作需要阻塞模式
-        session.set_blocking(true);
-
-        let sftp = session
-            .sftp()
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("创建SFTP会话失败: {}", e))
-            })?;
-
-        // 设置权限
-        let result = sftp.setstat(
-            std::path::Path::new(path),
-            ssh2::FileStat {
-                size: None,
-                uid: None,
-                gid: None,
-                perm: Some(mode),
-                atime: None,
-                mtime: None,
-            },
-        )
-        .map_err(|e| LovelyResError::SSHError(format!("修改权限失败: {}", e)));
-
-        // 恢复非阻塞模式
-        let _ = session.set_blocking(false);
-
-        result.map(|_| ())
-    }
 
     /// 修改权限内容（共用逻辑）
     fn chmod_sftp_content(&self, sftp: &ssh2::Sftp, path: &str, mode: u32) -> LovelyResResult<()> {
@@ -1546,57 +1336,7 @@ impl SSHManager {
         self.write_sftp_file_content(&sftp, path, content)
     }
 
-    /// 使用主连接写入SFTP文件
-    fn write_sftp_file_with_main_connection(&mut self, path: &str, content: &str) -> LovelyResResult<()> {
-        use std::io::Write;
 
-        // 确保SSH会话存活，如果断开则自动重连
-        if let Err(_) = self.ensure_session_alive_and_reconnect_if_needed() {
-            return Err(LovelyResError::ConnectionError("SSH会话不可用且重连失败".to_string()));
-        }
-
-        let session = self
-            .current_session
-            .as_mut()
-            .ok_or_else(|| LovelyResError::ConnectionError("未建立SSH连接".to_string()))?;
-
-        // SFTP操作需要阻塞模式
-        session.set_blocking(true);
-
-        let sftp = session
-            .sftp()
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("创建SFTP会话失败: {}", e))
-            })?;
-
-        // 创建或打开文件进行写入
-        let mut file = sftp
-            .create(std::path::Path::new(path))
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("创建/打开文件失败: {}", e))
-            })?;
-
-        // 写入内容
-        file.write_all(content.as_bytes())
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("写入文件失败: {}", e))
-            })?;
-
-        // 确保数据写入磁盘
-        file.flush()
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("刷新文件缓冲区失败: {}", e))
-            })?;
-
-        // 恢复非阻塞模式
-        let _ = session.set_blocking(false);
-
-        Ok(())
-    }
 
     /// 写入SFTP文件内容（共用逻辑）
     fn write_sftp_file_content(&self, sftp: &ssh2::Sftp, path: &str, content: &str) -> LovelyResResult<()> {
@@ -1978,67 +1718,7 @@ impl SSHManager {
         self.upload_file_content(&sftp, local_path, remote_path)
     }
 
-    /// 使用主连接上传文件
-    fn upload_file_with_main_connection(&mut self, local_path: &str, remote_path: &str) -> LovelyResResult<()> {
-        use std::io::Write;
 
-        // 确保SSH会话存活，如果断开则自动重连
-        if let Err(_) = self.ensure_session_alive_and_reconnect_if_needed() {
-            return Err(LovelyResError::ConnectionError("SSH会话不可用且重连失败".to_string()));
-        }
-
-        let session = self
-            .current_session
-            .as_mut()
-            .ok_or_else(|| LovelyResError::ConnectionError("未建立SSH连接".to_string()))?;
-
-        // SFTP操作需要阻塞模式
-        session.set_blocking(true);
-
-        let sftp = session
-            .sftp()
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("创建SFTP会话失败: {}", e))
-            })?;
-
-        // 读取本地文件
-        let local_file_data = std::fs::read(local_path)
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("读取本地文件失败: {}", e))
-            })?;
-
-        // 创建远程文件
-        let mut remote_file = sftp
-            .create(std::path::Path::new(remote_path))
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("创建远程文件失败: {}", e))
-            })?;
-
-        // 写入数据
-        remote_file
-            .write_all(&local_file_data)
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("写入远程文件失败: {}", e))
-            })?;
-
-        // 确保数据写入磁盘
-        remote_file
-            .flush()
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("刷新远程文件缓冲区失败: {}", e))
-            })?;
-
-        // 恢复非阻塞模式
-        let _ = session.set_blocking(false);
-
-        println!("文件上传成功: {} -> {}", local_path, remote_path);
-        Ok(())
-    }
 
     /// 上传文件内容（共用逻辑）
     fn upload_file_content(&self, sftp: &ssh2::Sftp, local_path: &str, remote_path: &str) -> LovelyResResult<()> {
@@ -2082,60 +1762,7 @@ impl SSHManager {
         self.download_file_content(&sftp, remote_path, local_path)
     }
 
-    /// 使用主连接下载文件
-    fn download_file_with_main_connection(&mut self, remote_path: &str, local_path: &str) -> LovelyResResult<()> {
-        use std::io::Read;
 
-        // 确保SSH会话存活，如果断开则自动重连
-        if let Err(_) = self.ensure_session_alive_and_reconnect_if_needed() {
-            return Err(LovelyResError::ConnectionError("SSH会话不可用且重连失败".to_string()));
-        }
-
-        let session = self
-            .current_session
-            .as_mut()
-            .ok_or_else(|| LovelyResError::ConnectionError("未建立SSH连接".to_string()))?;
-
-        // SFTP操作需要阻塞模式
-        session.set_blocking(true);
-
-        let sftp = session
-            .sftp()
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("创建SFTP会话失败: {}", e))
-            })?;
-
-        // 打开远程文件
-        let mut remote_file = sftp
-            .open(std::path::Path::new(remote_path))
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("打开远程文件失败: {}", e))
-            })?;
-
-        // 读取远程文件数据
-        let mut buffer = Vec::new();
-        remote_file
-            .read_to_end(&mut buffer)
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("读取远程文件失败: {}", e))
-            })?;
-
-        // 写入本地文件
-        std::fs::write(local_path, &buffer)
-            .map_err(|e| {
-                let _ = session.set_blocking(false);
-                LovelyResError::SSHError(format!("写入本地文件失败: {}", e))
-            })?;
-
-        // 恢复非阻塞模式
-        let _ = session.set_blocking(false);
-
-        println!("文件下载成功: {} -> {}", remote_path, local_path);
-        Ok(())
-    }
 
     /// 下载文件内容（共用逻辑）
     fn download_file_content(&self, sftp: &ssh2::Sftp, remote_path: &str, local_path: &str) -> LovelyResResult<()> {
@@ -3021,15 +2648,7 @@ impl SSHManager {
 
     // ==================== 私有辅助方法 ====================
 
-    /// 生成唯一的会话ID
-    fn generate_session_id() -> String {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-        format!("session_{}", timestamp)
-    }
+
 
 
 }

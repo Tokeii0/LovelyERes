@@ -61,7 +61,7 @@ pub struct SSHFlowController {
     
     /// Window size tracking
     window_size: Arc<Mutex<u32>>,
-    initial_window_size: u32,
+    _initial_window_size: u32,
     
     /// Flow control metrics
     bytes_sent: Arc<Mutex<u64>>,
@@ -71,7 +71,7 @@ pub struct SSHFlowController {
     max_buffer_size: usize,
     max_retry_count: u32,
     drain_timeout: Duration,
-    throttle_threshold: f32,
+    _throttle_threshold: f32,
     
     /// Timing for adaptive backoff
     last_successful_write: Arc<Mutex<Instant>>,
@@ -84,13 +84,13 @@ impl SSHFlowController {
             input_buffer: Arc::new(Mutex::new(VecDeque::new())),
             flow_state: Arc::new(Mutex::new(FlowControlState::Normal)),
             window_size: Arc::new(Mutex::new(1024 * 1024)), // 1MB window size - 大幅增加
-            initial_window_size: 1024 * 1024,
+            _initial_window_size: 1024 * 1024,
             bytes_sent: Arc::new(Mutex::new(0)),
             bytes_acknowledged: Arc::new(Mutex::new(0)),
             max_buffer_size: 1024 * 1024, // 1MB buffer - 大幅增加
             max_retry_count: 100, // 增加重试次数
             drain_timeout: Duration::from_secs(3600), // 1小时超时
-            throttle_threshold: 0.99, // 几乎不限流
+            _throttle_threshold: 0.99, // 几乎不限流
             last_successful_write: Arc::new(Mutex::new(Instant::now())),
             consecutive_failures: Arc::new(Mutex::new(0)),
         }

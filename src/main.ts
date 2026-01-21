@@ -8,6 +8,9 @@ import './styles/sftp.css';
 import './styles/system-info.css';
 import './styles/log-analysis.css';
 
+import './styles/session-tabs.css';
+import './styles/docker.css';
+
 import { invoke } from "@tauri-apps/api/core";
 import { LovelyResApp } from './modules/core/app';
 import { remoteOperationsManager } from './modules/remote/remoteOperationsManager';
@@ -16,8 +19,6 @@ import { dockerPageManager } from './modules/docker/dockerPageManager';
 import { emergencyPageManager } from './modules/emergency/emergencyPageManager';
 import { sshConnectionManager } from './modules/remote/sshConnectionManager';
 import { quickDetectionManager } from './modules/detection/quickDetectionManager';
-import { SettingsManager } from './modules/settings/settingsManager';
-import { SettingsPageManager } from './modules/settings/settingsPageManager';
 import { ProcessContextMenu } from './modules/ui/processContextMenu';
 import { NetworkContextMenu } from './modules/ui/networkContextMenu';
 import { ServiceContextMenu } from './modules/ui/serviceContextMenu';
@@ -28,10 +29,6 @@ import { FirewallContextMenu } from './modules/ui/firewallContextMenu';
 
 // 全局变量
 import { sftpManager } from './modules/remote/sftpManager';
-
-// 创建设置管理器实例
-const settingsManager = new SettingsManager();
-const settingsPageManager = new SettingsPageManager(settingsManager);
 
 // 创建进程右键菜单实例
 const processContextMenu = new ProcessContextMenu();
@@ -154,6 +151,8 @@ import { EmergencyResultModal } from './modules/ui/emergencyModal';
 import { CommandHistoryModal } from './modules/ui/commandHistoryModal';
 import { FileContextMenu } from './modules/ui/fileContextMenu';
 import { LogContextMenu } from './modules/ui/logContextMenu';
+import { UploadModal } from './modules/ui/uploadModal';
+import { FileDetailsModal } from './modules/ui/fileDetailsModal';
 
 // 移除旧的SSH连接状态变量，现在由模块化管理器处理
 
@@ -177,6 +176,8 @@ async function initializeApp() {
   const commandHistoryModal = new CommandHistoryModal();
   const fileContextMenu = new FileContextMenu();
   const logContextMenu = new LogContextMenu(); // 初始化日志右键菜单
+  const uploadModal = new UploadModal(); // 初始化上传模态框
+  const fileDetailsModal = new FileDetailsModal(); // 初始化文件详情模态框
 
   // 将模态组件添加到全局作用域
   (window as any).fileViewerModal = fileViewerModal;
@@ -185,6 +186,8 @@ async function initializeApp() {
   (window as any).commandHistoryModal = commandHistoryModal;
   (window as any).fileContextMenu = fileContextMenu;
   (window as any).logContextMenu = logContextMenu;
+  (window as any).uploadModal = uploadModal;
+  (window as any).fileDetailsModal = fileDetailsModal;
 
   // 添加全局日志右键菜单监听
   document.addEventListener('contextmenu', (e) => {
@@ -308,8 +311,14 @@ async function initializeApp() {
     await sshTerminalManager.initialize();
 
     // 初始化设置管理器
-    await settingsManager.initialize();
+    if (app.settingsManager) {
+      await (app.settingsManager as any).initialize();
+    }
 
+    // 初始化多会话 Tab 渲染器
+    const { sessionTabsRenderer } = await import('./modules/ui/sessionTabsRenderer');
+    sessionTabsRenderer.initialize();
+    (window as any).sessionTabsRenderer = sessionTabsRenderer;
 
     // 将管理器暴露到全局，供HTML调用
     (window as any).remoteOperationsManager = remoteOperationsManager;
@@ -384,10 +393,8 @@ async function initializeApp() {
         }
       } catch (e) {
         console.error('查看文件详情失败:', e);
-        (window as any).showNotification && (window as any).showNotification(`查看详情失败: ${e}`, 'error');
       }
     };
-
     // 文件安全分析功能处理
     (window as any).sftpFileSecurityAnalysis = async (action: string) => {
       console.log('文件安全分析被选择，动作:', action, '索引:', sftpCtx.index);
@@ -590,6 +597,14 @@ async function initializeApp() {
         };
       }
 
+      // 删除按钮
+      const deleteBtn = document.getElementById('sftp-ctx-delete');
+      if (deleteBtn) {
+        deleteBtn.onclick = (e) => {
+          e.stopPropagation();
+          (window as any).sftpDeleteSelected();
+        };
+      }
 
 
       if (fileDetailsBtn) {
@@ -811,6 +826,64 @@ async function initializeApp() {
       } catch (e) {
         console.error('下载过程中发生错误:', e);
         (window as any).showNotification && (window as any).showNotification(`下载失败: ${e}`, 'error');
+      }
+    };
+
+    // 删除功能处理
+    (window as any).sftpDeleteSelected = async () => {
+      console.log('删除被选择，索引:', sftpCtx.index);
+      const idx = sftpCtx.index;
+      if (idx == null || idx < 0) {
+        console.warn('无效的文件索引:', idx);
+        return;
+      }
+      (window as any).hideSftpContextMenu();
+      try {
+        const file = sftpManager.getFileByIndex(idx);
+        console.log('获取到文件信息:', file);
+        if (!file) return;
+
+        const isDirectory = file.file_type === 'directory';
+        const typeLabel = isDirectory ? '文件夹' : '文件';
+        
+        // 显示确认对话框
+        const confirmed = await (window as any).__TAURI__.dialog.confirm(
+          `确定要删除${typeLabel} "${file.name}" 吗？\n\n路径: ${file.path}\n\n此操作无法撤销！`,
+          { title: `删除${typeLabel}`, kind: 'warning' }
+        );
+
+        if (!confirmed) {
+          console.log('用户取消了删除操作');
+          return;
+        }
+
+        // 显示删除开始通知
+        (window as any).showNotification && (window as any).showNotification(`正在删除: ${file.name}`, 'info');
+
+        try {
+          if (isDirectory) {
+            // 删除目录
+            await (window as any).__TAURI__.core.invoke('sftp_delete_directory', {
+              remotePath: file.path
+            });
+          } else {
+            // 删除文件
+            await (window as any).__TAURI__.core.invoke('sftp_delete_file', {
+              remotePath: file.path
+            });
+          }
+
+          (window as any).showNotification && (window as any).showNotification(`已成功删除: ${file.name}`, 'success');
+          
+          // 刷新文件列表
+          await sftpManager.refreshCurrentDirectory();
+        } catch (error) {
+          console.error('删除失败:', error);
+          (window as any).showNotification && (window as any).showNotification(`删除失败: ${error}`, 'error');
+        }
+      } catch (e) {
+        console.error('删除过程中发生错误:', e);
+        (window as any).showNotification && (window as any).showNotification(`删除失败: ${e}`, 'error');
       }
     };
 
@@ -1256,10 +1329,30 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
           submitButton.textContent = '保存服务器';
         }
 
+        // 重新绑定表单提交事件
+        const formEl = document.getElementById('add-server-form-element') as HTMLFormElement;
+        if (formEl) {
+          formEl.onsubmit = (event) => {
+            console.log('🚀 [Form submit] Add mode');
+            event.preventDefault();
+            (window as any).handleServerFormSubmit(event);
+          };
+          console.log('✅ [showAddServerForm] Event bound to #add-server-form-element');
+        }
+
         // 清空表单
         const form = document.getElementById('add-server-form-element') as HTMLFormElement;
         if (form) {
           form.reset();
+          // 重置Sudo相关UI状态
+          const sudoPasswordField = document.getElementById('sudo-password-field');
+          if (sudoPasswordField) {
+            sudoPasswordField.style.display = 'none';
+          }
+          const sudoInput = form.elements.namedItem('sudoPassword') as HTMLInputElement;
+          if (sudoInput) {
+            sudoInput.placeholder = "如果与登录密码不同，请在此输入";
+          }
         }
       }
 
@@ -1274,8 +1367,9 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
     const addForm = document.getElementById('add-server-form');
 
     if (serverList && addForm) {
-      // 清除编辑模式标识
+      // 清除编辑模式标识和保存的加密密码
       (window as any).editingServerId = null;
+      (window as any).editingServerEncryptedPassword = null;
 
       serverList.style.display = 'block';
       addForm.style.display = 'none';
@@ -1425,10 +1519,17 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
 
   // 处理服务器表单提交
   (window as any).handleServerFormSubmit = async (event: Event) => {
+    console.log('🚀 handleServerFormSubmit 被触发');
     event.preventDefault();
     const form = event.target as HTMLFormElement;
     const formData = new FormData(form);
-    await (window as any).saveServer(formData);
+    console.log('📋 表单数据:', Object.fromEntries(formData.entries()));
+    try {
+        await (window as any).saveServer(formData);
+    } catch (e) {
+        console.error('❌ saveServer 执行出错:', e);
+        (window as any).showNotification?.('保存过程发生错误: ' + e, 'error');
+    }
   };
 
   // 切换连接下拉菜单
@@ -1458,6 +1559,8 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
       dropdown.style.display = 'none';
     }
   };
+
+
 
   // 点击其他地方时隐藏下拉菜单
   document.addEventListener('click', (event) => {
@@ -1731,6 +1834,10 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
         if (mainWorkspace) {
           mainWorkspace.innerHTML = app.getStateManager().getUIRenderer().renderMainWorkspace();
         }
+        // 重新渲染多会话 Tab（因为 innerHTML 会销毁原有的 DOM 元素）
+        if ((window as any).sessionTabsRenderer) {
+          (window as any).sessionTabsRenderer.refresh();
+        }
         console.log('✅ 仪表盘已刷新');
       }
     } catch (error) {
@@ -1774,25 +1881,50 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
     }
   };
 
-  // 保存服务器配置
+  /**
+   * 提交添加服务器表单
+   */
+  (window as any).handleServerFormSubmit = async (event: Event) => {
+    try {
+      event.preventDefault();
+      
+      const form = event.target as HTMLFormElement;
+      if (!form || form.tagName !== 'FORM') {
+          const actualForm = document.getElementById('add-server-form-element') as HTMLFormElement;
+          if (actualForm) {
+              const formData = new FormData(actualForm);
+              await (window as any).saveServer(formData);
+              return;
+          }
+          throw new Error('无法找到要提交的表单元素');
+      }
+
+      const formData = new FormData(form);
+      await (window as any).saveServer(formData);
+    } catch (error) {
+      console.error('提交失败:', error);
+      (window as any).showNotification?.(`提交失败: ${error}`, 'error');
+    }
+  };
+
+  // 提取保存服务器逻辑为独立函数
   (window as any).saveServer = async (formData: FormData) => {
     try {
+      console.log('🚀 [saveServer] 开始保存服务器配置...');
+      const isEditing = !!(window as any).editingServerId;
       const editingServerId = (window as any).editingServerId;
-      const isEditing = !!editingServerId;
 
-      console.log(isEditing ? '更新服务器配置...' : '保存服务器配置...');
-
-      // 收集基本配置
-      const serverData = {
+      const serverData: any = {
         name: formData.get('name') as string,
         host: formData.get('host') as string,
         port: parseInt(formData.get('port') as string) || 22,
         username: formData.get('username') as string,
-        authType: formData.get('authType') as string, // 前端使用 authType
-        password: formData.get('password') as string,
-        keyPath: formData.get('keyPath') as string,
-        keyPassphrase: formData.get('keyPassphrase') as string,
-        accounts: [] as any[] // 新增：多账号数组
+        authType: formData.get('authType') as 'password' | 'key',
+        password: (formData.get('password') as string) || undefined,
+        keyPath: (formData.get('keyPath') as string) || undefined,
+        keyPassphrase: (formData.get('keyPassphrase') as string) || undefined,
+        accounts: [],
+        isConnected: false
       };
 
       // 首先添加主账号到 accounts 数组
@@ -1831,17 +1963,39 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
         });
       }
 
-      console.log('📝 [保存服务器] 收集到的额外账号数:', serverData.accounts.length);
+      // 处理 Sudo 配置
+      // 1. 获取 useSudo 状态
+      let useSudo = formData.get('useSudo') === 'on';
+      // 兜底方案：如果 FormData 没拿到，直接看 DOM
+      if (!useSudo) {
+          const sudoCheckbox = document.getElementById('server-use-sudo') as HTMLInputElement;
+          if (sudoCheckbox && sudoCheckbox.checked) {
+              useSudo = true;
+          }
+      }
 
-      // 调试日志：检查密码是否被正确获取
-      console.log('📝 [保存服务器] 表单数据:', {
-        name: serverData.name,
-        host: serverData.host,
-        username: serverData.username,
-        authType: serverData.authType,
-        hasPassword: !!serverData.password,
-        passwordLength: serverData.password?.length || 0
-      });
+      // 2. 获取 Sudo 密码
+      const sudoPassword = (formData.get('sudoPassword') as string) || '';
+      let encryptedSudoPassword = undefined;
+
+      // 3. 决定是否加密
+      if (useSudo && sudoPassword) {
+        try {
+          encryptedSudoPassword = await (window as any).__TAURI__.core.invoke('encrypt_password', {
+            password: sudoPassword
+          }) as string;
+        } catch (error) {
+          console.error('Sudo 密码加密失败:', error);
+          (window as any).showNotification?.('Sudo 密码加密失败', 'error');
+          return;
+        }
+      }
+
+      // 4. 将结果合入 serverData
+      (serverData as any).useSudo = useSudo;
+      if (encryptedSudoPassword) {
+        (serverData as any).encryptedSudoPassword = encryptedSudoPassword;
+      }
 
       // 验证必填字段
       if (!serverData.name || !serverData.host || !serverData.username) {
@@ -1868,7 +2022,6 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
             delete (updateData as any).password;
           }
           await sshManager.updateConnection(editingServerId, updateData);
-          console.log('✅ 服务器配置更新成功');
           (window as any).showNotification?.('服务器配置更新成功', 'success');
         } else {
           // 添加新连接前检查数量限制
@@ -1878,8 +2031,9 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
           (window as any).showNotification?.('服务器配置保存成功', 'success');
         }
 
-        // 清除编辑模式标识
+        // 清除编辑模式标识和保存的加密密码
         (window as any).editingServerId = null;
+        (window as any).editingServerEncryptedPassword = null;
 
         // 隐藏表单并刷新列表
         (window as any).hideAddServerForm();
@@ -1921,6 +2075,17 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
           if (newModal) {
             newModal.style.display = 'flex';
           }
+        }
+
+        // 重新绑定表单提交事件，防止内联 onsubmit 失效
+        const newForm = document.getElementById('add-server-form-element');
+        if (newForm) {
+            newForm.onsubmit = (event) => {
+                console.log('🚀 [事件绑定] 表单提交被触发');
+                event.preventDefault();
+                (window as any).handleServerFormSubmit(event);
+            };
+            console.log('✅ 已重新绑定服务器表单 submit 事件');
         }
       }
     } catch (error) {
@@ -1994,14 +2159,13 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
             });
 
             // 使用统一的SSH连接管理器
-            await sshConnectionManager.connect(
+            await (window as any).sshConnectionManager.connect(
               connection.host,
               connection.port,
               connection.username,
-              password
+              password,
+              connection.useSudo // 传递 Sudo 选项
             );
-
-            console.log('✅ sshConnectionManager.connect 调用成功');
 
             // 更新应用状态，传递完整的服务器信息
             if (app) {
@@ -2153,14 +2317,35 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
 
     try {
       console.log('🔄 测试连接中...');
-      console.log('连接参数:', { host, port, username, authType, hasPassword: !!password, hasKeyPath: !!keyPath });
+      
+      // 编辑模式下，如果密码为空，尝试使用原有加密密码
+      let testPassword = password;
+      if (!testPassword && authType === 'password' && (window as any).editingServerId && (window as any).editingServerEncryptedPassword) {
+        console.log('📝 编辑模式下密码为空，使用原有加密密码...');
+        try {
+          testPassword = await (window as any).__TAURI__.core.invoke('decrypt_password', {
+            encryptedPassword: (window as any).editingServerEncryptedPassword
+          });
+          console.log('✅ 原有密码解密成功');
+        } catch (decryptError) {
+          console.error('❌ 解密原有密码失败:', decryptError);
+          (window as any).showNotification('无法解密原有密码，请重新输入密码', 'warning');
+          if (testBtn) {
+            testBtn.innerHTML = originalText;
+            (testBtn as HTMLButtonElement).disabled = false;
+          }
+          return;
+        }
+      }
+      
+      console.log('连接参数:', { host, port, username, authType, hasPassword: !!testPassword, hasKeyPath: !!keyPath });
 
       const result = await (window as any).__TAURI__.core.invoke('ssh_test_connection', {
         host,
         port,
         username,
         authType,
-        password: password || null,
+        password: testPassword || null,
         keyPath: keyPath || null,
         keyPassphrase: keyPassphrase || null,
         certificatePath: null
@@ -2171,11 +2356,43 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
       if (result) {
         (window as any).showNotification('✅ 连接测试成功', 'success');
       } else {
-        (window as any).showNotification('❌ 连接测试失败', 'error');
+        (window as any).showNotification('❌ 连接测试失败：服务器拒绝连接', 'error');
       }
     } catch (error) {
       console.error('测试连接失败:', error);
-      (window as any).showNotification(`连接测试失败: ${error}`, 'error');
+      
+      // 提取并格式化错误信息
+      let errorMessage = '未知错误';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      // 根据错误类型提供更友好的中文提示
+      let friendlyMessage = errorMessage;
+      if (errorMessage.includes('Unable to exchange encryption keys') || errorMessage.includes('encryption keys')) {
+        friendlyMessage = 'SSH密钥交换失败：服务器不支持当前加密算法，请检查SSH服务器配置';
+      } else if (errorMessage.includes('Authentication failed') || errorMessage.includes('认证失败')) {
+        friendlyMessage = '认证失败：用户名或密码错误';
+      } else if (errorMessage.includes('Connection refused') || errorMessage.includes('连接被拒绝')) {
+        friendlyMessage = '连接被拒绝：请检查服务器地址和端口是否正确';
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('超时') || errorMessage.includes('Timeout')) {
+        friendlyMessage = '连接超时：请检查网络连接和防火墙设置';
+      } else if (errorMessage.includes('Network') || errorMessage.includes('网络') || errorMessage.includes('network')) {
+        friendlyMessage = '网络错误：无法连接到目标服务器';
+      } else if (errorMessage.includes('Host key') || errorMessage.includes('host key')) {
+        friendlyMessage = '主机密钥验证失败：服务器身份无法确认';
+      } else if (errorMessage.includes('Permission denied') || errorMessage.includes('权限')) {
+        friendlyMessage = '权限被拒绝：用户名或密码错误';
+      } else if (errorMessage.includes('No route to host') || errorMessage.includes('无法路由')) {
+        friendlyMessage = '无法访问目标主机：请检查网络连接';
+      } else if (errorMessage.includes('SSH握手失败')) {
+        // 解析更具体的握手失败原因
+        friendlyMessage = `SSH握手失败：${errorMessage.includes('encryption') ? '加密协商失败' : '协议协商失败'}`;
+      }
+      
+      (window as any).showNotification(`❌ 连接测试失败：${friendlyMessage}`, 'error');
     } finally {
       // 恢复按钮状态
       if (testBtn) {
@@ -2220,166 +2437,117 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
   (window as any).editServer = (serverId: string) => {
     try {
       console.log('✏️ 编辑服务器:', serverId);
-      const sshManager = (window as any).app?.sshManager;
-      if (sshManager) {
-        const connection = sshManager.getConnection(serverId);
-        if (connection) {
-          // 设置编辑模式
-          (window as any).editingServerId = serverId;
+      
+      // 先显示并重置表单
+      (window as any).showAddServerForm();
+      
+      // 添加一个小延迟确保 DOM 完全更新
+      setTimeout(() => {
+        const sshManager = (window as any).app?.sshManager;
+        if (sshManager) {
+          const connection = sshManager.getConnection(serverId);
+          if (connection) {
+            console.log('📦 [editServer] 找到连接数据:', {
+                name: connection.name,
+                useSudo: connection.useSudo,
+                hasEncryptedSudoPassword: !!connection.encryptedSudoPassword
+            });
+            // 设置编辑模式
+            (window as any).editingServerId = serverId;
+            // 保存原有的加密密码，用于测试连接时使用
+            (window as any).editingServerEncryptedPassword = connection.encryptedPassword;
 
-          // 填充编辑表单
-          const form = document.getElementById('add-server-form-element') as HTMLFormElement;
-          if (form) {
-            (form.elements.namedItem('name') as HTMLInputElement).value = connection.name;
-            (form.elements.namedItem('host') as HTMLInputElement).value = connection.host;
-            (form.elements.namedItem('port') as HTMLInputElement).value = connection.port.toString();
-            (form.elements.namedItem('username') as HTMLInputElement).value = connection.username;
-            (form.elements.namedItem('authType') as HTMLSelectElement).value = connection.authType;
+            // 填充编辑表单
+            const form = document.getElementById('add-server-form-element') as HTMLFormElement;
+            if (form) {
+              (form.elements.namedItem('name') as HTMLInputElement).value = connection.name;
+              (form.elements.namedItem('host') as HTMLInputElement).value = connection.host;
+              (form.elements.namedItem('port') as HTMLInputElement).value = connection.port.toString();
+              (form.elements.namedItem('username') as HTMLInputElement).value = connection.username;
+              (form.elements.namedItem('authType') as HTMLSelectElement).value = connection.authType;
 
-            // 清空额外账号列表
-            const additionalAccountsList = document.getElementById('additional-accounts-list');
-            if (additionalAccountsList) {
-              additionalAccountsList.innerHTML = '';
-              (window as any).additionalAccounts = [];
-            }
+              // 填充 Sudo 配置
+              const useSudoCheckbox = document.getElementById('server-use-sudo') as HTMLInputElement;
+              const sudoPasswordField = document.getElementById('sudo-password-field');
+              const sudoPasswordInput = document.querySelector('input[name="sudoPassword"]') as HTMLInputElement;
 
-            // 加载多账号数据
-            if (connection.accounts && connection.accounts.length > 0) {
-              console.log('📝 加载多账号数据:', connection.accounts.length, '个账号');
-
-              // 遍历所有账号，跳过主账号（isDefault: true）
-              connection.accounts.forEach((account: any, index: number) => {
-                // 跳过主账号，主账号已经填充到表单顶部了
-                if (account.isDefault) {
-                  console.log('跳过主账号:', account.username);
-                  return;
-                }
-
-                // 为额外账号创建账号项
-                if (additionalAccountsList) {
-                  const accountId = `account-${Date.now()}-${index}`;
-                  const accountHtml = `
-                    <div class="account-item" id="${accountId}" style="
-                      padding: var(--spacing-md);
-                      background: var(--bg-tertiary);
-                      border-radius: var(--border-radius);
-                      border: 1px solid var(--border-color);
-                      margin-bottom: var(--spacing-sm);
-                    ">
-                      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--spacing-sm);">
-                        <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">账号 #${index + 1}</span>
-                        <button type="button" onclick="window.removeServerAccount('${accountId}')" style="
-                          background: none;
-                          border: none;
-                          color: var(--text-secondary);
-                          cursor: pointer;
-                          font-size: 16px;
-                          padding: 0 4px;
-                        " title="删除账号">×</button>
-                      </div>
-                      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-sm); margin-bottom: var(--spacing-sm);">
-                        <div>
-                          <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">用户名</label>
-                          <input type="text" class="extra-account-username" value="${account.username}" placeholder="例如: superuser" style="
-                            width: 100%;
-                            padding: 6px 8px;
-                            border: 1px solid var(--border-color);
-                            border-radius: var(--border-radius-sm);
-                            background: var(--bg-secondary);
-                            color: var(--text-primary);
-                            font-size: 11px;
-                          " required>
-                        </div>
-                        <div>
-                          <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">描述（可选）</label>
-                          <input type="text" class="extra-account-description" value="${account.description || ''}" placeholder="例如: 数据库管理员" style="
-                            width: 100%;
-                            padding: 6px 8px;
-                            border: 1px solid var(--border-color);
-                            border-radius: var(--border-radius-sm);
-                            background: var(--bg-secondary);
-                            color: var(--text-primary);
-                            font-size: 11px;
-                          ">
-                        </div>
-                      </div>
-                      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-sm);">
-                        <div>
-                          <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">认证方式</label>
-                          <select class="extra-account-authType" style="
-                            width: 100%;
-                            padding: 6px 8px;
-                            border: 1px solid var(--border-color);
-                            border-radius: var(--border-radius-sm);
-                            background: var(--bg-secondary);
-                            color: var(--text-primary);
-                            font-size: 11px;
-                          " onchange="window.toggleExtraAccountAuthFields('${accountId}', this.value)">
-                            <option value="password" ${account.authType === 'password' ? 'selected' : ''}>密码认证</option>
-                            <option value="key" ${account.authType === 'key' ? 'selected' : ''}>SSH密钥</option>
-                          </select>
-                        </div>
-                        <div class="extra-account-password-field" style="display: ${account.authType === 'password' ? 'block' : 'none'};">
-                          <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">密码</label>
-                          <input type="password" class="extra-account-password" placeholder="留空则保持不变" style="
-                            width: 100%;
-                            padding: 6px 8px;
-                            border: 1px solid var(--border-color);
-                            border-radius: var(--border-radius-sm);
-                            background: var(--bg-secondary);
-                            color: var(--text-primary);
-                            font-size: 11px;
-                          ">
-                        </div>
-                        <div class="extra-account-key-field" style="display: ${account.authType === 'key' ? 'block' : 'none'};">
-                          <label style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">私钥路径</label>
-                          <input type="text" class="extra-account-keyPath" value="${account.keyPath || ''}" placeholder="/path/to/key" style="
-                            width: 100%;
-                            padding: 6px 8px;
-                            border: 1px solid var(--border-color);
-                            border-radius: var(--border-radius-sm);
-                            background: var(--bg-secondary);
-                            color: var(--text-primary);
-                            font-size: 11px;
-                          ">
-                        </div>
-                      </div>
-                      <div style="margin-top: var(--spacing-xs);">
-                        <label style="display: flex; align-items: center; font-size: 11px; color: var(--text-secondary); cursor: pointer;">
-                          <input type="checkbox" class="extra-account-isDefault" ${account.isDefault ? 'checked' : ''} style="margin-right: 4px;">
-                          设为默认账号
-                        </label>
-                      </div>
-                    </div>
-                  `;
-
-                  additionalAccountsList.insertAdjacentHTML('beforeend', accountHtml);
-                  (window as any).additionalAccounts.push(accountId);
-                }
+              console.log('🔍 [editServer] 检查表单元素:', {
+                  useSudoCheckbox: !!useSudoCheckbox,
+                  sudoPasswordField: !!sudoPasswordField,
+                  sudoPasswordInput: !!sudoPasswordInput
               });
-            }
 
-            // 更新表单标题和按钮文本
+              if (useSudoCheckbox) {
+                  console.log('✅ [editServer] 设置 checkbox.checked =', !!connection.useSudo);
+                  useSudoCheckbox.checked = connection.useSudo || false;
+                  if (sudoPasswordField) {
+                      sudoPasswordField.style.display = connection.useSudo ? 'block' : 'none';
+                  }
+              }
+
+              if (sudoPasswordInput) {
+                  if (connection.encryptedSudoPassword) {
+                      sudoPasswordInput.placeholder = "已保存 (留空保持不变)";
+                      sudoPasswordInput.value = "";
+                  } else {
+                      sudoPasswordInput.placeholder = "如果与登录密码不同，请在此输入";
+                      sudoPasswordInput.value = "";
+                  }
+              }
+
+              // 清空额外账号列表
+              const additionalAccountsList = document.getElementById('additional-accounts-list');
+              if (additionalAccountsList) {
+                additionalAccountsList.innerHTML = '';
+                (window as any).additionalAccounts = [];
+              }
+
+              // 加载多账号数据
+              if (connection.accounts && connection.accounts.length > 0) {
+                connection.accounts.forEach((account: any) => {
+                  if (account.isDefault) return;
+                  if (additionalAccountsList) {
+                    (window as any).addServerAccount(account);
+                  }
+                });
+              }
+
+            // 填充表单后，确保标题和按钮文本正确
             const formTitle = document.querySelector('#add-server-form h3');
-            if (formTitle) {
-              formTitle.textContent = '编辑服务器';
+            if (formTitle) formTitle.textContent = '编辑服务器配置';
+            
+            // 使用更通用的方式寻找按钮
+            const submitBtn = document.querySelector('.save-btn.modern-btn.primary') as HTMLButtonElement;
+            const formEl = document.getElementById('add-server-form-element') as HTMLFormElement;
+
+            if (submitBtn) {
+              submitBtn.textContent = '更新服务器配置';
+              submitBtn.onclick = () => {
+                  if (formEl) {
+                      const event = new Event('submit', { cancelable: true });
+                      formEl.dispatchEvent(event);
+                  }
+              };
             }
 
-            const submitButton = document.querySelector('#add-server-form button[type="submit"]');
-            if (submitButton) {
-              submitButton.textContent = '更新服务器';
+            // 统一绑定提交逻辑
+            if (formEl) {
+              formEl.onsubmit = (event) => {
+                event.preventDefault();
+                (window as any).handleServerFormSubmit(event);
+                return false; 
+              };
             }
-
-            // 显示表单
-            (window as any).showAddServerForm();
-            console.log('✅ 编辑表单已填充');
+            }
           }
         }
-      }
+      }, 100);
     } catch (error) {
       console.error('❌ 编辑服务器失败:', error);
     }
   };
+
+
 
   // 删除服务器
   (window as any).deleteServer = async (serverId: string) => {
@@ -2445,14 +2613,19 @@ function setupGlobalModalFunctions(app: LovelyResApp) {
       } else if (pageId === 'log-analysis') {
         console.log('📋 [PageSwitch] 初始化日志审计页面');
         // 延迟刷新日志，确保页面已渲染完成
-        setTimeout(() => {
-          (window as any).refreshLogAnalysis();
+        setTimeout(async () => {
+          if (typeof (window as any).refreshLogAnalysis === 'function') {
+            await (window as any).refreshLogAnalysis();
+          }
         }, 200);
       } else if (pageId === 'settings') {
         console.log('⚙️ [PageSwitch] 初始化设置页面');
         // 初始化设置页面
         setTimeout(() => {
-          settingsPageManager.initialize();
+          const app = (window as any).app;
+          if (app && app.settingsPageManager) {
+            app.settingsPageManager.initialize();
+          }
         }, 100);
       } else if (pageId === 'ssh-terminal') {
         // SSH 终端页面：在新窗口中打开
@@ -3370,7 +3543,9 @@ let remoteOperationsPageInitialized = false;
 
   // 初始化设置页面管理器
   setTimeout(() => {
-    settingsPageManager.initialize();
+    if (app.settingsPageManager) {
+      app.settingsPageManager.initialize();
+    }
   }, 100);
 };
 
@@ -3378,11 +3553,22 @@ let remoteOperationsPageInitialized = false;
  * 隐藏设置覆盖层
  */
 (window as any).hideSettingsOverlay = function () {
-  console.log('🔧 隐藏设置覆盖层');
+  console.log('🔧 隐藏设置覆盖层/页面');
 
   const settingsOverlay = document.getElementById('settings-overlay-container');
   if (settingsOverlay) {
     settingsOverlay.remove();
+  }
+
+  // 检查是否在“页面模式”下
+  const app = (window as any).app;
+  if (app && app.stateManager) {
+    const state = app.stateManager.getState();
+    if (state.currentPage === 'settings') {
+      console.log('🔄 重置页面状态到仪表盘');
+      app.stateManager.setCurrentPage('dashboard');
+      app.render(); // 重新渲染以销毁设置页面 DOM
+    }
   }
 };
 
@@ -3457,63 +3643,27 @@ async function loadLogFileList() {
   if (!select) return;
 
   console.log('📂 正在加载日志源列表...');
+  
+  // 保存当前选中值
+  const currentValue = select.value;
+  
+  // 先快速加载系统日志文件列表（通常很快）
   try {
-    const [logFiles, containers] = await Promise.all([
-      invoke('list_log_files') as Promise<any[]>,
-      invoke('docker_list_containers') as Promise<any[]>
-    ]);
+    const logFiles = await invoke('list_log_files') as any[];
     
-    const currentValue = select.value;
     let optionsHtml = '';
-
-    // 1. Docker 容器分组
-    if (Array.isArray(containers) && containers.length > 0) {
-      console.log('📦 获取到的容器列表:', containers);
-      optionsHtml += `<optgroup label="Docker 容器">`;
-      containers.forEach((container: any) => {
-        // 兼容不同的字段名（PascalCase 或 camelCase）
-        const id = container.Id || container.id;
-        const names = container.Names || container.names;
-        const name = container.Name || container.name;
-        const state = container.State || container.state;
-
-        if (!id) return;
-        
-        // 容器ID取前12位
-        const containerId = String(id);
-        const shortId = containerId.substring(0, 12);
-        
-        // 显示名称，去掉开头的斜杠
-        let displayName = 'Unknown';
-        if (Array.isArray(names) && names.length > 0) {
-          displayName = names[0].replace(/^\//, '');
-        } else if (name) {
-          displayName = name.replace(/^\//, '');
-        }
-        
-        // 状态图标
-        const statusIcon = state === 'running' ? '🟢' : '🔴';
-        
-        const value = `docker:${shortId}`;
-        optionsHtml += `<option value="${value}" ${value === currentValue ? 'selected' : ''}>
-          ${statusIcon} ${displayName} (${shortId})
-        </option>`;
-      });
-      optionsHtml += `</optgroup>`;
-    } else {
-       console.log('⚠️ 未获取到 Docker 容器或列表为空');
-       optionsHtml += `<optgroup label="Docker 容器"><option value="" disabled>无运行中容器</option></optgroup>`;
-    }
-
-    // 2. 系统日志分组
+    
+    // 添加正在加载的 Docker 容器占位
+    optionsHtml += `<optgroup label="Docker 容器"><option value="" disabled>加载中...</option></optgroup>`;
+    
+    // 系统日志分组
     if (Array.isArray(logFiles) && logFiles.length > 0) {
       optionsHtml += `<optgroup label="系统日志">`;
       logFiles.forEach((file: any) => {
         const sizeStr = file.size > 1024 * 1024 
           ? `${(file.size / 1024 / 1024).toFixed(1)} MB` 
           : `${(file.size / 1024).toFixed(1)} KB`;
-        // 标记最近修改的文件
-        const isRecent = Date.now() - parseInt(file.modified) * 1000 < 24 * 60 * 60 * 1000; // 24小时内
+        const isRecent = Date.now() - parseInt(file.modified) * 1000 < 24 * 60 * 60 * 1000;
         const recentMark = isRecent ? '🕒 ' : '';
         
         optionsHtml += `<option value="${file.path}" ${file.path === currentValue ? 'selected' : ''}>
@@ -3525,10 +3675,79 @@ async function loadLogFileList() {
     
     if (optionsHtml) {
       select.innerHTML = optionsHtml;
-      console.log(`✅ 已加载日志源: ${logFiles.length} 个文件, ${containers.length} 个容器`);
+      console.log(`✅ 已加载 ${logFiles.length} 个日志文件`);
     }
   } catch (error) {
-    console.error('❌ 加载日志源列表失败:', error);
+    console.error('❌ 加载日志文件列表失败:', error);
+  }
+  
+  // 异步加载 Docker 容器列表（带超时，不阻塞主流程）
+  loadDockerContainersAsync(select, currentValue);
+}
+
+/**
+ * 异步加载 Docker 容器列表（带超时处理）
+ */
+async function loadDockerContainersAsync(select: HTMLSelectElement, currentValue: string) {
+  try {
+    // 5 秒超时
+    const timeoutPromise = new Promise<any[]>((_, reject) => 
+      setTimeout(() => reject(new Error('timeout')), 5000)
+    );
+    
+    const containers = await Promise.race([
+      invoke('docker_list_containers') as Promise<any[]>,
+      timeoutPromise
+    ]);
+    
+    if (Array.isArray(containers) && containers.length > 0) {
+      console.log('📦 获取到的容器列表:', containers);
+      
+      // 更新 Docker 容器 optgroup
+      const dockerOptgroup = select.querySelector('optgroup[label="Docker 容器"]');
+      if (dockerOptgroup) {
+        let dockerHtml = '';
+        containers.forEach((container: any) => {
+          const id = container.Id || container.id;
+          const names = container.Names || container.names;
+          const name = container.Name || container.name;
+          const state = container.State || container.state;
+
+          if (!id) return;
+          
+          const containerId = String(id);
+          const shortId = containerId.substring(0, 12);
+          
+          let displayName = 'Unknown';
+          if (Array.isArray(names) && names.length > 0) {
+            displayName = names[0].replace(/^\//, '');
+          } else if (name) {
+            displayName = name.replace(/^\//, '');
+          }
+          
+          const statusIcon = state === 'running' ? '🟢' : '🔴';
+          const value = `docker:${shortId}`;
+          dockerHtml += `<option value="${value}" ${value === currentValue ? 'selected' : ''}>
+            ${statusIcon} ${displayName} (${shortId})
+          </option>`;
+        });
+        dockerOptgroup.innerHTML = dockerHtml;
+        console.log(`✅ 已加载 ${containers.length} 个 Docker 容器`);
+      }
+    } else {
+      // 没有容器，更新显示
+      const dockerOptgroup = select.querySelector('optgroup[label="Docker 容器"]');
+      if (dockerOptgroup) {
+        dockerOptgroup.innerHTML = '<option value="" disabled>无运行中容器</option>';
+      }
+    }
+  } catch (error: any) {
+    console.warn('⚠️ Docker 容器列表加载失败或超时:', error?.message || error);
+    // 更新为加载失败状态
+    const dockerOptgroup = select.querySelector('optgroup[label="Docker 容器"]');
+    if (dockerOptgroup) {
+      dockerOptgroup.innerHTML = '<option value="" disabled>加载失败</option>';
+    }
   }
 }
 

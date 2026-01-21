@@ -567,6 +567,11 @@ async fn save_ssh_connections(
     connections: Vec<types::SSHConnection>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    println!("💾 [Tauri] save_ssh_connections called. Count: {}", connections.len());
+    for conn in &connections {
+        println!("  - Server: {}, use_sudo: {}, has_sudo_pwd: {}", 
+            conn.name, conn.use_sudo, conn.encrypted_sudo_password.is_some());
+    }
     let manager = state.ssh_connection_manager.lock().unwrap();
     manager
         .save_connections(&connections)
@@ -631,6 +636,8 @@ async fn ssh_connect_with_auth(
         is_connected: false,
         last_connected: None,
         tags: None,
+        use_sudo: false,
+        encrypted_sudo_password: None,
     };
 
     let mut client = state.ssh_client.lock().unwrap();
@@ -649,52 +656,53 @@ async fn ssh_test_connection(
     auth_type: String,
     password: Option<String>,
     key_path: Option<String>,
-    key_passphrase: Option<String>,
-    certificate_path: Option<String>,
+    _key_passphrase: Option<String>,
+    _certificate_path: Option<String>,
+    state: State<'_, AppState>,
 ) -> Result<bool, String> {
-    println!("🔍 [ssh_test_connection] 开始测试连接:");
+    println!("🔍 [ssh_test_connection] 开始测试连接 (使用 russh):");
     println!("  Host: {}", host);
     println!("  Port: {}", port);
     println!("  Username: {}", username);
     println!("  Auth Type: {}", auth_type);
     
-    let account = types::SSHAccountCredential {
-        username: username.clone(),
-        auth_type: auth_type.clone(),
-        encrypted_password: None,
-        key_path: key_path.clone(),
-        key_passphrase: key_passphrase.clone(),
-        certificate_path: certificate_path.clone(),
-        is_default: true,
-        description: None,
+    // 使用 russh 进行连接测试
+    let manager = state.ssh_manager.lock().unwrap();
+    
+    // 根据认证类型准备参数
+    let private_key = if auth_type == "key" {
+        // 读取密钥文件内容
+        if let Some(ref path) = key_path {
+            match std::fs::read_to_string(path) {
+                Ok(content) => Some(content),
+                Err(e) => {
+                    let err_msg = format!("读取密钥文件失败: {}", e);
+                    println!("❌ [ssh_test_connection] {}", err_msg);
+                    return Err(err_msg);
+                }
+            }
+        } else {
+            let err_msg = "密钥认证需要提供密钥路径".to_string();
+            println!("❌ [ssh_test_connection] {}", err_msg);
+            return Err(err_msg);
+        }
+    } else {
+        None
     };
-
-    let connection = types::SSHConnection {
-        id: uuid::Uuid::new_v4().to_string(),
-        name: format!("{}@{}", username, host),
-        host,
-        port,
-        username: username.clone(),
-        auth_type: auth_type.clone(),
-        encrypted_password: None,
-        key_path: key_path.clone(),
-        key_passphrase: key_passphrase.clone(),
-        certificate_path: certificate_path.clone(),
-        accounts: vec![account],
-        active_account: Some(username),
-        is_connected: false,
-        last_connected: None,
-        tags: None,
-    };
-
-    match ssh_client::SSHClient::test_connection(&connection, password.as_deref()) {
-        Ok(success) => {
-            println!("✅ [ssh_test_connection] 测试结果: {}", success);
-            Ok(success)
+    
+    // 尝试连接
+    match manager.connect(&host, port, &username, password.as_deref(), private_key.as_deref()) {
+        Ok(session_id) => {
+            println!("✅ [ssh_test_connection] 连接成功，session_id: {}", session_id);
+            // 连接成功后立即断开测试会话
+            if let Err(e) = manager.disconnect_session(&session_id) {
+                println!("⚠️ [ssh_test_connection] 断开连接时出错: {}", e);
+            }
+            Ok(true)
         }
         Err(e) => {
             println!("❌ [ssh_test_connection] 测试失败: {}", e);
-            Err(e.to_string())
+            Err(e)
         }
     }
 }
@@ -722,30 +730,44 @@ async fn ssh_connect_direct(
     port: u16,
     username: String,
     password: String,
+    use_sudo: Option<bool>,
+    sudo_password: Option<String>,
     state: State<'_, AppState>,
-) -> Result<(), String> {
-    println!("=== [Tauri] ssh_connect_direct 被调用 ===");
-    println!("  Host: {}", host);
-    println!("  Port: {}", port);
-    println!("  Username: {}", username);
-    println!("  Password Length: {}", password.len());
-    println!("  Password (masked): {}***", if password.len() > 3 { &password[..3] } else { "" });
-    
+) -> Result<String, String> {
     let manager = state.ssh_manager.lock().unwrap();
-    let result = manager.connect(&host, port, &username, Some(&password), None);
+    let result = manager.connect_with_sudo(
+        &host, 
+        port, 
+        &username, 
+        Some(&password), 
+        None, 
+        use_sudo.unwrap_or(false), 
+        sudo_password.as_deref()
+    );
     
-    match &result {
-        Ok(_) => println!("✅ [Tauri] SSH 连接成功"),
-        Err(e) => println!("❌ [Tauri] SSH 连接失败: {}", e),
-    }
-    
-    result.map(|_| ()).map_err(|e| e.to_string())
+    result.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn ssh_disconnect_direct(state: State<'_, AppState>) -> Result<(), String> {
+async fn ssh_disconnect_direct(
+    session_id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let manager = state.ssh_manager.lock().unwrap();
-    manager.disconnect().map_err(|e| e.to_string())
+    if let Some(id) = session_id {
+        manager.disconnect_session(&id).map_err(|e| e.to_string())
+    } else {
+        manager.disconnect().map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+async fn ssh_set_current_session(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let manager = state.ssh_manager.lock().unwrap();
+    manager.set_current_session_id(&session_id)
 }
 
 #[tauri::command]
@@ -754,10 +776,10 @@ async fn ssh_execute_command_direct(
     username: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<ssh_manager_russh::TerminalOutput, String> {
-    let start_time = std::time::Instant::now();
+    let _start_time = std::time::Instant::now();
     //println!("[PERF] 右键菜单命令执行开始: \"{}\" 时间: {:?}", command, start_time);
 
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = state.ssh_manager.lock().unwrap();
     // 使用仪表盘专用 session 快速执行（右键菜单命令都是快速查询）
     let result = manager.execute_dashboard_command_as_user(&command, username.as_deref()).map_err(|e| e.to_string());
 
@@ -768,15 +790,20 @@ async fn ssh_execute_command_direct(
 #[tauri::command]
 async fn ssh_execute_dashboard_command_direct(
     command: String,
+    session_id: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<ssh_manager_russh::TerminalOutput, String> {
-    let start_time = std::time::Instant::now();
-    //println!("[PERF] 仪表盘命令执行开始: \"{}\" 时间: {:?}", command, start_time);
+    let _start_time = std::time::Instant::now();
+    //println!("[PERF] 仪表盘命令执行开始: \"{}\" 时间: {:?}", command, _start_time);
 
-    let mut manager = state.ssh_manager.lock().unwrap();
-    let result = manager.execute_dashboard_command(&command).map_err(|e| e.to_string());
+    let manager = state.ssh_manager.lock().unwrap();
+    let result = if let Some(id) = session_id {
+        manager.execute_command_on_session(&id, &command).map_err(|e| e.to_string())
+    } else {
+        manager.execute_dashboard_command(&command).map_err(|e| e.to_string())
+    };
 
-    //println!("[PERF] 仪表盘命令执行完成: \"{}\" 总耗时: {:?}", command, start_time.elapsed());
+    //println!("[PERF] 仪表盘命令执行完成: \"{}\" 总耗时: {:?}", command, _start_time.elapsed());
     result
 }
 
@@ -789,7 +816,7 @@ async fn ssh_execute_emergency_command_direct(
     let _start_time = std::time::Instant::now();
     //println!("[PERF] 应急响应命令执行开始: \"{}\" 账号: {:?} 时间: {:?}", command, username, _start_time);
 
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = state.ssh_manager.lock().unwrap();
     let result = if username.is_some() {
         manager.execute_dashboard_command_as_user(&command, username.as_deref()).map_err(|e| e.to_string())
     } else {
@@ -797,7 +824,20 @@ async fn ssh_execute_emergency_command_direct(
     };
 
     //println!("[PERF] 应急响应命令执行完成: \"{}\" 总耗时: {:?}", command, _start_time.elapsed());
+    //println!("[PERF] 应急响应命令执行完成: \"{}\" 总耗时: {:?}", command, _start_time.elapsed());
     result
+}
+
+#[tauri::command]
+async fn ssh_update_session_sudo_password_direct(
+    session_id: String,
+    password: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let manager = state.ssh_manager.lock().unwrap();
+    // 如果密码为空，视为 None
+    let pwd_opt = if password.is_empty() { None } else { Some(password) };
+    manager.update_session_sudo_password(&session_id, pwd_opt).map_err(|e| e.to_string())
 }
 
 /// 执行检测报告中AI生成的命令
@@ -808,7 +848,7 @@ async fn execute_detection_command(
 ) -> Result<ssh_manager_russh::TerminalOutput, String> {
     println!("🤖 [AI命令执行] 开始执行: {}", command);
     
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = state.ssh_manager.lock().unwrap();
     let result = manager.execute_dashboard_command(&command).map_err(|e| {
         println!("❌ [AI命令执行] 执行失败: {}", e);
         e.to_string()
@@ -835,7 +875,7 @@ async fn execute_detection_command(
 async fn test_ssh_performance(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = state.ssh_manager.lock().unwrap();
 
     let test_commands = vec![
         ("echo test", "基础响应测试"),
@@ -876,7 +916,7 @@ async fn test_ssh_performance(
 async fn diagnose_shell_performance(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = state.ssh_manager.lock().unwrap();
 
     let mut results = Vec::new();
     results.push("=== Shell性能诊断 ===".to_string());
@@ -939,7 +979,7 @@ async fn detect_system_type(state: State<'_, AppState>) -> Result<serde_json::Va
 
     println!("🔍 [后端] 开始系统类型检测...");
 
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = state.ssh_manager.lock().unwrap();
 
     if !manager.is_connected() {
         println!("❌ [后端] 没有活动的 SSH 连接");
@@ -1434,10 +1474,15 @@ async fn ssh_get_completion(
 #[tauri::command]
 async fn sftp_list_files(
     path: String,
+    session_id: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Vec<ssh_manager_russh::SftpFileInfo>, String> {
-    let mut manager = state.ssh_manager.lock().unwrap();
-    manager.list_sftp_files(&path).map_err(|e| e.to_string())
+    let manager = state.ssh_manager.lock().unwrap();
+    if let Some(id) = session_id {
+        manager.list_sftp_files_on_session(&id, &path).map_err(|e| e.to_string())
+    } else {
+        manager.list_sftp_files(&path).map_err(|e| e.to_string())
+    }
 }
 #[tauri::command]
 async fn sftp_read_file(
@@ -1568,6 +1613,30 @@ async fn sftp_create_directory(
     let manager = state.ssh_manager.lock().unwrap();
     manager
         .create_directory(&remote_path)
+        .map_err(|e| e.to_string())
+}
+
+/// 删除 SFTP 文件
+#[tauri::command]
+async fn sftp_delete_file(
+    remote_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let manager = state.ssh_manager.lock().unwrap();
+    manager
+        .delete_sftp_file(&remote_path)
+        .map_err(|e| e.to_string())
+}
+
+/// 删除 SFTP 目录
+#[tauri::command]
+async fn sftp_delete_directory(
+    remote_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let manager = state.ssh_manager.lock().unwrap();
+    manager
+        .delete_sftp_directory(&remote_path)
         .map_err(|e| e.to_string())
 }
 #[tauri::command]
@@ -1749,7 +1818,7 @@ async fn read_system_log(
     date_filter: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<log_analysis::LogAnalysisResult, String> {
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = state.ssh_manager.lock().unwrap();
     
     if !manager.is_connected() {
         return Err("没有活动的 SSH 连接".to_string());
@@ -1799,7 +1868,7 @@ async fn read_journalctl_log(
     until: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<log_analysis::LogAnalysisResult, String> {
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = state.ssh_manager.lock().unwrap();
     
     if !manager.is_connected() {
         return Err("没有活动的 SSH 连接".to_string());
@@ -1844,7 +1913,7 @@ async fn read_journalctl_log(
 async fn list_log_files(
     state: State<'_, AppState>,
 ) -> Result<Vec<log_analysis::LogFileInfo>, String> {
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = state.ssh_manager.lock().unwrap();
     
     if !manager.is_connected() {
         return Err("没有活动的 SSH 连接".to_string());
@@ -1903,7 +1972,7 @@ async fn get_log_file_info(
     log_path: String,
     state: State<'_, AppState>,
 ) -> Result<log_analysis::LogFileInfo, String> {
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = state.ssh_manager.lock().unwrap();
     
     if !manager.is_connected() {
         return Err("没有活动的 SSH 连接".to_string());
@@ -1996,9 +2065,11 @@ pub fn run() {
             // 新的SSH/SFTP命令
             ssh_connect_direct,
             ssh_disconnect_direct,
+            ssh_set_current_session,
             ssh_execute_command_direct,
             ssh_execute_dashboard_command_direct,
             ssh_execute_emergency_command_direct,
+            ssh_update_session_sudo_password_direct,
             execute_detection_command,
             sftp_list_files,
             sftp_read_file,
@@ -2006,6 +2077,8 @@ pub fn run() {
             sftp_upload,
             sftp_download,
             sftp_create_directory,
+            sftp_delete_file,
+            sftp_delete_directory,
             save_temp_file,
             sftp_compress,
             sftp_extract,

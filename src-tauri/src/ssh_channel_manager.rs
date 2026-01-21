@@ -73,8 +73,8 @@ impl ManagedChannel {
 /// SSH Channel Manager for state tracking and health monitoring
 pub struct SSHChannelManager {
     channels: Arc<RwLock<HashMap<String, Arc<ManagedChannel>>>>,
-    session: Arc<Mutex<Option<Session>>>,
-    health_check_interval: Duration,
+    _session: Arc<Mutex<Option<Session>>>,
+    _health_check_interval: Duration,
     channel_timeout: Duration,
 }
 
@@ -82,8 +82,8 @@ impl SSHChannelManager {
     pub fn new(session: Session) -> Self {
         Self {
             channels: Arc::new(RwLock::new(HashMap::new())),
-            session: Arc::new(Mutex::new(Some(session))),
-            health_check_interval: Duration::from_secs(3600), // 1小时检查一次，减少干扰
+            _session: Arc::new(Mutex::new(Some(session))),
+            _health_check_interval: Duration::from_secs(3600), // 1小时检查一次，减少干扰
             channel_timeout: Duration::from_secs(u64::MAX / 2), // 几乎永不超时
         }
     }

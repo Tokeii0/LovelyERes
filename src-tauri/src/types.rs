@@ -77,6 +77,12 @@ pub struct SSHConnection {
     pub is_connected: bool,
     pub last_connected: Option<chrono::DateTime<chrono::Utc>>,
     pub tags: Option<Vec<String>>,          // 连接标签
+    /// 是否使用sudo执行命令 (默认false)
+    #[serde(default)]
+    pub use_sudo: bool,
+
+    /// sudo密码 (AES加密，可选)
+    pub encrypted_sudo_password: Option<String>,
 }
 
 /// SSH命令配置
@@ -444,6 +450,8 @@ impl Default for SSHConnection {
             is_connected: false,
             last_connected: None,
             tags: None,
+            use_sudo: false,
+            encrypted_sudo_password: None,
         }
     }
 }

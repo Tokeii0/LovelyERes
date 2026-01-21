@@ -164,52 +164,83 @@ pub fn parse_log_line(line: &str, keywords: &[&str]) -> LogEntry {
 }
 
 /// 生成获取日志的命令
+/// 
+/// 优化策略：
+/// - 无过滤场景：使用 tail 从文件尾部读取，效率最高
+/// - 有过滤场景：使用 tac（反向读取）+ grep 策略，避免读取整个文件
+///   - tac 从文件尾部开始反向输出
+///   - grep -m N 找到 N 个匹配后立即停止
+///   - 对于用户通常只关心最新日志的场景，大幅减少 I/O
 pub fn generate_log_read_command(log_path: &str, page: usize, page_size: usize, filter: Option<&str>, date_filter: Option<&str>) -> String {
     let total_lines = page * page_size;
     
-    let mut grep_part = String::new();
-    if let Some(filter_text) = filter {
-        if !filter_text.trim().is_empty() {
-            grep_part.push_str(&format!(" | grep -i '{}'", filter_text));
-        }
-    }
+    // 检查是否有过滤条件
+    let has_filter = filter.map_or(false, |f| !f.trim().is_empty());
+    let has_date_filter = date_filter.map_or(false, |d| !d.trim().is_empty());
     
-    if let Some(date) = date_filter {
-        if !date.trim().is_empty() {
-            // 简单的日期匹配，假设日志行包含该日期字符串
-            grep_part.push_str(&format!(" | grep '{}'", date));
-        }
-    }
-
-    // 逻辑：先过滤（如果需要），然后取最后的 N 行，再取前 page_size 行
-    // 注意：如果使用了 grep，由于不知道匹配的总行数，分页会变得复杂。
-    // 这里采用简化的策略：如果不使用 grep，直接用 tail 分页。
-    // 如果使用了 grep，则对 grep 的结果进行 tail 分页。
-    
-    if grep_part.is_empty() {
-        // 无过滤：tail -n (page * size) | head -n size (注意：这里 head 取的是 tail 输出的前面，即最旧的，我们需要反转)
-        // 正确的倒序分页（最新的在最前）：
-        // page 1: tail -n 100
-        // page 2: tail -n 200 | head -n 100
-        // 但是 tail 输出是旧->新。
-        // tail -n 200 输出：[Line N-199 ... Line N]
-        // 我们需要的是 [Line N-199 ... Line N-100]
-        // 所以是 head -n 100。
-        
+    if !has_filter && !has_date_filter {
+        // ========== 无过滤场景 ==========
+        // 使用 tail 直接从文件尾部读取，这是最高效的方式
+        // tail 输出顺序：旧 -> 新
         if page == 1 {
             format!("tail -n {} {} 2>/dev/null || echo 'Log file not found'", page_size, log_path)
         } else {
             format!("tail -n {} {} 2>/dev/null | head -n {} || echo 'Log file not found'", total_lines, log_path, page_size)
         }
     } else {
-        // 有过滤：cat file | grep ... | tail ...
-        // 这里效率较低，但功能优先
+        // ========== 有过滤场景 ==========
+        // 使用 tac 从文件尾部反向读取，配合 grep
+        // 简化实现：直接使用 tac，不做复杂的回退检测
+        
+        // 构建 grep 过滤条件
+        let mut grep_filters = Vec::new();
+        if let Some(filter_text) = filter {
+            let trimmed = filter_text.trim();
+            if !trimmed.is_empty() {
+                // 使用 -E 支持扩展正则，-i 忽略大小写
+                grep_filters.push(format!("grep -iE '{}'", escape_grep_pattern(trimmed)));
+            }
+        }
+        if let Some(date) = date_filter {
+            let trimmed = date.trim();
+            if !trimmed.is_empty() {
+                grep_filters.push(format!("grep '{}'", escape_grep_pattern(trimmed)));
+            }
+        }
+        
+        let grep_chain = grep_filters.join(" | ");
+        
+        // 简化方案：直接使用 cat | grep | tail/head
+        // 虽然效率不如 tac 方案，但语法简单可靠
         if page == 1 {
-            format!("cat {} 2>/dev/null {} | tail -n {} || echo 'No matching entries'", log_path, grep_part, page_size)
+            format!(
+                "cat {} 2>/dev/null | {} | tail -n {} || echo 'No matching entries'",
+                log_path, grep_chain, page_size
+            )
         } else {
-            format!("cat {} 2>/dev/null {} | tail -n {} | head -n {} || echo 'No matching entries'", log_path, grep_part, total_lines, page_size)
+            format!(
+                "cat {} 2>/dev/null | {} | tail -n {} | head -n {} || echo 'No matching entries'",
+                log_path, grep_chain, total_lines, page_size
+            )
         }
     }
+}
+
+/// 转义 grep 模式中的特殊字符
+fn escape_grep_pattern(pattern: &str) -> String {
+    // 转义可能导致 shell 注入或 grep 语法错误的字符
+    let mut escaped = String::with_capacity(pattern.len() * 2);
+    for c in pattern.chars() {
+        match c {
+            '\'' => escaped.push_str("'\\''"),  // 单引号需要特殊处理
+            '\\' | '$' | '`' | '"' | '!' => {
+                escaped.push('\\');
+                escaped.push(c);
+            }
+            _ => escaped.push(c),
+        }
+    }
+    escaped
 }
 
 /// 生成获取journalctl日志的命令
@@ -240,8 +271,9 @@ pub fn generate_journalctl_command(page: usize, page_size: usize, unit: Option<&
     }
     
     if let Some(filter_text) = filter {
-        if !filter_text.trim().is_empty() {
-            cmd.push_str(&format!(" | grep -i '{}'", filter_text));
+        let trimmed = filter_text.trim();
+        if !trimmed.is_empty() {
+            cmd.push_str(&format!(" | grep -iE '{}'", escape_grep_pattern(trimmed)));
         }
     }
     

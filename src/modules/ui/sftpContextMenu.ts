@@ -272,6 +272,13 @@ export class SftpContextMenuRenderer {
           ${IconPark.ChartHistogramOne({ theme: 'outline', size: '14', fill: 'currentColor' })}
           <span>查看详细信息</span>
         </div>
+
+        <div style="height: 1px; background: var(--border-color); margin: 4px 0;"></div>
+
+        <div class="ctx-item ctx-item-danger" id="sftp-ctx-delete" style="color: var(--error-color, #e53935);">
+          ${IconPark.Delete({ theme: 'outline', size: '14', fill: 'currentColor' })}
+          <span>删除</span>
+        </div>
       </div>
     `
   }

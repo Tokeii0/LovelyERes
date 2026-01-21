@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import * as IconPark from '@icon-park/svg'
+import { wrapCommandWithBash } from '../utils/shellUtils'
 
 /**
  * 网络连接右键菜单管理器
@@ -937,10 +938,11 @@ export class NetworkContextMenu {
       const accountInfo = this.selectedUsername ? ` (账号: ${this.selectedUsername})` : ''
       this.showModal(title, `⏳ 正在执行: ${actionName}${accountInfo}...\n\n命令: ${command.substring(0, 100)}${command.length > 100 ? '...' : ''}`)
 
-      // 执行命令
-      const params: any = { command }
-      if (this.selectedUsername) {
-        params.username = this.selectedUsername
+       // 执行命令
+       const finalCommand = wrapCommandWithBash(command);
+       const params: any = { command: finalCommand }
+       if (this.selectedUsername) {
+         params.username = this.selectedUsername
         console.log('👤 使用账号执行网络命令:', this.selectedUsername)
       }
       const result = await invoke('ssh_execute_command_direct', params) as { output: string; exit_code: number }

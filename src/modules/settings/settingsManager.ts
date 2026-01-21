@@ -172,6 +172,11 @@ export class SettingsManager {
       // 从后端加载（如果有的话）
       const backendSettings = await this.loadFromBackend();
 
+      // 判断后端设置是否为空（意味着文件不存在或为空）
+      // 注意：loadFromBackend 出错返回 {}，文件不存在也返回 {}
+      // 我们通过检查返回对象的键数量来判断
+      const isBackendEmpty = Object.keys(backendSettings).length === 0;
+
       // 使用深度合并，避免嵌套对象（如ai.providers）被覆盖
       this.settings = this.deepMerge(
         this.getDefaultSettings(),
@@ -181,6 +186,19 @@ export class SettingsManager {
 
       // 通知监听器
       this.notifyListeners();
+
+      // 如果后端没有设置（文件不存在或为空），则自动生成并保存默认设置到后端文件
+      if (isBackendEmpty) {
+        console.log('⚠️ 检测到配置文件不存在或为空，正在自动生成默认配置文件...');
+        try {
+          // 保存当前合并后的设置（即默认+本地）作为新的配置文件
+          // 这样可以确保配置文件的存在，避免后续可能的读取错误
+          await this.saveToBackend();
+          console.log('✅ 默认配置文件已自动生成');
+        } catch (saveError) {
+          console.error('❌ 自动生成配置文件失败:', saveError);
+        }
+      }
 
     } catch (error) {
       console.error('加载设置失败:', error);
@@ -211,9 +229,16 @@ export class SettingsManager {
       const settingsContent = await invoke('read_settings_file') as string;
 
       if (settingsContent) {
-        const settings = JSON.parse(settingsContent);
-        console.log('✅ 从settings.json加载设置成功');
-        return settings;
+        try {
+          const settings = JSON.parse(settingsContent);
+          console.log('✅ 从settings.json加载设置成功');
+          return settings;
+        } catch (parseError) {
+          console.error('❌ settings.json 格式错误，重置为默认设置:', parseError);
+          console.error('原始内容:', settingsContent.substring(0, 100) + '...');
+          // 如果解析失败，可能是文件损坏，返回空对象让它使用默认值
+          return {};
+        }
       }
 
       return {};

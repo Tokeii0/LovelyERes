@@ -147,7 +147,7 @@ export class DockerPageManager {
     if (!grid) return;
     if (isLoading) {
       grid.classList.add('docker-grid-loading');
-      grid.innerHTML = '<div class="docker-loading">加载容器信息中...</div>';
+      grid.innerHTML = '<div class="docker-loading"><div class="loading-spinner"></div><div>正在获取容器数据...</div></div>';
     } else {
       grid.classList.remove('docker-grid-loading');
     }
@@ -231,75 +231,81 @@ export class DockerPageManager {
     const statusClass = isRunning ? 'status-running' : container.state.toLowerCase() === 'paused' ? 'status-paused' : 'status-stopped';
     const cpu = container.cpuPercent != null ? `${container.cpuPercent.toFixed(1)}%` : '--';
     const memoryRaw = container.memoryUsage ?? '--';
-    // Extract only the used memory part (before the " / ")
     const memory = memoryRaw.includes(' / ') ? memoryRaw.split(' / ')[0] : memoryRaw;
     const networkMode = container.networkMode ?? '未知';
-    const firstNetwork = container.networks[0]?.ipv4Address ?? '无';
+    const firstNetwork = container.networks[0]?.ipv4Address ?? '无 IP';
 
     // Simplify port display
     const portChips = container.ports.length
       ? container.ports
-          .slice(0, 3) // Limit to 3 ports
-          .map((port) => `<span class="docker-chip port">${port.publicPort ?? '*'}→${port.privatePort}</span>`)
-          .join('') + (container.ports.length > 3 ? `<span class="docker-chip port-more">+${container.ports.length - 3}</span>` : '')
-      : '<span class="docker-chip muted">无端口</span>';
+          .slice(0, 3) 
+          .map((port) => `<span class="port-badge" title="${port.publicPort ? '公网: ' + port.publicPort : '私有'} → ${port.privatePort}">${port.publicPort ?? '*'}:${port.privatePort}</span>`)
+          .join('') + (container.ports.length > 3 ? `<span class="port-badge port-more" title="更多端口...">+${container.ports.length - 3}</span>` : '')
+      : '<span class="port-badge" style="opacity: 0.5;">无端口</span>';
 
-    // Action Buttons Grouped
+    // Action Buttons
+    // Using tooltip class for better hover titles
     const primaryAction = isRunning
-      ? `<button class="docker-icon-btn stop" data-docker-action="stop" data-container="${container.name}" title="停止">${ICONS.stop}</button>
-         <button class="docker-icon-btn restart" data-docker-action="restart" data-container="${container.name}" title="重启">${ICONS.restart}</button>`
-      : `<button class="docker-icon-btn start" data-docker-action="start" data-container="${container.name}" title="启动">${ICONS.start}</button>`;
+      ? `<button class="icon-btn stop tooltip" data-docker-action="stop" data-container="${container.name}" title="停止容器">${ICONS.stop}</button>
+         <button class="icon-btn restart tooltip" data-docker-action="restart" data-container="${container.name}" title="重启容器">${ICONS.restart}</button>`
+      : `<button class="icon-btn start tooltip" data-docker-action="start" data-container="${container.name}" title="启动容器">${ICONS.start}</button>`;
 
     const terminalAction = isRunning 
-      ? `<button class="docker-icon-btn terminal" data-docker-action="terminal" data-container="${container.name}" title="终端">${ICONS.terminal}</button>` 
+      ? `<button class="icon-btn terminal tooltip" data-docker-action="terminal" data-container="${container.name}" title="打开终端">${ICONS.terminal}</button>` 
       : '';
 
     return `
       <div class="docker-card">
         <div class="docker-card-header">
           <div class="docker-identity">
-            <h3>${container.name}</h3>
+            <h3 title="${container.name}">${container.name}</h3>
             <div class="docker-image" title="${container.image}">${container.image}</div>
           </div>
-          <div class="docker-status-wrapper">
-             <span class="docker-status-dot ${statusClass}"></span>
-             <span class="docker-status-text ${statusClass}">${container.state}</span>
+          <div class="docker-status-badge ${statusClass}">
+             <span class="status-dot"></span>
+             <span>${container.state}</span>
           </div>
         </div>
         
         <div class="docker-card-body">
-           <div class="docker-metrics-row">
-             <div class="metric-box">
+           <div class="docker-metrics-grid">
+             <div class="metric-item">
                <span class="metric-label">CPU</span>
                <span class="metric-value">${cpu}</span>
              </div>
-             <div class="metric-box">
-               <span class="metric-label">MEM</span>
+             <div class="metric-item">
+               <span class="metric-label">内存</span>
                <span class="metric-value">${memory}</span>
              </div>
-             <div class="metric-box">
-               <span class="metric-label">NET</span>
+             <div class="metric-item">
+               <span class="metric-label">网络</span>
                <span class="metric-value">${networkMode}</span>
              </div>
            </div>
            
-           <div class="docker-info-row">
-              <div class="info-label">IP: ${firstNetwork}</div>
-              <div class="docker-chip-group">${portChips}</div>
+           <div class="docker-info-list">
+              <div class="info-row">
+                 <span class="info-icon">🌐</span>
+                 <span>${firstNetwork}</span>
+              </div>
+              <div class="info-row">
+                 <span class="info-icon">🔌</span>
+                 <div class="port-badges">${portChips}</div>
+              </div>
            </div>
         </div>
 
         <div class="docker-card-footer">
-           <div class="docker-action-group primary">
+           <div class="footer-actions">
              ${primaryAction}
            </div>
-           <div class="docker-action-divider"></div>
-           <div class="docker-action-group tools">
+           
+           <div class="footer-actions">
              ${terminalAction}
-             <button class="docker-icon-btn" data-docker-action="logs" data-container="${container.name}" title="日志">${ICONS.logs}</button>
-             <button class="docker-icon-btn" data-docker-action="inspect" data-container="${container.name}" title="详情">${ICONS.inspect}</button>
-             <button class="docker-icon-btn" data-docker-action="edit" data-container="${container.name}" title="编辑">${ICONS.edit}</button>
-             <button class="docker-icon-btn" data-docker-action="copy" data-container="${container.name}" title="复制">${ICONS.copy}</button>
+             <button class="icon-btn tooltip" data-docker-action="logs" data-container="${container.name}" title="查看日志">${ICONS.logs}</button>
+             <button class="icon-btn tooltip" data-docker-action="inspect" data-container="${container.name}" title="以及详情">${ICONS.inspect}</button>
+             <button class="icon-btn tooltip" data-docker-action="edit" data-container="${container.name}" title="编辑文件">${ICONS.edit}</button>
+             <button class="icon-btn tooltip" data-docker-action="copy" data-container="${container.name}" title="文件传输">${ICONS.copy}</button>
            </div>
         </div>
       </div>
@@ -312,10 +318,10 @@ export class DockerPageManager {
 
     if (isEmpty) {
       emptyState.innerHTML = `
-        <div class="docker-empty">
+        <div class="docker-empty-state">
           <div class="docker-empty-icon">🐳</div>
-          <div class="docker-empty-title">没有匹配的容器</div>
-          <p class="docker-empty-description">尝试修改搜索条件，或检查服务器上的 Docker 服务是否正常运行。</p>
+          <div class="docker-empty-title">暂无容器</div>
+          <p class="docker-empty-description">当前筛选条件下未找到任何容器，请尝试调整关键词。</p>
         </div>
       `;
       emptyState.style.display = 'block';
@@ -331,7 +337,7 @@ export class DockerPageManager {
 
     if (statsEl) {
       statsEl.innerHTML = `
-        <div class="docker-disconnected">
+        <div class="docker-empty-state">
           <div class="docker-empty-icon">🔌</div>
           <div>
             <div class="docker-empty-title">尚未连接 SSH</div>

@@ -557,20 +557,12 @@ struct DockerPsRow {
     id: String,
     #[serde(rename = "Names")]
     names: Option<String>,
-    #[serde(rename = "Image")]
-    image: Option<String>,
     #[serde(rename = "Command")]
     command: Option<String>,
-    #[serde(rename = "CreatedAt")]
-    created_at: Option<String>,
     #[serde(rename = "RunningFor")]
     running_for: Option<String>,
     #[serde(rename = "Status")]
     status: Option<String>,
-    #[serde(rename = "State")]
-    state: Option<String>,
-    #[serde(rename = "Ports")]
-    ports: Option<String>,
 }
 
 impl DockerPsRow {

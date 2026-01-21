@@ -3,7 +3,8 @@
  * 负责获取和管理Linux系统信息
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { wrapCommandWithBash } from '../utils/shellUtils'
+import { sshConnectionManager } from '../remote/sshConnectionManager';
 
 export interface SystemInfo {
   hostname: string;
@@ -105,23 +106,41 @@ export class SystemInfoManager {
   private updateInterval?: number;
   private isUpdating = false;
   private detailedInfo?: any; // 缓存详细信息
+  private currentSessionId?: string; // 多服务器支持：当前会话ID
 
   constructor() {
     // 构造函数保持简单
   }
 
   /**
+   * 设置当前会话ID（用于多服务器支持）
+   */
+  setSessionId(sessionId: string | undefined): void {
+    console.log(`🔄 [SystemInfoManager] setSessionId 被调用: 旧ID='${this.currentSessionId}' -> 新ID='${sessionId}'`);
+    if (this.currentSessionId !== sessionId) {
+      this.currentSessionId = sessionId;
+      // 切换会话时清除所有缓存数据
+      this.systemInfo = undefined;
+      this.detailedInfo = undefined;
+      console.log(`✅ [SystemInfoManager] 会话已切换，缓存已清除`);
+    } else {
+      console.log(`⚠️ [SystemInfoManager] 会话ID相同，跳过缓存清除`);
+    }
+  }
+
+  /**
    * 获取系统信息
    */
-  async fetchSystemInfo(): Promise<SystemInfo> {
-    if (this.isUpdating) {
+  async fetchSystemInfo(force: boolean = false): Promise<SystemInfo> {
+    if (this.isUpdating && !force) {
       throw new Error('系统信息正在更新中');
     }
 
     this.isUpdating = true;
 
     try {
-      console.log('📊 正在获取系统信息（包括详细信息）...');
+      console.log(`📊 正在获取系统信息，使用会话 ID: ${this.currentSessionId || '(默认)'}`);
+
 
       // 并行执行所有命令获取系统信息和详细信息
       const [
@@ -224,8 +243,21 @@ export class SystemInfoManager {
    */
   private async executeCommand(command: string): Promise<string> {
     try {
-      // 使用仪表盘专用的快速执行命令
-      const result = await invoke('ssh_execute_dashboard_command_direct', { command });
+      // 使用带Sudo重试的执行器
+      const sessionId = this.currentSessionId || null;
+      
+      // 自动包裹bash -c以支持sudo下的复杂命令（如if/else, for循环, 管道），并处理单引号转义
+      // 使用工具函数安全包裹命令
+      const execCommand = wrapCommandWithBash(command);
+
+      const result = await sshConnectionManager.executeCommandWithSudoRetry(
+        'ssh_execute_dashboard_command_direct', 
+        { 
+          command: execCommand,
+          sessionId 
+        },
+        sessionId
+      );
 
       // 确保返回值是字符串类型
       if (typeof result === 'string') {
@@ -963,8 +995,9 @@ export class SystemInfoManager {
    * 清除缓存
    */
   clearCache(): void {
+    this.systemInfo = undefined;
     this.detailedInfo = undefined;
-    console.log('🧹 系统信息缓存已清除');
+    console.log('🧹 [SystemInfoManager] 系统信息和详细信息缓存已清除');
   }
 
   /**
