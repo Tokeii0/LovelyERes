@@ -125,6 +125,43 @@ export class SSHConnectionDialog {
           />
         </div>
 
+        <div style="margin-bottom: var(--spacing-md);">
+          <label style="display: flex; align-items: center; gap: var(--spacing-xs); color: var(--text-primary); font-size: 13px; cursor: pointer;">
+            <input
+              type="checkbox"
+              id="ssh-use-sudo"
+              style="cursor: pointer;"
+            />
+            <span>使用 sudo 执行系统命令</span>
+          </label>
+          <small style="display: block; margin-top: var(--spacing-xs); color: var(--text-secondary); font-size: 11px; margin-left: 20px;">
+            勾选后,系统信息查询和Docker命令将使用sudo权限执行
+          </small>
+        </div>
+
+        <div id="sudo-password-container" style="margin-bottom: var(--spacing-md); display: none;">
+          <label style="display: block; margin-bottom: var(--spacing-xs); color: var(--text-primary); font-size: 12px;">
+            Sudo 密码 (可选)
+          </label>
+          <input
+            type="password"
+            id="ssh-sudo-password"
+            placeholder="如果配置了NOPASSWD则留空"
+            style="
+              width: 100%;
+              padding: var(--spacing-sm);
+              border: 1px solid var(--border-color);
+              border-radius: var(--border-radius);
+              background: var(--bg-secondary);
+              color: var(--text-primary);
+              font-size: 14px;
+            "
+          />
+          <small style="display: block; margin-top: var(--spacing-xs); color: var(--text-secondary); font-size: 11px;">
+            如果服务器执行sudo需要密码，请输入。密码将加密保存。
+          </small>
+        </div>
+
         <div style="display: flex; gap: var(--spacing-sm); justify-content: flex-end;">
           <button
             class="modern-btn secondary"
@@ -158,6 +195,21 @@ export class SSHConnectionDialog {
       }
     });
 
+    // 监听sudo复选框变化
+    const useSudoCheckbox = document.getElementById('ssh-use-sudo');
+    if (useSudoCheckbox) {
+      useSudoCheckbox.addEventListener('change', (e) => {
+        const container = document.getElementById('sudo-password-container');
+        if (container) {
+          if ((e.target as HTMLInputElement).checked) {
+            container.style.display = 'block';
+          } else {
+            container.style.display = 'none';
+          }
+        }
+      });
+    }
+
     document.body.appendChild(this.dialog);
 
     // 聚焦到第一个输入框
@@ -187,6 +239,8 @@ export class SSHConnectionDialog {
     const port = parseInt((document.getElementById('ssh-port') as HTMLInputElement)?.value);
     const username = (document.getElementById('ssh-username') as HTMLInputElement)?.value;
     const password = (document.getElementById('ssh-password') as HTMLInputElement)?.value;
+    const useSudo = (document.getElementById('ssh-use-sudo') as HTMLInputElement)?.checked || false;
+    const sudoPassword = (document.getElementById('ssh-sudo-password') as HTMLInputElement)?.value || undefined;
 
     if (!host || !username || !password) {
       (window as any).showConnectionStatus('请填写完整的连接信息', 'error');
@@ -194,8 +248,8 @@ export class SSHConnectionDialog {
     }
 
     try {
-      // 使用SSH连接管理器进行连接
-      await sshConnectionManager.connect(host, port, username, password);
+      // 使用SSH连接管理器进行连接,传递useSudo参数和sudo密码
+      await sshConnectionManager.connect(host, port, username, password, useSudo, sudoPassword);
       
       // 连接成功，关闭对话框
       this.hide();

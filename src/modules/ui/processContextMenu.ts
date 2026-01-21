@@ -4,6 +4,7 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import * as IconPark from '@icon-park/svg'
+import { wrapCommandWithBash } from '../utils/shellUtils'
 
 export class ProcessContextMenu {
   private contextMenu: HTMLElement | null = null
@@ -1211,8 +1212,9 @@ ${content}
       this.showModal(title, `⏳ 正在执行: ${actionName}${userInfo}...\n\n命令: ${command.substring(0, 100)}${command.length > 100 ? '...' : ''}`)
 
       // 执行命令，传入选中的账号
+      const finalCommand = wrapCommandWithBash(command);
       const result = await invoke('ssh_execute_command_direct', {
-        command,
+        command: finalCommand,
         username: this.selectedUsername
       }) as { output: string; exit_code: number }
 

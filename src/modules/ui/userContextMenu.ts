@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import * as IconPark from '@icon-park/svg'
+import { wrapCommandWithBash } from '../utils/shellUtils'
 
 /**
  * 用户列表右键菜单管理器
@@ -858,7 +859,8 @@ export class UserContextMenu {
       const accountInfo = this.selectedUsername ? ` (账号: ${this.selectedUsername})` : ''
       this.showModal(title, `⏳ 正在执行: ${actionName}${accountInfo}...\n\n命令: ${command.substring(0, 100)}${command.length > 100 ? '...' : ''}`)
 
-      const params: any = { command }
+      const finalCommand = wrapCommandWithBash(command);
+      const params: any = { command: finalCommand }
       if (this.selectedUsername) {
         params.username = this.selectedUsername
         console.log('👤 使用账号执行用户命令:', this.selectedUsername)

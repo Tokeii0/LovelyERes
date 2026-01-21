@@ -133,8 +133,10 @@ export class SftpManager {
     }
 
     try {
+      // 传递 session_id 以支持多服务器连接
       const files = await (window as any).__TAURI__.core.invoke('sftp_list_files', {
-        path: this.currentPath
+        path: this.currentPath,
+        sessionId: sshConnectionManager.getCurrentSessionId() || null
       });
 
       this.fileList = this.sortFiles(files);

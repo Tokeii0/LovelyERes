@@ -109,6 +109,8 @@ enum WorkerCommand {
         username: String,
         password: Option<String>,
         private_key: Option<String>,
+        use_sudo: bool,  // 是否使用sudo执行命令
+        sudo_password: Option<String>, // sudo密码
         response_tx: mpsc::Sender<Result<String, String>>,
     },
     ExecuteCommand {
@@ -142,10 +144,20 @@ enum WorkerCommand {
         path: String,
         response_tx: mpsc::Sender<Result<(), String>>,
     },
+    DeleteSftpDirectory {
+        session_id: String,
+        path: String,
+        response_tx: mpsc::Sender<Result<(), String>>,
+    },
     RenameSftpFile {
         session_id: String,
         old_path: String,
         new_path: String,
+        response_tx: mpsc::Sender<Result<(), String>>,
+    },
+    UpdateSudoPassword {
+        session_id: String,
+        password: Option<String>,
         response_tx: mpsc::Sender<Result<(), String>>,
     },
     Disconnect {
@@ -201,6 +213,9 @@ enum WorkerCommand {
 struct SessionData {
     handle: Handle<ClientHandler>,
     info: ConnectionInfo,
+    use_sudo: bool,  // 是否使用sudo执行命令
+    sudo_password: Option<String>, // sudo密码
+    login_password: Option<String>, // 登录密码 (用于sudo回退)
 }
 
 // ================== Terminal Session Data ==================
@@ -210,8 +225,8 @@ use tauri::Emitter;
 
 struct TerminalSession {
     channel: russh::Channel<Msg>,
-    session_id: String,
-    window: tauri::Window,
+    _session_id: String,
+    _window: tauri::Window,
 }
 
 // ================== Async Helper Functions ==================
@@ -338,6 +353,96 @@ async fn execute_command_async(
             output.push('\n');
         }
         output.push_str(&String::from_utf8_lossy(&stderr));
+    }
+    
+    Ok(TerminalOutput::new(command, &output, exit_code))
+}
+
+async fn execute_sudo_command_async(
+    handle: &Handle<ClientHandler>,
+    command: &str,
+    sudo_password: &str,
+) -> Result<TerminalOutput, String> {
+    // Open a session channel
+    let mut channel = handle
+        .channel_open_session()
+        .await
+        .map_err(|e| format!("Failed to open channel: {}", e))?;
+    
+    // Execute command with sudo -S (read password from stdin)
+    let sudo_cmd = format!("sudo -S {}", command);
+    channel
+        .exec(true, sudo_cmd)
+        .await
+        .map_err(|e| format!("Failed to execute command: {}", e))?;
+    
+    // Write password to stdin
+    // sudo -S reads password from stdin. We append newline just in case.
+    // Note: We don't send EOF immediately because the command itself might produce output 
+    // and we want to keep the channel open until the process exits.
+    let mut pwd_input = sudo_password.to_string();
+    if !pwd_input.ends_with('\n') {
+        pwd_input.push('\n');
+    }
+    
+    channel.data(pwd_input.as_bytes()).await
+        .map_err(|e| format!("Failed to write password to stdin: {}", e))?;
+    
+    // Read output
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut exit_code: Option<i32> = None;
+    
+    loop {
+        match channel.wait().await {
+            Some(ChannelMsg::Data { data }) => {
+                stdout.extend_from_slice(&data);
+            }
+            Some(ChannelMsg::ExtendedData { data, ext }) => {
+                if ext == 1 {
+                    // stderr
+                    stderr.extend_from_slice(&data);
+                }
+            }
+            Some(ChannelMsg::ExitStatus { exit_status }) => {
+                exit_code = Some(exit_status as i32);
+            }
+            Some(ChannelMsg::Eof) | None => {
+                break;
+            }
+            _ => {}
+        }
+    }
+    
+    // Combine stdout and stderr
+    // Note: sudo might output the password prompt to stderr (e.g. "[sudo] password for user:")
+    // We might want to filter that out if possible, but it's tricky since it varies.
+    
+    let stderr_str = String::from_utf8_lossy(&stderr).to_string();
+    
+    // Check for common sudo password errors
+    if stderr_str.contains("Sorry, try again") || 
+       stderr_str.contains("incorrect password") ||
+       stderr_str.contains("sudo: 3 incorrect password attempts") {
+        return Err("Sudo密码错误，请检查配置".to_string());
+    }
+
+    let mut output = String::from_utf8_lossy(&stdout).to_string();
+
+    // Try to remove the password prompt from output/stderr if present
+    // It usually appears on stderr, but we are appending stderr to output
+    let prompt_markers = ["[sudo] password for", "Password:"];
+    
+    let clean_stderr = stderr_str.lines()
+        .filter(|line| !prompt_markers.iter().any(|m| line.contains(m)))
+        .collect::<Vec<&str>>()
+        .join("\n");
+
+    if !clean_stderr.is_empty() {
+        if !output.is_empty() && !output.ends_with('\n') {
+            output.push('\n');
+        }
+        output.push_str(&clean_stderr);
     }
     
     Ok(TerminalOutput::new(command, &output, exit_code))
@@ -538,6 +643,31 @@ async fn create_sftp_directory_async(
     Ok(())
 }
 
+async fn delete_sftp_directory_async(
+    handle: &Handle<ClientHandler>,
+    path: &str,
+) -> Result<(), String> {
+    let channel = handle
+        .channel_open_session()
+        .await
+        .map_err(|e| format!("Failed to open channel: {}", e))?;
+    
+    channel
+        .request_subsystem(true, "sftp")
+        .await
+        .map_err(|e| format!("Failed to request SFTP subsystem: {}", e))?;
+    
+    let sftp = SftpSession::new(channel.into_stream())
+        .await
+        .map_err(|e| format!("Failed to create SFTP session: {}", e))?;
+    
+    sftp.remove_dir(path)
+        .await
+        .map_err(|e| format!("Failed to delete directory: {}", e))?;
+    
+    Ok(())
+}
+
 async fn rename_sftp_file_async(
     handle: &Handle<ClientHandler>,
     old_path: &str,
@@ -587,7 +717,7 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
             };
             
             match cmd {
-                WorkerCommand::Connect { host, port, username, password, private_key, response_tx } => {
+                WorkerCommand::Connect { host, port, username, password, private_key, use_sudo, sudo_password, response_tx } => {
                     let result = connect_async(&host, port, &username, password.as_deref(), private_key.as_deref()).await;
                     match result {
                         Ok(handle) => {
@@ -598,7 +728,13 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                                 username: username.clone(),
                                 auth_method: if private_key.is_some() { "key".to_string() } else { "password".to_string() },
                             };
-                            sessions.insert(session_id.clone(), SessionData { handle, info });
+                            sessions.insert(session_id.clone(), SessionData { 
+                                handle, 
+                                info, 
+                                use_sudo, 
+                                sudo_password,
+                                login_password: password
+                            });
                             let _ = response_tx.send(Ok(session_id));
                         }
                         Err(e) => {
@@ -609,7 +745,23 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                 
                 WorkerCommand::ExecuteCommand { session_id, command, response_tx } => {
                     let result = if let Some(session) = sessions.get(&session_id) {
-                        execute_command_async(&session.handle, &command).await
+                        // 根据use_sudo配置决定执行方式
+                        if session.use_sudo {
+                            // 优先使用专用 sudo 密码，如果没有则回退到登录密码
+                            let effective_pwd = session.sudo_password.as_ref().or(session.login_password.as_ref());
+                            
+                            if let Some(pwd) = effective_pwd {
+                                // 始终使用 -S 模式以避免 "terminal required" 错误
+                                execute_sudo_command_async(&session.handle, &command, pwd).await
+                            } else {
+                                // 实在没密码，才尝试直接 sudo (通常会失败，除非是 NOPASSWD)
+                                let final_command = format!("sudo {}", command);
+                                execute_command_async(&session.handle, &final_command).await
+                            }
+                        } else {
+                            // 普通执行
+                            execute_command_async(&session.handle, &command).await
+                        }
                     } else {
                         Err(format!("Session not found: {}", session_id))
                     };
@@ -661,6 +813,15 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                     let _ = response_tx.send(result);
                 }
                 
+                WorkerCommand::DeleteSftpDirectory { session_id, path, response_tx } => {
+                    let result = if let Some(session) = sessions.get(&session_id) {
+                        delete_sftp_directory_async(&session.handle, &path).await
+                    } else {
+                        Err(format!("Session not found: {}", session_id))
+                    };
+                    let _ = response_tx.send(result);
+                }
+                
                 WorkerCommand::RenameSftpFile { session_id, old_path, new_path, response_tx } => {
                     let result = if let Some(session) = sessions.get(&session_id) {
                         rename_sftp_file_async(&session.handle, &old_path, &new_path).await
@@ -669,9 +830,19 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                     };
                     let _ = response_tx.send(result);
                 }
+
+                WorkerCommand::UpdateSudoPassword { session_id, password, response_tx } => {
+                    let result = if let Some(session) = sessions.get_mut(&session_id) {
+                        session.sudo_password = password;
+                        Ok(())
+                    } else {
+                        Err(format!("Session not found: {}", session_id))
+                    };
+                    let _ = response_tx.send(result);
+                }
                 
                 WorkerCommand::Disconnect { session_id, response_tx } => {
-                    let result = if let Some(mut session) = sessions.remove(&session_id) {
+                    let result = if let Some(session) = sessions.remove(&session_id) {
                         let _ = session.handle.disconnect(Disconnect::ByApplication, "User disconnected", "en").await;
                         Ok(())
                     } else {
@@ -681,7 +852,7 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                 }
                 
                 WorkerCommand::DisconnectAll { response_tx } => {
-                    for (_, mut session) in sessions.drain() {
+                    for (_, session) in sessions.drain() {
                         let _ = session.handle.disconnect(Disconnect::ByApplication, "User disconnected", "en").await;
                     }
                     let _ = response_tx.send(Ok(()));
@@ -731,16 +902,16 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                                 }
                                 
                                 // Create terminal session
-                                let terminal_session = TerminalSession {
+                                let term_session = TerminalSession {
                                     channel,
-                                    session_id: session_id.clone(),
-                                    window: window.clone(),
+                                    _session_id: session_id.clone(),
+                                    _window: window.clone(),
                                 };
                                 
                                 // Store it
                                 let terminal_id_clone = terminal_id.clone();
                                 let mut terminals = terminal_sessions.lock().await;
-                                terminals.insert(terminal_id.clone(), terminal_session);
+                                terminals.insert(terminal_id.clone(), term_session);
                                 drop(terminals);
                                 
                                 // Spawn a task to read output from the channel and emit to window
@@ -842,7 +1013,7 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                 
                 WorkerCommand::CloseTerminalSession { terminal_id, response_tx } => {
                     let mut terminals = terminal_sessions.lock().await;
-                    let result = if let Some(mut term) = terminals.remove(&terminal_id) {
+                    let result = if let Some(term) = terminals.remove(&terminal_id) {
                         let _ = term.channel.eof().await;
                         let _ = term.channel.close().await;
                         Ok(())
@@ -855,7 +1026,7 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                 
                 WorkerCommand::CloseAllTerminalSessions { response_tx } => {
                     let mut terminals = terminal_sessions.lock().await;
-                    for (_, mut term) in terminals.drain() {
+                    for (_, term) in terminals.drain() {
                         let _ = term.channel.eof().await;
                         let _ = term.channel.close().await;
                     }
@@ -877,7 +1048,7 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                 
                 WorkerCommand::Shutdown => {
                     // Disconnect all sessions before shutdown
-                    for (_, mut session) in sessions.drain() {
+                    for (_, session) in sessions.drain() {
                         let _ = session.handle.disconnect(Disconnect::ByApplication, "Shutdown", "en").await;
                     }
                     break;
@@ -933,6 +1104,20 @@ impl SSHManagerRussh {
         password: Option<&str>,
         private_key: Option<&str>,
     ) -> Result<String, String> {
+        self.connect_with_sudo(host, port, username, password, private_key, false, None)
+    }
+    
+    /// Connect to SSH server with sudo option
+    pub fn connect_with_sudo(
+        &self,
+        host: &str,
+        port: u16,
+        username: &str,
+        password: Option<&str>,
+        private_key: Option<&str>,
+        use_sudo: bool,
+        sudo_password: Option<&str>,
+    ) -> Result<String, String> {
         let (response_tx, response_rx) = mpsc::channel();
         
         self.worker_tx
@@ -942,13 +1127,13 @@ impl SSHManagerRussh {
                 username: username.to_string(),
                 password: password.map(|s| s.to_string()),
                 private_key: private_key.map(|s| s.to_string()),
+                use_sudo,
+                sudo_password: sudo_password.map(|s| s.to_string()),
                 response_tx,
             })
             .map_err(|_| "Worker thread has shut down".to_string())?;
-        
-        let result = response_rx
-            .recv()
-            .map_err(|_| "Failed to receive response from worker".to_string())??;
+            
+        let result = response_rx.recv().map_err(|_| "Worker thread panic or disconnected".to_string())??;
         
         // Set as current session
         self.set_current_session(Some(result.clone()));
@@ -964,19 +1149,18 @@ impl SSHManagerRussh {
     
     /// Execute command on specific session
     pub fn execute_command_on_session(&self, session_id: &str, command: &str) -> Result<TerminalOutput, String> {
-        let (response_tx, response_rx) = mpsc::channel();
+        let (tx, rx) = mpsc::channel();
         
         self.worker_tx
             .send(WorkerCommand::ExecuteCommand {
                 session_id: session_id.to_string(),
                 command: command.to_string(),
-                response_tx,
+                response_tx: tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+            .map_err(|e| format!("Failed to send command: {}", e))?;
         
-        response_rx
-            .recv()
-            .map_err(|_| "Failed to receive response from worker".to_string())?
+        rx.recv()
+            .map_err(|e| format!("Failed to receive response: {}", e))?
     }
     
     // ================== SFTP Methods ==================
@@ -1086,6 +1270,29 @@ impl SSHManagerRussh {
         
         self.worker_tx
             .send(WorkerCommand::CreateSftpDirectory {
+                session_id: session_id.to_string(),
+                path: path.to_string(),
+                response_tx,
+            })
+            .map_err(|_| "Worker thread has shut down".to_string())?;
+        
+        response_rx
+            .recv()
+            .map_err(|_| "Failed to receive response from worker".to_string())?
+    }
+    
+    /// Delete directory on current session
+    pub fn delete_sftp_directory(&self, path: &str) -> Result<(), String> {
+        let session_id = self.get_current_session()?;
+        self.delete_sftp_directory_on_session(&session_id, path)
+    }
+    
+    /// Delete directory on specific session
+    pub fn delete_sftp_directory_on_session(&self, session_id: &str, path: &str) -> Result<(), String> {
+        let (response_tx, response_rx) = mpsc::channel();
+        
+        self.worker_tx
+            .send(WorkerCommand::DeleteSftpDirectory {
                 session_id: session_id.to_string(),
                 path: path.to_string(),
                 response_tx,
@@ -1279,6 +1486,23 @@ impl SSHManagerRussh {
         };
         
         self.execute_command(&final_command)
+    }
+
+    /// Update sudo password for a session
+    pub fn update_session_sudo_password(&self, session_id: &str, password: Option<String>) -> Result<(), String> {
+        let (response_tx, response_rx) = mpsc::channel();
+        
+        self.worker_tx
+            .send(WorkerCommand::UpdateSudoPassword {
+                session_id: session_id.to_string(),
+                password,
+                response_tx,
+            })
+            .map_err(|_| "Worker thread has shut down".to_string())?;
+            
+        response_rx.recv().map_err(|_| "Worker thread panic or disconnected".to_string())??;
+        
+        Ok(())
     }
     
     /// Get connection status (backward compatibility)

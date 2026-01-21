@@ -3,7 +3,7 @@
  * 负责应用状态的管理和同步
  */
 
-import type { AppState } from './app';
+import type { AppState } from './types';
 import type { ModernUIRenderer } from '../ui/modernUIRenderer';
 
 export class StateManager {

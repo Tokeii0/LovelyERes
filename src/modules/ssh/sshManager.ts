@@ -107,6 +107,21 @@ export class SSHManager {
   }
 
   /**
+   * 设置当前会话ID (用于多服务器切换)
+   * 强制清除所有缓存以确保刷新时获取新会话数据
+   */
+  setSessionId(sessionId: string): void {
+    console.log(`🔄 [SSHManager] 设置会话 ID: ${sessionId}`);
+    // 强制清除 systemInfoManager 的缓存
+    this.systemInfoManager.setSessionId(sessionId);
+    // 额外调用 clearCache 确保完全清除
+    if (this.systemInfoManager.clearCache) {
+      this.systemInfoManager.clearCache();
+      console.log('🗑️ [SSHManager] 已清除 SystemInfoManager 缓存');
+    }
+  }
+
+  /**
    * 断开服务器连接
    */
   async disconnectFromServer(id: string): Promise<void> {
@@ -182,8 +197,8 @@ export class SSHManager {
   /**
    * 获取系统信息
    */
-  async fetchSystemInfo(): Promise<SystemInfo> {
-    return this.systemInfoManager.fetchSystemInfo();
+  async fetchSystemInfo(force: boolean = false): Promise<SystemInfo> {
+    return this.systemInfoManager.fetchSystemInfo(force);
   }
 
   /**

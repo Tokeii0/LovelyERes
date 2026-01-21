@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import * as IconPark from '@icon-park/svg'
+import { wrapCommandWithBash } from '../utils/shellUtils'
 
 /**
  * 自启动项右键菜单管理器
@@ -880,7 +881,8 @@ export class StartupContextMenu {
       const accountInfo = this.selectedUsername ? ` (账号: ${this.selectedUsername})` : ''
       this.showModal(title, `⏳ 正在执行: ${actionName}${accountInfo}...\n\n命令: ${cmd.substring(0, 100)}${cmd.length > 100 ? '...' : ''}`)
 
-      const params: any = { command: cmd }
+      const finalCommand = wrapCommandWithBash(cmd);
+      const params: any = { command: finalCommand }
       if (this.selectedUsername) {
         params.username = this.selectedUsername
         console.log('👤 使用账号执行启动项命令:', this.selectedUsername)

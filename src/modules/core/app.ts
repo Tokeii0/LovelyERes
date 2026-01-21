@@ -11,26 +11,11 @@ import { SSHManager } from '../ssh/sshManager';
 import { DockerManager } from '../docker/dockerManager';
 import { KubernetesManager } from '../kubernetes/kubernetesManager';
 import { SettingsManager } from '../settings/settingsManager';
+import { SettingsPageManager } from '../settings/settingsPageManager';
 import { SystemInfoManager } from '../system/systemInfoManager';
 import { sshConnectionManager } from '../remote/sshConnectionManager';
 import { sshTerminalManager } from '../ssh/sshTerminalManager';
-
-export interface ServerInfo {
-  name: string;
-  host: string;
-  port: number;
-  username?: string;
-  detailedInfo?: any; // 用于存储系统详细信息
-}
-
-export interface AppState {
-  theme: 'light' | 'dark' | 'sakura';
-  isConnected: boolean;
-  currentServer?: string; // 保留向后兼容
-  serverInfo?: ServerInfo; // 新增详细服务器信息
-  loading: boolean;
-  currentPage: 'dashboard' | 'system-info' | 'ssh-terminal' | 'remote-operations' | 'docker' | 'emergency-commands' | 'log-analysis' | 'settings' | 'quick-detection' | 'kubernetes' | 'database';
-}
+import type { AppState } from './types';
 
 export class LovelyResApp {
   private stateManager: StateManager;
@@ -39,7 +24,8 @@ export class LovelyResApp {
   private sshManager: SSHManager;
   private dockerManager: DockerManager;
   private kubernetesManager: KubernetesManager;
-  private settingsManager: SettingsManager;
+  public settingsManager: SettingsManager;
+  public settingsPageManager: SettingsPageManager;
   private systemInfoManager: SystemInfoManager;
 
   constructor() {
@@ -50,13 +36,18 @@ export class LovelyResApp {
     this.dockerManager = new DockerManager();
     this.kubernetesManager = new KubernetesManager();
     this.settingsManager = new SettingsManager();
-    this.systemInfoManager = new SystemInfoManager();
+    this.settingsPageManager = new SettingsPageManager(this.settingsManager);
+    // 注意：不再单独创建 SystemInfoManager，使用 sshManager 内部的实例
+    // 这样可以确保 setSessionId 和 getDetailedSystemInfo 操作的是同一个实例
+    this.systemInfoManager = (this.sshManager as any).systemInfoManager;
 
     // 暴露管理器和应用实例给全局对象，供UI使用
     (window as any).app = {
       sshManager: this.sshManager,
       kubernetesManager: this.kubernetesManager,
-      systemInfoManager: this.systemInfoManager,
+      systemInfoManager: this.systemInfoManager, // 现在指向 sshManager 内部的同一个实例
+      settingsManager: this.settingsManager,
+      settingsPageManager: this.settingsPageManager,
       stateManager: this.stateManager,
       modernUIRenderer: this.modernUIRenderer,
       render: () => this.render() // 暴露render方法
@@ -197,6 +188,18 @@ export class LovelyResApp {
 
       // 加载样式
       this.loadStyles();
+
+      // 重新渲染多会话 Tab
+      // 因为 innerHTML 重写会导致 DOM 元素丢失，需要手动刷新一次
+      if ((window as any).sessionTabsRenderer) {
+        (window as any).sessionTabsRenderer.refresh();
+      }
+
+      // 如果当前是设置页面，自动初始化设置管理器（绑定事件等）
+      if (this.stateManager.getState().currentPage === 'settings') {
+        console.log('⚙️ 检测到进入设置页面，触发初始化...');
+        this.settingsPageManager.initialize();
+      }
     }
   }
 

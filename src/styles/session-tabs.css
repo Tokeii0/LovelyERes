@@ -1,0 +1,250 @@
+/* 多会话 Tab 样式 - 高级毛玻璃设计 */
+
+#session-tabs-container {
+  display: none;
+  padding: 0 12px;
+  height: 44px; /* Slightly taller for better touch target */
+  background: var(--bg-secondary); /* Use theme secondary background */
+  flex-shrink: 0;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-color);
+  z-index: 50;
+  position: relative;
+}
+
+/* 顶部光效装饰 */
+#session-tabs-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0) 0%, 
+    var(--border-color) 20%, 
+    var(--border-color) 80%, 
+    rgba(255, 255, 255, 0) 100%
+  );
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.session-tabs-header {
+  display: none;
+}
+
+.session-tabs-list {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  height: 100%;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-top: 4px; /* 向下推一点，让active tab贴底 */
+}
+
+.session-tabs-list::-webkit-scrollbar {
+  display: none;
+}
+
+/* 单个 Tab 样式 */
+.session-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 12px;
+  height: 36px;
+  border-radius: 8px 8px 0 0; /* 更圆润 */
+  cursor: pointer;
+  background: transparent;
+  width: 180px; /* 固定宽度，显得更整齐 */
+  min-width: 140px;
+  max-width: 220px;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: relative;
+  margin-top: 4px; /* 默认略微下沉 */
+  border: 1px solid transparent;
+  border-bottom: none;
+  overflow: hidden; /* 防止背景溢出 */
+  color: var(--text-secondary);
+}
+
+/* 悬停效果 */
+.session-tab:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.session-tab:hover .session-tab-bg {
+  opacity: 1;
+}
+
+/* Tab 背景层 (用于更好的光效) */
+.session-tab-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, var(--bg-hover) 0%, rgba(255, 255, 255, 0) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+/* 激活状态 */
+.session-tab.active {
+  background: var(--bg-primary); /* Active tab blends with main content */
+  color: var(--text-primary);
+  height: 38px; /* 略微突出 */
+  margin-top: 2px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05); /* Softer shadow */
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+  z-index: 10;
+}
+
+/* 激活状态下的底部光感 */
+.active-glow {
+  position: absolute;
+  bottom: 0px;
+  left: 0;
+  right: 0;
+  height: 2px; /* Slightly thicker */
+  background: var(--primary-color);
+  box-shadow: 0 0 8px var(--primary-color), 0 0 16px var(--primary-color);
+  z-index: 20;
+  opacity: 0.8;
+}
+
+/* 顶部高光 (Active) */
+.session-tab.active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    var(--primary-color) 50%, 
+    transparent 100%
+  );
+  opacity: 0.3;
+}
+
+/* 图标 */
+.session-tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+  color: currentColor;
+}
+
+.session-tab-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.session-tab.active .session-tab-icon {
+  opacity: 1;
+  color: var(--primary-color);
+}
+
+/* 文本 */
+.session-tab-name {
+  flex: 1;
+  font-size: 13px; /* 略微增大 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono, monospace); /* 终端风格字体 */
+  letter-spacing: -0.2px;
+  transition: color 0.2s;
+}
+
+.session-tab.active .session-tab-name {
+  font-weight: 500;
+}
+
+/* 关闭按钮容器 */
+.session-tab-close-wrapper {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.session-tab:hover .session-tab-close-wrapper,
+.session-tab.active .session-tab-close-wrapper {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* 未激活时不显示关闭按钮（保持整洁），除非悬停 */
+.session-tab:not(.active):not(:hover) .session-tab-close-wrapper {
+  display: none;
+}
+
+/* 关闭按钮 */
+.session-tab-close {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+}
+
+.session-tab-close svg {
+  width: 12px;
+  height: 12px;
+}
+
+.session-tab-close:hover {
+  background: var(--error-color, #EF4444); /* Use error color variable if available */
+  color: #fff;
+  opacity: 1;
+  transform: scale(1.1);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+/* 动画：新 Tab 进入 */
+@keyframes tabSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.session-tab {
+  animation: tabSlideIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+/* 为每个 Tab 添加阶梯延迟 */
+.session-tab:nth-child(1) { animation-delay: 0ms; }
+.session-tab:nth-child(2) { animation-delay: 50ms; }
+.session-tab:nth-child(3) { animation-delay: 100ms; }
+.session-tab:nth-child(4) { animation-delay: 150ms; }

@@ -4,7 +4,7 @@
  */
 
 import type { StateManager } from '../core/stateManager';
-import type { AppState } from '../core/app';
+import type { AppState } from '../core/types';
 import { DashboardRenderer } from './dashboardRenderer';
 import { KubernetesRenderer } from './kubernetesRenderer';
 import { SftpContextMenuRenderer } from './sftpContextMenu';
@@ -158,9 +158,172 @@ export class ModernUIRenderer {
       }
     });
 
+    // 注册系统信息Tab切换函数
+    (window as any).switchSystemInfoTab = (tabId: string) => {
+      this.switchSystemInfoTab(tabId);
+    };
+
+    // 注册设置Tab切换函数
+    (window as any).switchSettingsTab = (tabId: string) => {
+      this.switchSettingsTab(tabId);
+    };
+
+    // 注册日志审计相关函数
+    this.registerLogAnalysisFunctions();
   }
 
+  /**
+   * 注册日志审计相关全局函数
+   */
+  private registerLogAnalysisFunctions(): void {
+    (window as any).switchLogSource = (source: 'file' | 'journalctl') => {
+      this.logAnalysisRenderer.setUseJournalctl(source === 'journalctl');
+      // 同步状态
+      (window as any).logAnalysisState = (window as any).logAnalysisState || {};
+      (window as any).logAnalysisState.useJournalctl = source === 'journalctl';
+      if (typeof (window as any).refreshLogAnalysis === 'function') {
+        (window as any).refreshLogAnalysis();
+      }
+    };
 
+    (window as any).updateLogDate = (_date: string) => {
+      // LogAnalysisRenderer 暂时没有 setDate 方法，需要添加或使用现有方法
+      if (typeof (window as any).refreshLogAnalysis === 'function') {
+        (window as any).refreshLogAnalysis();
+      }
+    };
+
+    (window as any).updateLogFilter = (filter: string) => {
+      this.logAnalysisRenderer.setFilter(filter);
+      // 同步状态
+      (window as any).logAnalysisState = (window as any).logAnalysisState || {};
+      (window as any).logAnalysisState.filter = filter;
+      if (typeof (window as any).refreshLogAnalysis === 'function') {
+        (window as any).refreshLogAnalysis();
+      }
+    };
+
+    (window as any).clearLogFilter = () => {
+      const input = document.getElementById('log-filter-input') as HTMLInputElement;
+      if (input) input.value = '';
+      this.logAnalysisRenderer.setFilter('');
+      if (typeof (window as any).refreshLogAnalysis === 'function') {
+        (window as any).refreshLogAnalysis();
+      }
+    };
+
+    // refreshLogAnalysis 由 main.ts 定义，不在这里覆盖
+
+    (window as any).updateLogLines = (lines: string) => {
+      this.logAnalysisRenderer.setLines(parseInt(lines, 10));
+      // 同步更新 logAnalysisState，确保 main.ts 的 refreshLogAnalysis 能读取到
+      (window as any).logAnalysisState = (window as any).logAnalysisState || {};
+      (window as any).logAnalysisState.lines = lines;
+      // 刷新交给 main.ts 的 refreshLogAnalysis
+      if (typeof (window as any).refreshLogAnalysis === 'function') {
+        (window as any).refreshLogAnalysis();
+      }
+    };
+
+    (window as any).changeLogPage = (delta: number) => {
+      // 更新分页状态
+      (window as any).logAnalysisState = (window as any).logAnalysisState || {};
+      let currentPage = (window as any).logAnalysisState.page || 1;
+      currentPage += delta;
+      if (currentPage < 1) currentPage = 1;
+      (window as any).logAnalysisState.page = currentPage;
+      
+      if (typeof (window as any).refreshLogAnalysis === 'function') {
+        (window as any).refreshLogAnalysis();
+      }
+    };
+
+    (window as any).updateLogPath = (path: string) => {
+      this.logAnalysisRenderer.setLogPath(path);
+      // 同步状态
+      (window as any).logAnalysisState = (window as any).logAnalysisState || {};
+      (window as any).logAnalysisState.logPath = path;
+      if (typeof (window as any).refreshLogAnalysis === 'function') {
+        (window as any).refreshLogAnalysis();
+      }
+    };
+
+    (window as any).updateJournalUnit = (unit: string) => {
+      this.logAnalysisRenderer.setJournalUnit(unit);
+      // 同步状态
+      (window as any).logAnalysisState = (window as any).logAnalysisState || {};
+      (window as any).logAnalysisState.journalUnit = unit;
+      if (typeof (window as any).refreshLogAnalysis === 'function') {
+        (window as any).refreshLogAnalysis();
+      }
+    };
+  }
+
+  /**
+   * 刷新日志审计视图
+   */
+  public refreshLogAnalysis(): void {
+    const container = document.querySelector('.log-analysis-container');
+    if (container) {
+      container.parentElement!.innerHTML = this.renderLogAnalysisPage();
+    }
+  }
+
+  /**
+   * 切换系统信息标签页
+   */
+  public switchSystemInfoTab(tabId: string): void {
+    // 1. 更新 Tab 按钮状态
+    const tabs = document.querySelectorAll('.system-info-tabs .tab-btn');
+    tabs.forEach(tab => {
+      if (tab.getAttribute('data-tab') === tabId) {
+        tab.classList.add('active');
+      } else {
+        tab.classList.remove('active');
+      }
+    });
+
+    // 2. 更新内容区域
+    const contentContainer = document.getElementById('system-info-content');
+    if (contentContainer) {
+      contentContainer.innerHTML = this.renderSystemInfoTab(tabId);
+      
+      // 重新绑定过滤器事件（如果需要）
+    }
+  }
+
+  /**
+   * 切换设置标签页
+   */
+  public switchSettingsTab(tabId: string): void {
+    // 1. 更新 Tab 按钮状态
+    const tabs = document.querySelectorAll('.settings-tab');
+    tabs.forEach(tab => {
+      if (tab.getAttribute('data-tab') === tabId) {
+        tab.classList.add('active');
+        (tab as HTMLElement).style.color = 'var(--text-primary)';
+        (tab as HTMLElement).style.borderBottom = '2px solid var(--accent-color)';
+      } else {
+        tab.classList.remove('active');
+        (tab as HTMLElement).style.color = 'var(--text-secondary)';
+        (tab as HTMLElement).style.borderBottom = '2px solid transparent';
+      }
+    });
+
+    // 2. 更新内容区域
+    const basicSettings = document.getElementById('basic-settings');
+    const aiSettings = document.getElementById('ai-settings');
+
+    if (basicSettings && aiSettings) {
+      if (tabId === 'basic') {
+        basicSettings.style.display = 'block';
+        aiSettings.style.display = 'none';
+      } else {
+        basicSettings.style.display = 'none';
+        aiSettings.style.display = 'block';
+      }
+    }
+  }
   /**
    * 更新状态
    */
@@ -522,6 +685,10 @@ export class ModernUIRenderer {
   renderMainWorkspace(): string {
     return `
       <div class="main-workspace">
+        
+        <!-- 多服务器会话 Tab 列表 (Horizontal) -->
+        <div id="session-tabs-container"></div>
+
         <!-- 工作区内容 -->
         <div class="workspace-content">
           ${this.renderWorkspaceContent()}
@@ -635,12 +802,17 @@ export class ModernUIRenderer {
       return this.renderLoadingState();
     }
 
+    // 设置页面不需要连接服务器，可以在未连接时访问
+    if (this.state.currentPage === 'settings') {
+      return this.renderSettingsPage();
+    }
+
     if (!this.state.isConnected) {
       return this.renderConnectionPrompt();
     }
 
     // 根据当前页面渲染不同内容
-    switch (this.state.currentPage) {
+    switch (this.state.currentPage as any) {
       case 'system-info':
         return this.renderSystemInfo();
       case 'ssh-terminal':
@@ -703,37 +875,37 @@ export class ModernUIRenderer {
           </div>
 
           <div class="system-info-tabs">
-            <button class="tab-btn active" data-tab="processes">
+            <button class="tab-btn active" data-tab="processes" onclick="window.switchSystemInfoTab('processes')">
               <span class="tab-icon">${List({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
               <span class="tab-label">进程详情</span>
               ${counts.processes > 0 ? `<span class="count-badge">${counts.processes}</span>` : ''}
             </button>
-            <button class="tab-btn" data-tab="network">
+            <button class="tab-btn" data-tab="network" onclick="window.switchSystemInfoTab('network')">
               <span class="tab-icon">${Earth({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
               <span class="tab-label">网络详情</span>
               ${counts.network > 0 ? `<span class="count-badge">${counts.network}</span>` : ''}
             </button>
-            <button class="tab-btn" data-tab="services">
+            <button class="tab-btn" data-tab="services" onclick="window.switchSystemInfoTab('services')">
               <span class="tab-icon">${System({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
               <span class="tab-label">系统服务</span>
               ${counts.services > 0 ? `<span class="count-badge">${counts.services}</span>` : ''}
             </button>
-            <button class="tab-btn" data-tab="users">
+            <button class="tab-btn" data-tab="users" onclick="window.switchSystemInfoTab('users')">
               <span class="tab-icon">${User({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
               <span class="tab-label">用户列表</span>
               ${counts.users > 0 ? `<span class="count-badge">${counts.users}</span>` : ''}
             </button>
-            <button class="tab-btn" data-tab="autostart">
+            <button class="tab-btn" data-tab="autostart" onclick="window.switchSystemInfoTab('autostart')">
               <span class="tab-icon">${Rocket({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
               <span class="tab-label">自启动</span>
               ${counts.autostart > 0 ? `<span class="count-badge">${counts.autostart}</span>` : ''}
             </button>
-            <button class="tab-btn" data-tab="cron">
+            <button class="tab-btn" data-tab="cron" onclick="window.switchSystemInfoTab('cron')">
               <span class="tab-icon">${Time({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
               <span class="tab-label">计划任务</span>
               ${counts.cron > 0 ? `<span class="count-badge">${counts.cron}</span>` : ''}
             </button>
-            <button class="tab-btn" data-tab="firewall">
+            <button class="tab-btn" data-tab="firewall" onclick="window.switchSystemInfoTab('firewall')">
               <span class="tab-icon">${Shield({ theme: 'outline', size: '16', fill: 'currentColor' })}</span>
               <span class="tab-label">防火墙</span>
               ${counts.firewall > 0 ? `<span class="count-badge">${counts.firewall}</span>` : ''}
@@ -1777,6 +1949,49 @@ export class ModernUIRenderer {
             </div>
           </div>
 
+
+            <div id="auth-key-passphrase-field" class="form-group" style="display: none;">
+                <!-- 密钥密码字段 -->
+            </div>
+          </div>
+
+          <!-- Sudo 配置 -->
+          <div style="margin-bottom: var(--spacing-xl);">
+            <h4 style="font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: var(--spacing-md); font-weight: 600;">提权设置</h4>
+            
+            <div class="form-group">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" name="useSudo" id="server-use-sudo" onchange="const el=document.getElementById('sudo-password-field'); if(el) el.style.display=this.checked?'block':'none';" style="margin-right: 8px;">
+                    <span style="font-size: 13px; color: var(--text-primary);">使用 Sudo 执行特权命令</span>
+                </label>
+                <div style="font-size: 11px; color: var(--text-secondary); margin-left: 20px; margin-top: 4px;">
+                    启用后，系统命令（如 Docker、进程管理）将通过 sudo 执行。
+                </div>
+            </div>
+
+            <div id="sudo-password-field" style="display: none; margin-top: var(--spacing-md); animation: fadeIn 0.3s ease;">
+                <div class="form-group">
+                  <label style="display: block; font-size: 12px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px;">Sudo 密码 (可选)</label>
+                  <div style="position: relative;">
+                      <input type="password" name="sudoPassword" placeholder="如果与登录密码不同，请在此输入" style="
+                        width: 100%;
+                        padding: 10px 12px 10px 36px;
+                        border: 1px solid var(--border-color);
+                        border-radius: var(--border-radius);
+                        background: var(--bg-primary);
+                        color: var(--text-primary);
+                        font-size: 13px;
+                        transition: all 0.2s;
+                      " onfocus="this.style.borderColor='var(--primary-color)'; this.style.boxShadow='0 0 0 2px var(--primary-color-alpha-10)'" onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none'">
+                      <div style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary);">
+                          ${Shield({ theme: 'outline', size: '14', fill: 'currentColor' })}
+                      </div>
+                  </div>
+                  <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;">留空将使用登录密码或免密 Sudo</div>
+                </div>
+            </div>
+          </div>
+
           <!-- 多账号管理区域 -->
           <div class="form-group" style="
             margin-bottom: var(--spacing-md); 
@@ -2015,7 +2230,7 @@ export class ModernUIRenderer {
           </div>
           
           <div class="sftp-breadcrumb-bar">
-            <span style="color: var(--text-secondary); margin-right: 8px;">/</span>
+
             <input
               type="text"
               id="sftp-path-input"
@@ -2079,28 +2294,47 @@ export class ModernUIRenderer {
    * 渲染Docker页面
    */
   private renderDockerPage(): string {
+    const refreshIcon = Refresh({ theme: 'outline', size: '14', fill: 'currentColor' });
+    const searchIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`;
+
     return `
-      <div class="docker-page">
+      <div class="docker-page-container">
+        <!-- 顶部统计 -->
+        <div id="docker-stats"></div>
+
+        <!-- 顶部工具栏 -->
         <div class="docker-toolbar">
-          <div class="toolbar-left">
-            <button class="modern-btn primary" data-docker-action="refresh">刷新</button>
-            <button class="modern-btn secondary" data-docker-action="toggle-auto-refresh">自动刷新·关</button>
+          <div class="docker-search-wrapper">
+             <div class="docker-search-icon">${searchIcon}</div>
+             <input 
+               type="text" 
+               id="docker-search" 
+               placeholder="搜索容器名称 / 镜像 / ID..." 
+               autocomplete="off"
+             >
           </div>
-          <div class="toolbar-right">
-            <input
-              type="text"
-              id="docker-search"
-              class="docker-search-input"
-              placeholder="搜索容器名称 / 镜像 / 状态"
-              autocomplete="off"
-            />
+          
+          <div class="docker-actions-right">
+             <button class="docker-btn secondary" data-docker-action="toggle-auto-refresh">
+               <span>自动刷新·关</span>
+             </button>
+             <button class="docker-btn primary" data-docker-action="refresh">
+               <span class="btn-icon">${refreshIcon}</span>
+               <span>刷新列表</span>
+             </button>
           </div>
         </div>
-        <div id="docker-stats" class="docker-stats"></div>
-        <div id="docker-container-grid" class="docker-grid docker-grid-loading">
-          <div class="docker-loading">加载容器信息中...</div>
+
+        <!-- 容器网格 -->
+        <div id="docker-container-grid">
+          <div class="docker-loading">
+            <div class="loading-spinner"></div>
+            <div>正在连接 Docker 服务...</div>
+          </div>
         </div>
-        <div id="docker-empty-state" class="docker-empty-state"></div>
+        
+        <!-- 空状态占位 -->
+        <div id="docker-empty-state" style="display: none;"></div>
       </div>
     `;
   }
@@ -2842,7 +3076,7 @@ export class ModernUIRenderer {
             margin-bottom: var(--spacing-xl);
             border-bottom: 1px solid var(--border-color);
           ">
-            <button class="settings-tab active" data-tab="basic" style="
+            <button class="settings-tab active" data-tab="basic" onclick="window.switchSettingsTab('basic')" style="
               padding: var(--spacing-md) var(--spacing-lg);
               background: none;
               border: none;
@@ -2853,7 +3087,7 @@ export class ModernUIRenderer {
               border-bottom: 2px solid var(--accent-color);
               transition: all 0.2s;
             ">基础设置</button>
-            <button class="settings-tab" data-tab="ai" style="
+            <button class="settings-tab" data-tab="ai" onclick="window.switchSettingsTab('ai')" style="
               padding: var(--spacing-md) var(--spacing-lg);
               background: none;
               border: none;

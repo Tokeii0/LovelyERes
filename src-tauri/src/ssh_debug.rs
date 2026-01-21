@@ -65,11 +65,11 @@ pub struct SSHDebugger {
 }
 
 #[derive(Debug, Clone)]
-struct SessionStats {
+pub struct SessionStats {
     created_at: Instant,
     last_activity: Instant,
     input_bytes: u64,
-    output_bytes: u64,
+    _output_bytes: u64,
     error_count: u32,
     flow_control_count: u32,
     retry_count: u32,
@@ -175,7 +175,7 @@ impl SSHDebugger {
                 created_at: timestamp,
                 last_activity: timestamp,
                 input_bytes: 0,
-                output_bytes: 0,
+                _output_bytes: 0,
                 error_count: 0,
                 flow_control_count: 0,
                 retry_count: 0,

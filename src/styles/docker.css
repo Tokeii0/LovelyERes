@@ -1,0 +1,674 @@
+/* Docker 页现代化 UI 样式 */
+
+.docker-page-container {
+  padding: 16px 24px 24px; /* 增加内边距 */
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  background: transparent; /* 背景透明以显示主应用背景 */
+}
+
+/* 顶部统计卡片 */
+#docker-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.docker-stat-card {
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.docker-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary-color-alpha, rgba(64, 158, 255, 0.3));
+}
+
+.docker-stat-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.05) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.docker-stat-title {
+  font-size: 15px;
+  color: var(--text-secondary, #909399);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.docker-stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary, #E5EAF3);
+  letter-spacing: -0.5px;
+  font-family: var(--font-number, 'Inter', sans-serif);
+}
+
+/* 工具栏区域 */
+.docker-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.03)); /* 轻微背景区分 */
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.docker-search-wrapper {
+  position: relative;
+  width: 300px;
+}
+
+.docker-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--text-placeholder, #606266);
+  pointer-events: none;
+}
+
+#docker-search {
+  width: 100%;
+  background: var(--bg-tertiary, rgba(0, 0, 0, 0.2));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  padding: 8px 12px 8px 36px;
+  color: var(--text-primary, #E5EAF3);
+  font-size: 14px;
+  transition: all 0.2s;
+  outline: none;
+}
+
+#docker-search:focus {
+  border-color: var(--primary-color, #409EFF);
+  box-shadow: 0 0 0 2px var(--primary-color-alpha, rgba(64, 158, 255, 0.2));
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.3));
+}
+
+.docker-actions-right {
+  display: flex;
+  gap: 10px;
+}
+
+.docker-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.docker-btn.primary {
+  background: var(--primary-color, #409EFF);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.3);
+}
+
+.docker-btn.primary:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.docker-btn.secondary {
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  color: var(--text-primary, #E5EAF3);
+}
+
+.docker-btn.secondary:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.1));
+  border-color: var(--text-secondary, rgba(255, 255, 255, 0.2));
+}
+
+.docker-btn.secondary.active {
+  background: var(--success-color-alpha, rgba(103, 194, 58, 0.15));
+  color: var(--success-color, #67C23A);
+  border-color: var(--success-color-alpha, rgba(103, 194, 58, 0.3));
+}
+
+/* 容器网格布局 */
+#docker-container-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+  padding-bottom: 24px;
+}
+
+/* 容器卡片 */
+.docker-card {
+  background: var(--bg-secondary, rgba(30, 30, 30, 0.8));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  backdrop-filter: blur(10px);
+  container-type: inline-size; /* 启用容器查询，用于动态字体大小 */
+}
+
+.docker-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-color: var(--border-hover, rgba(255, 255, 255, 0.2));
+  z-index: 10;
+}
+
+/* 状态条装饰 */
+.docker-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--disabled-color, #909399); /* Default stopped */
+  opacity: 0.6;
+  transition: background-color 0.3s;
+}
+
+/* 动态状态颜色 */
+.docker-card:has(.status-running)::before {
+  background: var(--success-color, #67C23A);
+  box-shadow: 0 0 8px var(--success-color-alpha, rgba(103, 194, 58, 0.4));
+}
+.docker-card:has(.status-paused)::before {
+  background: var(--warning-color, #E6A23C);
+}
+.docker-card:has(.status-stopped)::before {
+  background: var(--info-color, #909399);
+}
+
+/* 卡片头部 */
+.docker-card-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.05));
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
+}
+
+.docker-identity {
+  flex: 1;
+  overflow: hidden;
+}
+
+.docker-identity h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.2px;
+}
+
+.docker-image {
+  font-size: 12px;
+  color: var(--text-secondary, #909399);
+  font-family: var(--font-mono, monospace);
+  background: var(--bg-tertiary, rgba(0, 0, 0, 0.2));
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.docker-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid transparent;
+}
+
+.status-running {
+  color: var(--success-color, #67C23A);
+  background: var(--success-color-alpha, rgba(103, 194, 58, 0.1));
+  border-color: rgba(103, 194, 58, 0.2);
+}
+
+.status-stopped {
+  color: var(--text-secondary, #909399);
+  background: rgba(144, 147, 153, 0.1);
+}
+
+.status-paused {
+  color: var(--warning-color, #E6A23C);
+  background: rgba(230, 162, 60, 0.1);
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 4px currentColor;
+}
+
+/* 卡片内容 */
+.docker-card-body {
+  padding: 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.docker-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  background: var(--bg-tertiary, rgba(0, 0, 0, 0.2));
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.metric-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.metric-label {
+  font-size: 10px;
+  color: var(--text-secondary, #909399);
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+/* Docker 容器卡片指标数值 - 优化显示效果，适配 UI 配色 */
+.docker-metrics-grid .metric-item .metric-value,
+.docker-card .metric-value {
+  font-size: clamp(11px, 5cqw, 14px) !important; /* 动态字体：最小11px，首选宽度5%，最大14px */
+  font-family: var(--font-number, 'Inter', sans-serif) !important; 
+  color: var(--primary-color, #409EFF) !important; /* 使用系统主色调，更有质感 */
+  font-weight: 600 !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  line-height: 1.4;
+  letter-spacing: 0.1px;
+  text-shadow: 0 0 4px var(--primary-color-alpha, rgba(64, 158, 255, 0.2)); /* 添加轻微发光感 */
+}
+
+.docker-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary, #A0A0A0);
+}
+
+.info-icon {
+  width: 14px;
+  height: 14px;
+  opacity: 0.7;
+}
+
+.port-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.port-badge {
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-primary, #D4D4D4);
+  transition: all 0.2s;
+}
+
+.port-badge:hover {
+  background: var(--primary-color-alpha, rgba(64, 158, 255, 0.1));
+  border-color: var(--primary-color-alpha, rgba(64, 158, 255, 0.3));
+}
+
+.port-more {
+  font-size: 10px;
+  opacity: 0.7;
+  padding: 2px 4px;
+}
+
+/* 卡片底部操作栏 */
+.docker-card-footer {
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.15);
+  border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.05));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #909399);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.icon-btn:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.1));
+  color: var(--text-primary, #fff);
+  transform: scale(1.05);
+}
+
+.icon-btn.start:hover {
+  background: rgba(103, 194, 58, 0.15);
+  color: var(--success-color, #67C23A);
+}
+
+.icon-btn.stop:hover {
+  background: rgba(245, 108, 108, 0.15);
+  color: var(--error-color, #F56C6C);
+}
+
+.icon-btn.restart:hover {
+  background: rgba(230, 162, 60, 0.15);
+  color: var(--warning-color, #E6A23C);
+}
+
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 提示文字 */
+.tooltip {
+  position: relative;
+}
+
+.tooltip::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-5px);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: 0.2s;
+  z-index: 20;
+}
+
+.tooltip:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-8px);
+}
+
+/* 空状态与加载状态 */
+.docker-loading, .docker-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  text-align: center;
+  color: var(--text-secondary, #909399);
+  gap: 16px;
+}
+
+.docker-empty-icon {
+  font-size: 48px;
+  opacity: 0.5;
+  margin-bottom: 8px;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--primary-color, #409EFF);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 模态框样式优化 */
+.docker-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.docker-modal-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.docker-modal {
+  background: var(--bg-modal, #1e1e1e);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  transform: translateY(20px);
+  transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.docker-modal-overlay.visible .docker-modal {
+  transform: translateY(0);
+}
+
+.docker-modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color, #333);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.docker-modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  margin: 0;
+}
+
+.docker-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #999);
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.docker-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.docker-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.docker-log-viewer {
+  background: #000;
+  color: #f0f0f0;
+  padding: 16px;
+  border-radius: 8px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-height: 500px;
+  overflow-y: auto;
+  border: 1px solid #333;
+}
+
+.docker-form-label {
+  display: block;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--text-secondary, #ccc);
+}
+
+.docker-input, .docker-textarea, .docker-select {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.docker-input:focus, .docker-textarea:focus {
+  border-color: var(--primary-color, #409EFF);
+  outline: none;
+}
+
+.docker-textarea {
+  min-height: 200px;
+  font-family: monospace;
+}
+
+.docker-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color, #333);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.modern-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.modern-btn.primary {
+  background: var(--primary-color, #409EFF);
+  color: #fff;
+}
+
+.modern-btn.primary:hover {
+  filter: brightness(1.1);
+}
+
+.modern-btn.secondary {
+  background: transparent;
+  border: 1px solid var(--border-color, #555);
+  color: var(--text-primary, #ddd);
+}
+
+.modern-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #666;
+}
+
+.modern-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

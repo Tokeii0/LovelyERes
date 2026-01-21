@@ -3,6 +3,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import * as IconPark from '@icon-park/svg'
 import { CommandHistoryManager } from '../utils/commandHistoryManager'
+import { wrapCommandWithBash } from '../utils/shellUtils'
 
 export class EmergencyResultModal {
   private modal: HTMLElement | null = null;
@@ -350,7 +351,8 @@ export class EmergencyResultModal {
       if (hasCoordinatorConn && sshManager?.executeCommand) {
         output = await sshManager.executeCommand(command);
       } else if (hasDirectConn && tauriInvoke) {
-        const result: any = await tauriInvoke('ssh_execute_command_direct', { command });
+        const finalCommand = wrapCommandWithBash(command);
+        const result: any = await tauriInvoke('ssh_execute_command_direct', { command: finalCommand });
         if (result && typeof result === 'object') {
           if (typeof result.command === 'string' && result.command.length > 0) {
             displayedCommand = result.command;

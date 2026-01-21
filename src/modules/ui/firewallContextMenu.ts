@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import * as IconPark from '@icon-park/svg'
+import { wrapCommandWithBash } from '../utils/shellUtils'
 
 /**
  * 防火墙规则右键菜单管理器
@@ -877,7 +878,11 @@ export class FirewallContextMenu {
       this.showModal(title, `⏳ 正在执行: ${actionName}${accountInfo}...\n\n命令: ${command.substring(0, 100)}${command.length > 100 ? '...' : ''}`)
 
       // 执行命令
-      const params: any = { command }
+      // 自动包裹bash -c以支持sudo下的复杂命令（如if/else），并处理单引号转义
+      // Wrap command with bash -c for safe execution
+      const execCommand = wrapCommandWithBash(command);
+
+      const params: any = { command: execCommand }
       if (this.selectedUsername) {
         params.username = this.selectedUsername
         console.log('👤 使用账号执行防火墙命令:', this.selectedUsername)
