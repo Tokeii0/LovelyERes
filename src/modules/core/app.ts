@@ -10,10 +10,8 @@ import { ThemeManager } from '../ui/theme';
 import { SSHManager } from '../ssh/sshManager';
 import { DockerManager } from '../docker/dockerManager';
 import { KubernetesManager } from '../kubernetes/kubernetesManager';
-import { SettingsManager } from '../settings/settingsManager';
 import { SystemInfoManager } from '../system/systemInfoManager';
 import { sshConnectionManager } from '../remote/sshConnectionManager';
-import { sshTerminalManager } from '../ssh/sshTerminalManager';
 
 export interface ServerInfo {
   name: string;
@@ -24,12 +22,13 @@ export interface ServerInfo {
 }
 
 export interface AppState {
-  theme: 'light' | 'dark' | 'sakura';
+  theme: 'light' | 'dark' | 'sakura' | 'midnight' | 'ocean';
   isConnected: boolean;
   currentServer?: string; // 保留向后兼容
   serverInfo?: ServerInfo; // 新增详细服务器信息
   loading: boolean;
-  currentPage: 'dashboard' | 'system-info' | 'ssh-terminal' | 'remote-operations' | 'docker' | 'emergency-commands' | 'log-analysis' | 'settings' | 'quick-detection' | 'kubernetes' | 'database';
+  loadingStep?: string; // 当前连接步骤描述
+  currentPage: 'system-info' | 'ssh-terminal' | 'remote-operations' | 'docker' | 'emergency-commands' | 'log-analysis' | 'settings' | 'quick-detection' | 'kubernetes' | 'database' | 'packet-capture';
 }
 
 export class LovelyResApp {
@@ -39,7 +38,6 @@ export class LovelyResApp {
   private sshManager: SSHManager;
   private dockerManager: DockerManager;
   private kubernetesManager: KubernetesManager;
-  private settingsManager: SettingsManager;
   private systemInfoManager: SystemInfoManager;
 
   constructor() {
@@ -49,7 +47,6 @@ export class LovelyResApp {
     this.sshManager = new SSHManager();
     this.dockerManager = new DockerManager();
     this.kubernetesManager = new KubernetesManager();
-    this.settingsManager = new SettingsManager();
     this.systemInfoManager = new SystemInfoManager();
 
     // 暴露管理器和应用实例给全局对象，供UI使用
@@ -79,11 +76,8 @@ export class LovelyResApp {
       // 初始化主题
       await this.initializeTheme();
       
-      // 初始化设置
-      await this.settingsManager.initialize();
-
-      // 初始化SSH终端管理器
-      await sshTerminalManager.initialize();
+      // 注意: settingsManager 和 sshTerminalManager 的初始化
+      // 已在 main.ts 的 initializeApp() 中统一执行，此处不再重复调用
 
       // 渲染UI
       this.render();
@@ -105,8 +99,8 @@ export class LovelyResApp {
     try {
       // 从后端加载主题设置
       const savedTheme = await this.loadThemeFromBackend();
-      if (savedTheme && (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'sakura')) {
-        this.stateManager.setTheme(savedTheme);
+      if (savedTheme && ['light', 'dark', 'sakura', 'midnight', 'ocean'].includes(savedTheme)) {
+        this.stateManager.setTheme(savedTheme as 'light' | 'dark' | 'sakura' | 'midnight' | 'ocean');
       }
       
       // 应用主题
@@ -134,11 +128,13 @@ export class LovelyResApp {
   /**
    * 设置主题
    */
-  async setTheme(theme: 'light' | 'dark' | 'sakura'): Promise<void> {
-    const themeNames = {
+  async setTheme(theme: 'light' | 'dark' | 'sakura' | 'midnight' | 'ocean'): Promise<void> {
+    const themeNames: Record<string, string> = {
       'light': '浅色',
       'dark': '深色',
       'sakura': '樱花粉',
+      'midnight': '暗夜',
+      'ocean': '深海',
     };
 
     // 如果已经在该主题，不进行操作
@@ -166,6 +162,7 @@ export class LovelyResApp {
     // 更新UI
     this.modernUIRenderer.updateState(this.stateManager.getState());
     this.updateTitleBar();
+    this.updateThemeToggleButton();
   }
 
   /**
@@ -173,15 +170,15 @@ export class LovelyResApp {
    */
   async toggleTheme(): Promise<void> {
     const currentTheme = this.stateManager.getState().theme;
-    const themes: ('light' | 'dark' | 'sakura')[] = ['light', 'dark', 'sakura'];
+    const themes: ('light' | 'dark' | 'sakura' | 'midnight' | 'ocean')[] = ['light', 'dark', 'sakura', 'midnight', 'ocean'];
     const nextIndex = (themes.indexOf(currentTheme) + 1) % themes.length;
     await this.setTheme(themes[nextIndex]);
   }
 
   /**
-   * 渲染应用界面
+   * 首次渲染：创建完整 DOM 结构（标题栏 + 侧边栏 + 工作区 + 状态栏）
    */
-  render(): void {
+  private renderFull(): void {
     const app = document.getElementById('app');
     if (app) {
       app.innerHTML = `
@@ -201,16 +198,34 @@ export class LovelyResApp {
   }
 
   /**
-   * 加载样式文件
+   * 渲染应用界面
+   * 如果 DOM 骨架已存在，只更新 main-workspace 内容（局部更新）；
+   * 否则执行首次全量渲染。
+   */
+  render(): void {
+    const workspace = document.querySelector('.main-workspace');
+    if (!workspace) {
+      // DOM 骨架不存在，执行全量渲染
+      this.renderFull();
+      return;
+    }
+    // 局部更新：替换整个 workspace 元素（renderMainWorkspace 返回含 wrapper 的完整 HTML）
+    workspace.outerHTML = this.modernUIRenderer.renderMainWorkspace();
+
+    // 同步更新侧边栏 active 状态
+    const currentPage = this.stateManager.getState().currentPage;
+    document.querySelectorAll('.activity-bar-item[data-nav-id]').forEach(item => {
+      const navId = (item as HTMLElement).getAttribute('data-nav-id');
+      item.classList.toggle('active', navId === currentPage);
+    });
+  }
+
+  /**
+   * 加载样式文件 (已迁移至 main.css 模块化导入，无需动态加载)
    */
   private loadStyles(): void {
-    const existingLink = document.querySelector('link[href*="base.css"]');
-    if (!existingLink) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = '/src/css/base.css';
-      document.head.appendChild(link);
-    }
+    // Styles are now imported via main.css in main.ts
+    // No dynamic loading needed
   }
 
   /**
@@ -224,18 +239,17 @@ export class LovelyResApp {
     document.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
       
-      // 主题切换 - 分段控制器
-      const themeBtn = target.closest('.segmented-btn');
-      if (themeBtn && themeBtn.closest('.theme-switcher')) {
+      // 主题切换 - 分段控制器或主题色块
+      const themeBtn = target.closest('[data-theme-value]');
+      if (themeBtn) {
         const theme = themeBtn.getAttribute('data-theme-value');
-        if (theme && ['light', 'dark', 'sakura'].includes(theme)) {
-          this.setTheme(theme as 'light' | 'dark' | 'sakura');
+        if (theme && ['light', 'dark', 'sakura', 'midnight', 'ocean'].includes(theme)) {
+          this.setTheme(theme as 'light' | 'dark' | 'sakura' | 'midnight' | 'ocean');
         }
       }
 
-      // 导航点击事件
-      const navItem = target.closest('.nav-item');
-      // 排除设置按钮（它也有nav-item类，但没有data-nav-id或id不同）
+      // 导航点击事件 (activity-bar-item for VS Code style, nav-item for legacy)
+      const navItem = target.closest('.activity-bar-item[data-nav-id], .nav-item[data-nav-id]');
       if (navItem && navItem.getAttribute('data-nav-id')) {
         const navId = navItem.getAttribute('data-nav-id');
         if (navId) {
@@ -408,7 +422,6 @@ export class LovelyResApp {
         cache.lastUpdate = null;
         cache.isLoading = false;
       }
-      (window as any).stopDashboardAutoRefresh?.();
       (window as any).refreshServerList?.();
       (window as any).refreshSidebar?.();
       (window as any).refreshDashboard?.();
@@ -447,15 +460,20 @@ export class LovelyResApp {
    */
   private updateThemeToggleButton(): void {
     const currentTheme = this.stateManager.getState().theme;
-    const buttons = document.querySelectorAll('.theme-switcher .segmented-btn');
-    
-    buttons.forEach(btn => {
+
+    // Update segmented buttons
+    document.querySelectorAll('.theme-switcher .segmented-btn').forEach(btn => {
       const themeValue = btn.getAttribute('data-theme-value');
-      if (themeValue === currentTheme) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
+      btn.classList.toggle('active', themeValue === currentTheme);
+    });
+
+    // Update theme swatches in settings dropdown
+    document.querySelectorAll('.theme-swatch[data-theme-value]').forEach(btn => {
+      const el = btn as HTMLElement;
+      const themeValue = el.getAttribute('data-theme-value');
+      const isActive = themeValue === currentTheme;
+      el.classList.toggle('active', isActive);
+      el.style.borderColor = isActive ? 'var(--primary-color)' : 'transparent';
     });
   }
 

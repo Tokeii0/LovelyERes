@@ -95,9 +95,11 @@ export class SSHManager {
         lastConnected: new Date()
       });
 
-      // 连接成功后立即获取系统信息
-      console.log('📊 正在获取系统信息...');
-      await this.systemInfoManager.fetchSystemInfo();
+      // 后台异步加载系统信息（不阻塞连接流程和SFTP页面）
+      console.log('📊 后台异步加载系统信息...');
+      this.systemInfoManager.fetchSystemInfo().catch(err => {
+        console.warn('⚠️ 后台获取系统信息失败:', err);
+      });
 
       console.log(`✅ 成功连接到 ${connection.name}`);
     } catch (error) {
