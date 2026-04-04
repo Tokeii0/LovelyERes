@@ -4,7 +4,7 @@
  * 与ssh/connectionManager.ts协同工作
  */
 
-import { SSHConnectionManager as ConfigManager } from '../ssh/connectionManager';
+import { SSHConfigManager as ConfigManager } from '../ssh/connectionManager';
 
 export interface SSHConnectionInfo {
   id?: string; // 连接配置ID
@@ -15,7 +15,7 @@ export interface SSHConnectionInfo {
   lastActivity?: Date;
 }
 
-export class SSHConnectionManager {
+export class SSHSessionManager {
   private connectionStatus: SSHConnectionInfo | null = null;
   private listeners: Array<(status: SSHConnectionInfo | null) => void> = [];
   private configManager: ConfigManager;
@@ -234,4 +234,4 @@ export class SSHConnectionManager {
 }
 
 // 全局SSH连接管理器实例
-export const sshConnectionManager = new SSHConnectionManager();
+export const sshConnectionManager = new SSHSessionManager();

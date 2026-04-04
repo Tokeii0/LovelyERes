@@ -128,12 +128,10 @@ export class ModernUIRenderer {
 
     // 注册Kubernetes Tab切换函数
     (window as any).switchKubernetesTab = (tabId: string) => {
-      this.kubernetesRenderer.setTab(tabId);
-      // 重新渲染工作区内容
-      const workspaceContent = document.querySelector('.workspace-content');
-      if (workspaceContent) {
-        workspaceContent.innerHTML = this.renderKubernetesPage();
-      }
+      this.kubernetesRenderer.setTab(tabId as any);
+    };
+    (window as any).switchKubernetesSubTab = (subTabId: string) => {
+      this.kubernetesRenderer.setSubTab(subTabId);
     };
 
     // 监听状态变化
@@ -485,6 +483,12 @@ export class ModernUIRenderer {
         icon: Whale({ theme: 'outline', size: '18', fill: 'currentColor' }),
         title: 'Docker容器',
         active: currentPage === 'docker'
+      },
+      {
+        id: 'kubernetes',
+        icon: LinkCloud({ theme: 'outline', size: '18', fill: 'currentColor' }),
+        title: 'Kubernetes',
+        active: currentPage === 'kubernetes'
       },
       {
         id: 'emergency-commands',

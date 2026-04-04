@@ -17,6 +17,7 @@
   --bg-tertiary: #334155;
   --bg-dark: #475569;
   --bg-glass: rgba(0, 0, 0, 0.3);
+  --bg-hover: rgba(148, 163, 184, 0.08);
 
   /* 文字颜色 */
   --text-primary: #f1f5f9;
@@ -26,64 +27,54 @@
 
   /* 边框和阴影 */
   --border-color: rgba(148, 163, 184, 0.2);
+  --border-light: rgba(255, 255, 255, 0.08);
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --glow-primary: rgba(66, 153, 225, 0.5);
+
+  /* Semantic Colors */
+  --status-running: #10b981;
+  --status-stopped: #ef4444;
+  --status-paused: #f59e0b;
+  --accent-blue: #3b82f6;
+  --accent-purple: #8B5CF6;
+  --accent-green: #10b981;
+  --accent-orange: #F59E0B;
+
+  /* Scrollbar */
+  --scrollbar-thumb: var(--bg-tertiary);
+  --scrollbar-thumb-hover: var(--bg-dark);
+  --scrollbar-track: var(--bg-primary);
+
+  /* Focus */
+  --focus-ring-color: var(--primary-color);
+  --focus-ring-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+
+  /* Selection */
+  --selection-bg: var(--primary-color);
+  --selection-text: #ffffff;
+
+  /* Activity Bar — darkest layer */
+  --activitybar-bg: #0b1022;
+  --activitybar-border: rgba(148, 163, 184, 0.1);
+  --activitybar-icon-active: #e2e8f0;
+  --activitybar-icon-inactive: rgba(148, 163, 184, 0.4);
+  --activitybar-indicator: var(--primary-color);
+
+  /* Status Bar — same depth as activity bar */
+  --statusbar-bg: #0b1022;
+  --statusbar-text: #94a3b8;
+  --statusbar-border: rgba(148, 163, 184, 0.1);
+
+  /* Tooltip */
+  --tooltip-bg: #1e293b;
+  --tooltip-text: #f1f5f9;
+  --tooltip-border: rgba(148, 163, 184, 0.2);
 }
 
-/* 深色主题特定样式 */
-[data-theme="dark"] .modern-title-bar {
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
-  border-bottom: 1px solid var(--border-color);
-}
-
-[data-theme="dark"] .modern-sidebar {
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border-color);
-}
-
-[data-theme="dark"] .main-workspace {
-  background: var(--bg-primary);
-}
-
-[data-theme="dark"] .workspace-header {
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-}
-
-[data-theme="dark"] .status-bar {
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border-color);
-}
-
-[data-theme="dark"] .modern-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-sm);
-}
-
-[data-theme="dark"] .modern-card:hover {
-  box-shadow: var(--shadow-md);
-  border-color: var(--primary-color);
-}
-
-[data-theme="dark"] .modern-input {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-}
-
-[data-theme="dark"] .modern-input:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
-}
-
-[data-theme="dark"] .control-button:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-/* 深色主题特有的装饰效果 */
+/* Dark theme decorative effects */
 [data-theme="dark"] .luxe-text {
   background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
   -webkit-background-clip: text;
@@ -91,47 +82,10 @@
   background-clip: text;
 }
 
-/* 深色主题的连接状态指示器 */
-[data-theme="dark"] .connection-status {
-  background: var(--success-color);
-  color: white;
-}
-
-/* 深色主题的模态框样式 */
-[data-theme="dark"] .modal-overlay {
-  background: rgba(0, 0, 0, 0.7);
-}
-
-[data-theme="dark"] .modal-content {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-lg);
-}
-
-/* 深色主题特有的发光效果 */
 [data-theme="dark"] .modern-btn.primary {
   box-shadow: 0 0 10px rgba(66, 153, 225, 0.3);
 }
 
 [data-theme="dark"] .modern-btn.primary:hover {
   box-shadow: 0 0 15px rgba(66, 153, 225, 0.4);
-}
-
-/* 深色主题的滚动条样式 */
-[data-theme="dark"] ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-[data-theme="dark"] ::-webkit-scrollbar-track {
-  background: var(--bg-primary);
-}
-
-[data-theme="dark"] ::-webkit-scrollbar-thumb {
-  background: var(--bg-tertiary);
-  border-radius: 4px;
-}
-
-[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
-  background: var(--bg-dark);
 }

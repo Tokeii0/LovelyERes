@@ -1,0 +1,95 @@
+/* ═══════════════════════════════════════
+   Connecting — centered card with spinner
+   ═══════════════════════════════════════ */
+
+.workspace-connecting-center {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.connecting-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 48px;
+}
+
+/* Animated ring spinner */
+.connecting-spinner-ring {
+  width: 36px;
+  height: 36px;
+  border-width: 3px;
+  border-style: solid;
+  border-color: var(--border-color) var(--border-color) var(--border-color) var(--primary-color);
+  border-radius: 50%;
+  display: inline-block;
+  box-sizing: border-box;
+  -webkit-animation: spinRing 0.9s linear infinite;
+  animation: spinRing 0.9s linear infinite;
+}
+
+@-webkit-keyframes spinRing {
+  0%   { -webkit-transform: rotate(0deg); transform: rotate(0deg); }
+  100% { -webkit-transform: rotate(360deg); transform: rotate(360deg); }
+}
+
+@keyframes spinRing {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.connecting-step {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* Thin progress bar under the text */
+.connecting-progress-track {
+  width: 180px;
+  height: 3px;
+  background: var(--bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.connecting-progress-fill {
+  height: 100%;
+  background: var(--primary-color);
+  border-radius: 2px;
+  animation: progressSlide 6s ease-in-out forwards;
+}
+
+@keyframes progressSlide {
+  0%   { width: 0%; }
+  15%  { width: 20%; }
+  40%  { width: 45%; }
+  60%  { width: 60%; }
+  80%  { width: 80%; }
+  95%  { width: 95%; }
+  100% { width: 100%; }
+}
+
+/* Legacy — hidden */
+.workspace-loading-overlay { display: none; }
+.workspace-connecting-bar { display: none; }
+
+/* ═══════════════════════════════════════
+   Connection Prompt — minimal centered
+   ═══════════════════════════════════════ */
+
+.connection-prompt {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.connection-prompt-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}

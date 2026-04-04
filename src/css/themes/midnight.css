@@ -1,0 +1,108 @@
+/* Midnight 主题 - LovelyRes */
+/* 高对比暗黑 OLED 友好，纯黑背景 + 霓虹紫强调色 */
+
+[data-theme="midnight"] {
+  /* 主色调 - 霓虹紫 */
+  --primary-color: #7c3aed;
+  --secondary-color: #a855f7;
+  --accent-color: #c084fc;
+  --success-color: #34d399;
+  --warning-color: #fbbf24;
+  --error-color: #f87171;
+  --info-color: #818cf8;
+
+  /* 背景色 - 纯黑 OLED */
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0f;
+  --bg-tertiary: #151520;
+  --bg-dark: #1a1a2e;
+  --bg-glass: rgba(10, 10, 15, 0.85);
+  --bg-hover: rgba(124, 58, 237, 0.08);
+
+  /* 文字颜色 */
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-light: #71717a;
+  --text-white: #ffffff;
+
+  /* 边框和阴影 - 霓虹感 */
+  --border-color: rgba(124, 58, 237, 0.15);
+  --border-light: rgba(124, 58, 237, 0.08);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.7);
+  --shadow-glass: 0 8px 32px rgba(124, 58, 237, 0.08);
+  --glow-primary: rgba(124, 58, 237, 0.6);
+
+  /* Semantic Colors */
+  --status-running: #34d399;
+  --status-stopped: #f87171;
+  --status-paused: #fbbf24;
+  --accent-blue: #818cf8;
+  --accent-purple: #c084fc;
+  --accent-green: #34d399;
+  --accent-orange: #fbbf24;
+
+  /* Scrollbar */
+  --scrollbar-thumb: rgba(124, 58, 237, 0.3);
+  --scrollbar-thumb-hover: rgba(124, 58, 237, 0.6);
+  --scrollbar-track: transparent;
+
+  /* Focus */
+  --focus-ring-color: var(--primary-color);
+  --focus-ring-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+
+  /* Selection */
+  --selection-bg: var(--primary-color);
+  --selection-text: #ffffff;
+
+  /* Activity Bar */
+  --activitybar-bg: #050508;
+  --activitybar-border: rgba(124, 58, 237, 0.08);
+  --activitybar-icon-active: #e4e4e7;
+  --activitybar-icon-inactive: rgba(161, 161, 170, 0.4);
+  --activitybar-indicator: #7c3aed;
+
+  /* Status Bar */
+  --statusbar-bg: #050508;
+  --statusbar-text: #71717a;
+  --statusbar-border: rgba(124, 58, 237, 0.08);
+
+  /* Tooltip */
+  --tooltip-bg: #0a0a0f;
+  --tooltip-text: #fafafa;
+  --tooltip-border: rgba(124, 58, 237, 0.15);
+}
+
+/* Midnight neon decorative effects */
+[data-theme="midnight"] .luxe-text {
+  background: linear-gradient(135deg, #a855f7, #ec4899, #f97316);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  background-size: 200% 200%;
+  animation: luxeFlow 4s ease-in-out infinite;
+}
+
+/* Neon glow buttons */
+[data-theme="midnight"] .modern-btn.primary {
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  box-shadow: 0 0 15px rgba(124, 58, 237, 0.4);
+}
+[data-theme="midnight"] .modern-btn.primary:hover {
+  box-shadow: 0 0 25px rgba(124, 58, 237, 0.6), 0 0 50px rgba(124, 58, 237, 0.2);
+}
+
+/* Neon sidebar & workspace borders */
+[data-theme="midnight"] .activity-bar { border-color: rgba(124, 58, 237, 0.1); }
+[data-theme="midnight"] .main-workspace { border-color: rgba(124, 58, 237, 0.06); }
+
+/* Nav neon hover */
+[data-theme="midnight"] .activity-bar-item.active { color: #c084fc; }
+[data-theme="midnight"] .activity-bar-item:hover { color: #c084fc; }
+
+/* Connected card neon pulse */
+[data-theme="midnight"] .connection-card.connected {
+  border-color: rgba(52, 211, 153, 0.3);
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.1);
+}

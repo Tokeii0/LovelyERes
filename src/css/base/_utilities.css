@@ -1,0 +1,112 @@
+/* Animation Utility Classes */
+.animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+.animate-slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-slide-down { animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-scale-in { animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-pulse { animation: pulse 2s infinite ease-in-out; }
+
+/* Delay Utilities */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+
+/* Glassmorphism Effects */
+.glass-panel {
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-effect {
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+}
+
+/* Interactive Effects */
+.hover-glow {
+  transition: all 0.3s ease;
+}
+.hover-glow:hover {
+  box-shadow: 0 0 15px var(--glow-primary);
+  transform: translateY(-2px);
+}
+
+.hover-lift {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+.click-shrink:active { transform: scale(0.96); }
+
+/* Skeleton Loading */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-tertiary, #334155) 25%, var(--bg-secondary, #1e293b) 50%, var(--bg-tertiary, #334155) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+  border-radius: var(--border-radius);
+  color: transparent !important;
+  pointer-events: none;
+  user-select: none;
+}
+.skeleton-text { height: 1em; width: 80%; margin-bottom: 8px; }
+.skeleton-circle { border-radius: var(--border-radius-full); }
+.skeleton-card { min-height: 120px; border-radius: var(--border-radius-lg); }
+
+/* Ripple Effect */
+.ripple { position: relative; overflow: hidden; }
+.ripple::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 0; height: 0;
+  border-radius: var(--border-radius-full);
+  background: rgba(255, 255, 255, 0.15);
+  transform: translate(-50%, -50%);
+  transition: width var(--motion-slow) var(--ease-out-expo), height var(--motion-slow) var(--ease-out-expo), opacity var(--motion-slow);
+  opacity: 0;
+}
+.ripple:active::after { width: 300px; height: 300px; opacity: 1; transition: 0s; }
+
+/* Page Transitions */
+.page-enter { animation: pageEnter var(--motion-normal) var(--ease-out-expo) forwards; }
+.page-exit { animation: pageExit var(--motion-fast) var(--ease-smooth) forwards; }
+
+/* Surface Utilities */
+.surface-primary { background: var(--bg-primary); color: var(--text-primary); }
+.surface-secondary { background: var(--bg-secondary); color: var(--text-primary); }
+.surface-glass { background: var(--bg-glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+.surface-elevated { background: var(--bg-secondary); box-shadow: var(--elevation-3); border: 1px solid var(--border-light); }
+
+/* Count Up Animation */
+.count-up { animation: countPop var(--motion-slow) var(--ease-spring) forwards; display: inline-block; }
+
+/* Breathing Pulse */
+.pulse-breathe { animation: breathe 2.5s ease-in-out infinite; }
+.pulse-effect { animation: pulse-glow 2s infinite; }
+
+/* Theme Transition */
+.theme-transitioning {
+  transition: background-color var(--motion-slow) var(--ease-smooth),
+              color var(--motion-normal) var(--ease-smooth),
+              border-color var(--motion-slow) var(--ease-smooth);
+}
+
+/* Card Tilt 3D Effect */
+.card-tilt {
+  transition: transform var(--motion-normal) var(--ease-out-expo), box-shadow var(--motion-normal) var(--ease-smooth);
+  will-change: transform;
+}
+.card-tilt:hover { transform: perspective(800px) rotateX(2deg) rotateY(-2deg) translateY(-4px); box-shadow: var(--elevation-4); }
+.card-tilt:active { transform: perspective(800px) scale(0.98); }
+
+/* Font Mono */
+.font-mono { font-family: var(--font-mono); }

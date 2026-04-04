@@ -1,0 +1,258 @@
+/* ═══════════════════════════════════════════════════════
+   VS Code Activity Bar Style Sidebar
+   ═══════════════════════════════════════════════════════ */
+
+/* Activity Bar Container — flush to window edge */
+.activity-bar {
+  width: 44px;
+  height: 100%;
+  background: var(--activitybar-bg);
+  border-right: 1px solid var(--activitybar-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 100;
+  overflow: visible;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Top navigation section */
+.activity-bar-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding-top: 4px;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.activity-bar-top::-webkit-scrollbar { display: none; }
+
+/* Navigation icon button — compact 40px */
+.activity-bar-item {
+  width: 44px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  color: var(--activitybar-icon-inactive);
+  transition: color 0.15s ease;
+  border: none;
+  background: transparent;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.activity-bar-item:hover {
+  color: var(--activitybar-icon-active);
+}
+
+.activity-bar-item.active {
+  color: var(--activitybar-icon-active);
+}
+
+/* Active indicator — 2px left border */
+.activity-bar-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 20px;
+  background: var(--activitybar-indicator);
+  border-radius: 0 1px 1px 0;
+}
+
+/* Icon size */
+.activity-bar-item .nav-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.activity-bar-item .nav-item-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Disabled state */
+.activity-bar-item.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Badge dot */
+.activity-bar-item .activity-bar-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--primary-color);
+}
+
+/* Bottom section (settings + connection) */
+.activity-bar-bottom {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding-bottom: 4px;
+  position: relative;
+}
+
+/* Separator before bottom section */
+.activity-bar-bottom::before {
+  content: '';
+  width: 20px;
+  height: 1px;
+  background: var(--activitybar-border);
+  margin-bottom: 4px;
+}
+
+/* Connection status indicator (bottom icon) */
+.activity-bar-connection {
+  width: 44px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  color: var(--activitybar-icon-inactive);
+  transition: color 0.15s ease;
+  border: none;
+  background: transparent;
+  outline: none;
+}
+
+.activity-bar-connection:hover {
+  color: var(--activitybar-icon-active);
+}
+
+.activity-bar-connection.connected {
+  color: var(--success-color);
+}
+
+/* Connection status dot */
+.activity-bar-connection .connection-status-dot {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success-color);
+  border: 1.5px solid var(--activitybar-bg);
+}
+
+/* Tooltip */
+.activity-bar-item[data-tooltip]:hover::after,
+.activity-bar-connection[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 6px;
+  padding: 3px 8px;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
+  border: 1px solid var(--tooltip-border);
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* ─── Settings Dropdown ─── */
+.sidebar-settings-container {
+  position: relative;
+  width: 100%;
+}
+
+.settings-dropdown-menu {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 44px;
+  width: 260px;
+  min-width: 260px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  padding: 10px;
+  animation: slideInLeft 0.15s ease-out;
+  backdrop-filter: blur(12px);
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-dropdown-menu.show { display: flex; }
+
+.settings-group { display: flex; flex-direction: column; gap: 6px; }
+.settings-group-title { font-size: 11px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; padding-left: 4px; white-space: nowrap; }
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.settings-item:hover { background: var(--bg-hover); }
+.settings-item-icon { display: flex; align-items: center; justify-content: center; color: var(--text-secondary); flex-shrink: 0; }
+.settings-item:hover .settings-item-icon { color: var(--primary-color); }
+
+/* ─── Connection Dropdown ─── */
+.connection-card-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.connection-dropdown-menu {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 44px;
+  width: 240px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  padding: 6px;
+  animation: slideInLeft 0.15s ease-out;
+  backdrop-filter: blur(12px);
+}
+
+/* ─── Legacy classes hidden ─── */
+.nav-item-text { display: none; }
+.nav-item-badge { display: none; }
+.nav-item-indicator { display: none; }

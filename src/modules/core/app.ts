@@ -9,7 +9,11 @@ import { ModernUIRenderer } from '../ui/modernUIRenderer';
 import { ThemeManager } from '../ui/theme';
 import { SSHManager } from '../ssh/sshManager';
 import { DockerManager } from '../docker/dockerManager';
+import { DockerEmergencyManager } from '../docker/dockerEmergencyManager';
+import { DockerSecurityAuditor } from '../docker/dockerSecurityAuditor';
 import { KubernetesManager } from '../kubernetes/kubernetesManager';
+import { KubernetesEmergencyManager } from '../kubernetes/kubernetesEmergencyManager';
+import { KubernetesSecurityAuditor } from '../kubernetes/kubernetesSecurityAuditor';
 import { SystemInfoManager } from '../system/systemInfoManager';
 import { sshConnectionManager } from '../remote/sshConnectionManager';
 
@@ -37,7 +41,11 @@ export class LovelyResApp {
   private themeManager: ThemeManager;
   private sshManager: SSHManager;
   private dockerManager: DockerManager;
+  private dockerEmergencyManager: DockerEmergencyManager;
+  private dockerSecurityAuditor: DockerSecurityAuditor;
   private kubernetesManager: KubernetesManager;
+  private kubernetesEmergencyManager: KubernetesEmergencyManager;
+  private kubernetesSecurityAuditor: KubernetesSecurityAuditor;
   private systemInfoManager: SystemInfoManager;
 
   constructor() {
@@ -46,13 +54,22 @@ export class LovelyResApp {
     this.themeManager = new ThemeManager();
     this.sshManager = new SSHManager();
     this.dockerManager = new DockerManager();
+    this.dockerEmergencyManager = new DockerEmergencyManager(this.dockerManager);
+    this.dockerSecurityAuditor = new DockerSecurityAuditor(this.dockerManager);
     this.kubernetesManager = new KubernetesManager();
+    this.kubernetesEmergencyManager = new KubernetesEmergencyManager(this.kubernetesManager);
+    this.kubernetesSecurityAuditor = new KubernetesSecurityAuditor(this.kubernetesManager);
     this.systemInfoManager = new SystemInfoManager();
 
     // 暴露管理器和应用实例给全局对象，供UI使用
     (window as any).app = {
       sshManager: this.sshManager,
+      dockerManager: this.dockerManager,
+      dockerEmergencyManager: this.dockerEmergencyManager,
+      dockerSecurityAuditor: this.dockerSecurityAuditor,
       kubernetesManager: this.kubernetesManager,
+      kubernetesEmergencyManager: this.kubernetesEmergencyManager,
+      kubernetesSecurityAuditor: this.kubernetesSecurityAuditor,
       systemInfoManager: this.systemInfoManager,
       stateManager: this.stateManager,
       modernUIRenderer: this.modernUIRenderer,

@@ -4,7 +4,7 @@
  */
 
 export interface AppSettings {
-  theme: 'light' | 'dark' | 'sakura';
+  theme: 'light' | 'dark' | 'sakura' | 'midnight' | 'ocean';
   language: 'zh-CN' | 'en-US';
   autoConnect: boolean;
   defaultSSHPort: number;

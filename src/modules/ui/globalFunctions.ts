@@ -14,6 +14,7 @@ import { sshConnectionDialog } from '../ui/sshConnectionDialog';
 import { remoteOperationsManager } from '../remote/remoteOperationsManager';
 import { dockerPageManager } from '../docker/dockerPageManager';
 import { emergencyPageManager } from '../emergency/emergencyPageManager';
+import { KubernetesPageManager } from '../kubernetes/kubernetesPageManager';
 import { quickDetectionManager } from '../detection/quickDetectionManager';
 import { sshTerminalManager } from '../ssh/sshTerminalManager';
 import type { SettingsPageManager } from '../settings/settingsPageManager';
@@ -234,8 +235,32 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
             app.render();
           }
         }, 100);
+      } else if (pageId === 'kubernetes') {
+        // Lazy init K8s page manager
+        if (!(window as any).kubernetesPageManager) {
+          const appObj = (window as any).app;
+          if (appObj?.kubernetesManager && appObj?.kubernetesEmergencyManager && appObj?.kubernetesSecurityAuditor) {
+            const renderer = appObj.modernUIRenderer?.kubernetesRenderer;
+            if (renderer) {
+              const kpm = new KubernetesPageManager(
+                appObj.kubernetesManager,
+                appObj.kubernetesEmergencyManager,
+                appObj.kubernetesSecurityAuditor,
+                renderer
+              );
+              (window as any).kubernetesPageManager = kpm;
+            }
+          }
+        }
+        const kpm = (window as any).kubernetesPageManager;
+        if (kpm) {
+          kpm.initialize();
+          kpm.refresh(true);
+        }
       } else {
         dockerPageManager.deactivate();
+        const kpm = (window as any).kubernetesPageManager;
+        if (kpm) kpm.deactivate();
       }
 
       // 系统概览：仅在无缓存时才重新加载

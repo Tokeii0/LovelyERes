@@ -8,14 +8,18 @@
 @import url('./light.css');
 @import url('./dark.css');
 @import url('./sakura.css');
+@import url('./midnight.css');
+@import url('./ocean.css');
 */
 
 /* 主题配置信息 */
 /*
 可用主题：
-1. light.css - 浅色主题（清新明亮）
-2. dark.css - 深色主题（护眼舒适）
-3. sakura.css - 樱花主题（温柔浪漫）
+1. light.css   - 浅色主题 (清新明亮)
+2. dark.css    - 深色主题 (护眼舒适)
+3. sakura.css  - 樱花主题 (温柔浪漫)
+4. midnight.css - 暗夜主题 (霓虹暗黑 OLED)
+5. ocean.css   - 深海主题 (蓝绿沉浸)
 
 使用方式：
 - 通过 ThemeManager.setTheme(themeName) 动态加载

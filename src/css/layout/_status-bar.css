@@ -1,0 +1,12 @@
+/* Status Bar — matches activity bar depth */
+.status-bar {
+  height: 28px;
+  background: var(--statusbar-bg, var(--bg-secondary));
+  border-top: 1px solid var(--statusbar-border, var(--border-color));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--spacing-md);
+  font-size: 11px;
+  color: var(--statusbar-text, var(--text-secondary));
+}

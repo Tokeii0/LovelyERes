@@ -37,8 +37,6 @@ russh-sftp = "2.1.1"
 russh-keys = "0.49.2"
 async-trait = "0.1.89"
 futures = "0.3.31"
-# 保留旧的 ssh2 库以便逐步迁移
-ssh2 = "0.9"
 aes-gcm = "0.10"
 base64 = "0.21"
 rand = "0.8"

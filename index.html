@@ -9,8 +9,11 @@
   <!-- Highlight.js for syntax highlighting -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <script src="/src/assets/js/apexcharts.min.js"></script>
   <meta name="description" content="Linux应急响应工具，支持SSH连接、终端操作、文件管理和Docker容器管理" />
+  <!-- Modern Typography: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     /* 防止页面闪烁的基础样式 */
     * {
@@ -20,10 +23,9 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: #0f172a;
-      /* Dark background to match modern aesthetic */
-      color: #e2e8f0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg-primary, #0f172a);
+      color: var(--text-primary, #e2e8f0);
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
@@ -35,182 +37,88 @@
       overflow: hidden;
     }
 
-    /* Modern Loading Screen */
+    /* Loading Screen — follows theme via CSS variables with dark fallbacks */
     .loading-screen {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+      inset: 0;
+      background: var(--bg-primary, #0f172a);
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       z-index: 9999;
-      transition: opacity 0.6s ease-out, visibility 0.6s ease-out;
+      transition: opacity 0.5s ease-out, visibility 0.5s ease-out;
     }
-
-    .loading-screen.hidden {
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-    }
+    .loading-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 
     .loading-content {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 24px;
-      animation: fadeIn 0.8s ease-out;
+      gap: 20px;
+      animation: lsFadeIn 0.6s ease-out;
     }
 
-    /* Logo Animation */
+    /* Spinner ring */
     .logo-container {
       position: relative;
-      width: 80px;
-      height: 80px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 48px;
+      height: 48px;
     }
-
     .logo-ring {
       position: absolute;
-      width: 100%;
-      height: 100%;
+      inset: 0;
       border-radius: 50%;
-      border: 2px solid transparent;
-      border-top-color: #3b82f6;
-      border-right-color: #8b5cf6;
-      animation: spin 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      border-width: 2.5px;
+      border-style: solid;
+      border-color: var(--border-color, rgba(255,255,255,0.1)) var(--border-color, rgba(255,255,255,0.1)) var(--border-color, rgba(255,255,255,0.1)) var(--primary-color, #4299e1);
+      animation: lsSpin 0.9s linear infinite;
     }
+    .logo-circle { display: none; }
 
-    .logo-ring::before {
-      content: '';
-      position: absolute;
-      top: 4px;
-      left: 4px;
-      right: 4px;
-      bottom: 4px;
-      border-radius: 50%;
-      border: 2px solid transparent;
-      border-top-color: #8b5cf6;
-      border-left-color: #3b82f6;
-      animation: spin 2s cubic-bezier(0.4, 0, 0.2, 1) infinite reverse;
-      opacity: 0.6;
-    }
-
-    .logo-circle {
-      width: 16px;
-      height: 16px;
-      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-      border-radius: 50%;
-      box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    /* Typography */
     .app-title {
-      font-size: 32px;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #60a5fa, #a78bfa);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary, #f1f5f9);
       opacity: 0;
-      animation: slideUp 0.8s ease-out 0.2s forwards;
+      animation: lsSlideUp 0.6s ease-out 0.15s forwards;
     }
 
-    /* Loading Bar */
+    /* Progress bar */
     .loading-bar-container {
-      width: 200px;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.1);
+      width: 160px;
+      height: 3px;
+      background: var(--bg-tertiary, rgba(255,255,255,0.08));
       border-radius: 2px;
       overflow: hidden;
       opacity: 0;
-      animation: fadeIn 0.8s ease-out 0.4s forwards;
+      animation: lsFadeIn 0.6s ease-out 0.3s forwards;
     }
-
     .loading-bar {
       width: 100%;
       height: 100%;
-      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      background: var(--primary-color, #4299e1);
       transform-origin: left;
-      animation: progress 2s ease-in-out infinite;
+      animation: lsProgress 2s ease-in-out infinite;
     }
 
     .loading-text {
-      color: #94a3b8;
-      font-size: 14px;
+      color: var(--text-secondary, #94a3b8);
+      font-size: 12px;
       font-weight: 500;
-      letter-spacing: 0.5px;
       opacity: 0;
-      animation: fadeIn 0.8s ease-out 0.6s forwards;
+      animation: lsFadeIn 0.6s ease-out 0.4s forwards;
     }
 
-    /* Animations */
-    @keyframes spin {
-      0% {
-        transform: rotate(0deg);
-      }
-
-      100% {
-        transform: rotate(360deg);
-      }
+    @keyframes lsSpin   { to { transform: rotate(360deg); } }
+    @keyframes lsFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes lsSlideUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
-
-    @keyframes pulse {
-
-      0%,
-      100% {
-        transform: scale(1);
-        opacity: 1;
-      }
-
-      50% {
-        transform: scale(1.2);
-        opacity: 0.8;
-      }
-    }
-
-    @keyframes fadeIn {
-      from {
-        opacity: 0;
-      }
-
-      to {
-        opacity: 1;
-      }
-    }
-
-    @keyframes slideUp {
-      from {
-        opacity: 0;
-        transform: translateY(10px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    @keyframes progress {
-      0% {
-        transform: scaleX(0);
-      }
-
-      50% {
-        transform: scaleX(0.7);
-      }
-
-      100% {
-        transform: scaleX(1);
-        transform-origin: right;
-      }
+    @keyframes lsProgress {
+      0%   { transform: scaleX(0); }
+      50%  { transform: scaleX(0.7); }
+      100% { transform: scaleX(1); transform-origin: right; }
     }
   </style>
 </head>

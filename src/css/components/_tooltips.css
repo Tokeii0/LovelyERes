@@ -1,0 +1,37 @@
+/* Enhanced Tooltip Card */
+.tooltip-card {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%) scale(0.95);
+  padding: 8px 14px;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
+  border: 1px solid var(--tooltip-border);
+  border-radius: var(--border-radius);
+  box-shadow: var(--elevation-3);
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-smooth),
+              transform var(--motion-fast) var(--ease-spring);
+}
+
+.tooltip-card.visible,
+*:hover > .tooltip-card {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+.tooltip-card .tooltip-shortcut {
+  margin-left: 8px;
+  padding: 2px 6px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}

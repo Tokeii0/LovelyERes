@@ -1,47 +1,9 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import vitePluginBundleObfuscator from 'vite-plugin-bundle-obfuscator';
-// @ts-expect-error Node.js modules
-import { copyFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'fs';
-// @ts-expect-error Node.js modules
-import { join } from 'path';
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
-
-// 自定义插件：复制src目录到dist
-function copySrcPlugin() {
-  return {
-    name: 'copy-src',
-    writeBundle() {
-      const srcDir = 'src';
-      const distSrcDir = 'dist/src';
-
-      function copyDir(src: string, dest: string) {
-        if (!existsSync(dest)) {
-          mkdirSync(dest, { recursive: true });
-        }
-
-        const entries = readdirSync(src);
-        for (const entry of entries) {
-          const srcPath = join(src, entry);
-          const destPath = join(dest, entry);
-
-          if (statSync(srcPath).isDirectory()) {
-            copyDir(srcPath, destPath);
-          } else {
-            copyFileSync(srcPath, destPath);
-          }
-        }
-      }
-
-      if (existsSync(srcDir)) {
-        copyDir(srcDir, distSrcDir);
-        console.log('✅ src目录已复制到dist/src');
-      }
-    }
-  };
-}
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
@@ -103,7 +65,6 @@ export default defineConfig(async () => ({
   // 使用自定义插件
   plugins: [
     vue(),
-    copySrcPlugin(),
     // JavaScript 混淆插件（仅在生产构建时启用）
     vitePluginBundleObfuscator({
       enable: true, // 启用混淆

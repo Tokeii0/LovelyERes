@@ -1,0 +1,178 @@
+/* Buttons */
+.modern-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  border-radius: var(--border-radius);
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: var(--text-white);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.modern-btn::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.modern-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+
+.modern-btn:hover::after { opacity: 1; }
+
+.modern-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: var(--shadow-sm);
+}
+
+.modern-btn.secondary {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.modern-btn.secondary:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--primary-color);
+  color: var(--text-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.modern-btn.icon-only {
+  padding: var(--spacing-xs);
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+}
+
+.modern-btn.icon-only svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+.modern-btn.danger {
+  background: linear-gradient(135deg, var(--error-color), color-mix(in srgb, var(--error-color) 80%, #000));
+}
+
+.modern-btn.primary {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+}
+
+.modern-btn[style*="--success-color"]:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 15px rgba(16, 185, 129, 0.2);
+}
+
+.modern-btn.compact {
+  padding: 6px 12px;
+  font-size: 13px;
+  height: 32px;
+  gap: 6px;
+}
+
+/* Generic icon button */
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-color-hover);
+}
+
+/* System button */
+.system-btn {
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.system-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--primary-color);
+}
+
+/* Action buttons */
+.action-btn {
+  flex: 1;
+  border: none;
+  border-radius: 6px;
+  padding: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.action-btn.connect { background: var(--primary-color); color: white; }
+.action-btn.connect:hover { filter: brightness(1.1); }
+.action-btn.settings {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  flex: 0 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.action-btn.settings:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+
+/* Segmented Control */
+.segmented-control {
+  display: flex;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 2px;
+  gap: 2px;
+}
+
+.segmented-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  line-height: 1;
+}
+
+.segmented-btn:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+.segmented-btn.active { background: var(--bg-primary); color: var(--primary-color); font-weight: 600; box-shadow: var(--shadow-sm); }
+
+/* Refresh button */
+.refresh-btn { padding: 8px 16px; font-size: 13px; gap: 6px; border-radius: 10px; }
