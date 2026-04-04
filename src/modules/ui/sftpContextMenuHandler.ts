@@ -291,8 +291,7 @@ export function initSftpContextMenuHandler(): void {
     const filePath = file.path.replace(/\\/g, '/');
     try {
       if (isDir) {
-        // For directories, use SSH command rm -rf for reliability
-        await (window as any).__TAURI__.core.invoke('execute_command', {
+        await (window as any).__TAURI__.core.invoke('ssh_execute_command_direct', {
           command: `rm -rf "${filePath}"`
         });
       } else {
