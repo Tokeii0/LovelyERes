@@ -191,56 +191,65 @@ export class SystemInfoManager {
     this.isUpdating = true;
 
     try {
-      console.log('📊 正在获取基础系统信息...');
+      console.log('📊 正在获取基础系统信息（批量并行）...');
 
-      // 仅获取基础系统信息（14条快速命令），详细信息将渐进式加载
+      // 定义所有基础命令，一次性批量发送到后端并行执行
+      const commands = [
+        'hostname',
+        'uptime',
+        'cat /proc/loadavg',
+        'cat /proc/meminfo',
+        'df -hP',
+        'cat /proc/cpuinfo | grep "model name" | head -1 && nproc',
+        'top -bn2 -d0.5 | grep "Cpu(s)" | tail -1 | awk \'{print 100-$8"%"}\' || echo "0%"',
+        'ss -tuln 2>/dev/null | wc -l || netstat -tuln 2>/dev/null | wc -l || echo "0"',
+        'ps aux | wc -l',
+        'who | wc -l',
+        'ip addr show | grep -E "inet |UP|DOWN"',
+        'cat /etc/resolv.conf | grep nameserver',
+        'ip route | grep default',
+        "cat /proc/net/dev | grep -v lo | awk 'NR>2 {rx+=$2; tx+=$10} END {print rx \" \" tx}'"
+      ];
+
+      // 单次IPC调用，后端并行打开14个SSH channel执行
+      const batchResults = await invoke('ssh_execute_batch_commands', { commands }) as Array<{
+        command: string;
+        success: boolean;
+        output?: { output: string; exit_code?: number };
+        error?: string;
+      }>;
+
+      // 提取结果，失败的返回空字符串
+      const results = batchResults.map(r => r.success && r.output ? r.output.output : '');
+
       const [
-        hostname,
-        uptime,
-        loadAvg,
-        memInfo,
-        diskInfo,
-        cpuInfo,
-        cpuUsage,
-        netConnections,
-        processCount,
-        userCount,
-        networkInterfaces,
-        dnsInfo,
-        gatewayInfo,
-        networkTraffic
-      ] = (await Promise.allSettled([
-        this.executeCommand('hostname'),
-        this.executeCommand('uptime'),
-        this.executeCommand('cat /proc/loadavg'),
-        this.executeCommand('cat /proc/meminfo'),
-        this.executeCommand('df -hP'),
-        this.executeCommand('cat /proc/cpuinfo | grep "model name" | head -1 && nproc'),
-        this.executeCommand('top -bn2 -d0.5 | grep "Cpu(s)" | tail -1 | awk \'{print 100-$8"%"}\' || echo "0%"'),
-        this.getNetworkConnectionCount(),
-        this.executeCommand('ps aux | wc -l'),
-        this.executeCommand('who | wc -l'),
-        this.executeCommand('ip addr show | grep -E "inet |UP|DOWN"'),
-        this.executeCommand('cat /etc/resolv.conf | grep nameserver'),
-        this.executeCommand('ip route | grep default'),
-        this.getNetworkTraffic()
-      ])).map(r => r.status === 'fulfilled' ? r.value : '') as any[];
+        hostname, uptime, loadAvg, memInfo, diskInfo, cpuInfo, cpuUsage,
+        netConnections, processCount, userCount, networkInterfaces,
+        dnsInfo, gatewayInfo, networkTrafficRaw
+      ] = results;
+
+      // 解析网络流量
+      const trafficParts = (networkTrafficRaw || '').trim().split(' ');
+      const networkTraffic = {
+        rx: parseInt(trafficParts[0]) || 0,
+        tx: parseInt(trafficParts[1]) || 0
+      };
 
       // 解析基础系统信息
       this.systemInfo = this.parseSystemInfo({
-        hostname: (hostname as string).trim(),
-        uptime: (uptime as string).trim(),
-        loadAvg: (loadAvg as string).trim(),
-        memInfo: (memInfo as string).trim(),
-        diskInfo: (diskInfo as string).trim(),
-        cpuInfo: (cpuInfo as string).trim(),
-        cpuUsage: (cpuUsage as string).trim(),
-        netConnections: (netConnections as string).trim(),
-        processCount: (processCount as string).trim(),
-        userCount: (userCount as string).trim(),
-        networkInterfaces: (networkInterfaces as string).trim(),
-        dnsInfo: (dnsInfo as string).trim(),
-        gatewayInfo: (gatewayInfo as string).trim(),
+        hostname: (hostname || '').trim(),
+        uptime: (uptime || '').trim(),
+        loadAvg: (loadAvg || '').trim(),
+        memInfo: (memInfo || '').trim(),
+        diskInfo: (diskInfo || '').trim(),
+        cpuInfo: (cpuInfo || '').trim(),
+        cpuUsage: (cpuUsage || '').trim(),
+        netConnections: (netConnections || '').trim(),
+        processCount: (processCount || '').trim(),
+        userCount: (userCount || '').trim(),
+        networkInterfaces: (networkInterfaces || '').trim(),
+        dnsInfo: (dnsInfo || '').trim(),
+        gatewayInfo: (gatewayInfo || '').trim(),
         networkTraffic
       });
 
@@ -250,7 +259,7 @@ export class SystemInfoManager {
         this.systemInfo.detailedInfo = undefined;
       }
 
-      console.log('✅ 基础系统信息获取完成，详细信息将渐进式加载');
+      console.log('✅ 基础系统信息获取完成（批量并行），详细信息将渐进式加载');
       return this.systemInfo;
 
     } catch (error) {

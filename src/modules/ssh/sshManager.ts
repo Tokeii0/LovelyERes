@@ -4,7 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { SSHConnectionManager, type SSHConnection } from './connectionManager';
+import { SSHConfigManager, type SSHConnection } from './connectionManager';
 import { SystemInfoManager, type SystemInfo } from '../system/systemInfoManager';
 
 export interface SSHCommand {
@@ -17,12 +17,12 @@ export interface SSHCommand {
 }
 
 export class SSHManager {
-  private connectionManager: SSHConnectionManager;
+  private connectionManager: SSHConfigManager;
   private systemInfoManager: SystemInfoManager;
   private commands: SSHCommand[] = [];
 
   constructor() {
-    this.connectionManager = new SSHConnectionManager();
+    this.connectionManager = new SSHConfigManager();
     this.systemInfoManager = new SystemInfoManager();
     this.initializeDefaultCommands();
   }
@@ -76,8 +76,8 @@ export class SSHManager {
     try {
       console.log(`🔗 正在连接到 ${connection.name} (${connection.host}:${connection.port})`);
 
-      // 调用后端建立真正的SSH连接
-      await invoke('ssh_connect_with_auth', {
+      // 调用后端建立SSH连接 (russh)
+      await invoke('ssh_connect_direct', {
         host: connection.host,
         port: connection.port,
         username: connection.username,
@@ -119,7 +119,7 @@ export class SSHManager {
       console.log(`🔌 正在断开 ${connection.name} 的连接`);
 
       // 调用后端断开SSH连接
-      await invoke('ssh_disconnect');
+      await invoke('ssh_disconnect_direct');
 
       // 更新连接状态
       await this.connectionManager.updateConnection(id, {
@@ -135,17 +135,29 @@ export class SSHManager {
 
   /**
    * 连接到SSH服务器
+   * 连接成功后立即返回，系统信息在后台异步加载
    */
   async connect(id: string): Promise<void> {
     await this.connectionManager.connect(id);
 
-    // 连接成功后，开始自动更新系统信息
-    try {
-      await this.systemInfoManager.fetchSystemInfo();
-      this.systemInfoManager.startAutoUpdate(30000); // 30秒更新一次
-    } catch (error) {
-      console.warn('⚠️ 获取系统信息失败，但SSH连接成功:', error);
-    }
+    // 连接成功后，后台异步加载系统信息（不阻塞连接返回）
+    this.loadSystemInfoInBackground();
+  }
+
+  /**
+   * 后台加载系统信息（不阻塞主流程）
+   */
+  private loadSystemInfoInBackground(): void {
+    (async () => {
+      try {
+        console.log('📊 后台加载系统信息...');
+        await this.systemInfoManager.fetchSystemInfo();
+        this.systemInfoManager.startAutoUpdate(30000);
+        console.log('✅ 系统信息加载完成');
+      } catch (error) {
+        console.warn('⚠️ 获取系统信息失败，但SSH连接成功:', error);
+      }
+    })();
   }
 
   /**
@@ -218,9 +230,9 @@ export class SSHManager {
     }
 
     try {
-      const result = await invoke('ssh_execute_command', { command });
+      const result = await invoke('ssh_execute_command_direct', { command }) as { output: string; exit_code: number };
       console.log(`✅ 命令执行成功: ${command}`);
-      return result as string;
+      return result.output;
     } catch (error) {
       console.error(`❌ 命令执行失败: ${command}`, error);
       throw new Error(`命令执行失败: ${error}`);

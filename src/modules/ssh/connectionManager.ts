@@ -40,7 +40,7 @@ export interface SSHConnection {
   tags?: string[];
 }
 
-export class SSHConnectionManager {
+export class SSHConfigManager {
   private connections: SSHConnection[] = [];
   private activeConnection?: SSHConnection;
 
@@ -315,8 +315,8 @@ export class SSHConnectionManager {
         }) as string;
       }
 
-      // 调用后端SSH连接命令
-      const result = await invoke('ssh_connect_with_auth', {
+      // 调用后端SSH连接命令 (russh)
+      const result = await invoke('ssh_connect_direct', {
         host: connection.host,
         port: connection.port,
         username: connection.username,
@@ -324,7 +324,6 @@ export class SSHConnectionManager {
         password,
         keyPath: connection.keyPath,
         keyPassphrase: connection.keyPassphrase,
-        certificatePath: connection.certificatePath
       });
 
       // 连接成功，更新状态
@@ -332,7 +331,10 @@ export class SSHConnectionManager {
       connection.lastConnected = new Date();
       this.activeConnection = connection;
       
-      await this.saveConnections();
+      // 异步保存连接状态（不阻塞连接流程）
+      this.saveConnections().catch(err => {
+        console.warn('⚠️ 保存连接状态失败（不影响连接）:', err);
+      });
       
       console.log('✅ SSH连接成功:', result);
       
@@ -351,7 +353,7 @@ export class SSHConnectionManager {
     }
 
     try {
-      await invoke('ssh_disconnect');
+      await invoke('ssh_disconnect_direct');
       
       this.activeConnection.isConnected = false;
       this.activeConnection = undefined;

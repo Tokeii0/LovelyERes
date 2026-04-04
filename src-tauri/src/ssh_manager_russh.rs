@@ -11,7 +11,6 @@ use russh::keys::{PublicKey, PrivateKeyWithHashAlg};
 use russh::{ChannelMsg, Disconnect};
 use russh_sftp::client::SftpSession;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use std::net::ToSocketAddrs;
 
 // ================== Types ==================
 
@@ -21,6 +20,14 @@ pub struct TerminalOutput {
     pub output: String,
     pub exit_code: Option<i32>,
     pub timestamp: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchCommandResult {
+    pub command: String,
+    pub success: bool,
+    pub output: Option<TerminalOutput>,
+    pub error: Option<String>,
 }
 
 impl TerminalOutput {
@@ -193,6 +200,24 @@ enum WorkerCommand {
         rows: u32,
         response_tx: mpsc::Sender<Result<(), String>>,
     },
+    // Packet Capture commands
+    StartPacketCapture {
+        session_id: String,
+        interface: String,
+        filter: Option<String>,
+        count: Option<u32>,
+        window: tauri::Window,
+        response_tx: mpsc::Sender<Result<(), String>>,
+    },
+    StopPacketCapture {
+        session_id: String,
+        response_tx: mpsc::Sender<Result<(), String>>,
+    },
+    ExecuteBatch {
+        session_id: String,
+        commands: Vec<String>,
+        response_tx: mpsc::Sender<Result<Vec<Result<TerminalOutput, String>>, String>>,
+    },
     Shutdown,
 }
 
@@ -201,6 +226,8 @@ enum WorkerCommand {
 struct SessionData {
     handle: Handle<ClientHandler>,
     info: ConnectionInfo,
+    // Store active packet capture channel to allow stopping it
+    packet_capture_channel: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 // ================== Terminal Session Data ==================
@@ -223,7 +250,7 @@ async fn connect_async(
     password: Option<&str>,
     private_key: Option<&str>,
 ) -> Result<Handle<ClientHandler>, String> {
-    // Configure SSH client
+    // Configure SSH client with optimized settings
     let config = Config {
         inactivity_timeout: Some(std::time::Duration::from_secs(300)),
         keepalive_interval: Some(std::time::Duration::from_secs(30)),
@@ -231,20 +258,29 @@ async fn connect_async(
         ..Default::default()
     };
     
-    // Resolve hostname
-    let addr = format!("{}:{}", host, port)
-        .to_socket_addrs()
-        .map_err(|e| format!("Failed to resolve host: {}", e))?
-        .next()
-        .ok_or_else(|| format!("No addresses found for host: {}", host))?;
+    // Async DNS resolution with timeout
+    let addr_str = format!("{}:{}", host, port);
+    let addr = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        tokio::net::lookup_host(&addr_str)
+    )
+    .await
+    .map_err(|_| format!("DNS resolution timed out for host: {}", host))?
+    .map_err(|e| format!("Failed to resolve host: {}", e))?
+    .next()
+    .ok_or_else(|| format!("No addresses found for host: {}", host))?;
     
-    // Connect to server
+    // Connect to server with timeout
     let handler = ClientHandler::new();
-    let mut handle = russh::client::connect(Arc::new(config), addr, handler)
-        .await
-        .map_err(|e| format!("Failed to connect: {}", e))?;
+    let mut handle = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        russh::client::connect(Arc::new(config), addr, handler)
+    )
+    .await
+    .map_err(|_| format!("SSH connection timed out (15s) to {}:{}", host, port))?
+    .map_err(|e| format!("Failed to connect: {}", e))?;
     
-    // Authenticate
+    // Authenticate with timeout
     let auth_result = if let Some(key_str) = private_key {
         // Try key authentication
         let key_pair = if key_str.contains("OPENSSH PRIVATE KEY") || key_str.contains("RSA PRIVATE KEY") || key_str.contains("-----BEGIN") {
@@ -257,7 +293,6 @@ async fn connect_async(
         };
         
         // Convert russh_keys::PrivateKey to russh::keys::PrivateKey
-        // They should be the same type, but we need to use the one from russh
         let key_bytes = key_pair.to_openssh(russh_keys::ssh_key::LineEnding::LF)
             .map_err(|e| format!("Failed to encode key: {}", e))?;
         let russh_key = russh::keys::decode_secret_key(&key_bytes, None)
@@ -266,16 +301,22 @@ async fn connect_async(
         // Wrap key with hash algorithm for authentication
         let key_with_hash = PrivateKeyWithHashAlg::new(Arc::new(russh_key), None);
         
-        handle
-            .authenticate_publickey(username, key_with_hash)
-            .await
-            .map_err(|e| format!("Key authentication failed: {}", e))?
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            handle.authenticate_publickey(username, key_with_hash)
+        )
+        .await
+        .map_err(|_| "Key authentication timed out (10s)".to_string())?
+        .map_err(|e| format!("Key authentication failed: {}", e))?
     } else if let Some(pwd) = password {
         // Password authentication
-        handle
-            .authenticate_password(username, pwd)
-            .await
-            .map_err(|e| format!("Password authentication failed: {}", e))?
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            handle.authenticate_password(username, pwd)
+        )
+        .await
+        .map_err(|_| "Password authentication timed out (10s)".to_string())?
+        .map_err(|e| format!("Password authentication failed: {}", e))?
     } else {
         return Err("No authentication method provided".to_string());
     };
@@ -598,7 +639,7 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                                 username: username.clone(),
                                 auth_method: if private_key.is_some() { "key".to_string() } else { "password".to_string() },
                             };
-                            sessions.insert(session_id.clone(), SessionData { handle, info });
+                            sessions.insert(session_id.clone(), SessionData { handle, info, packet_capture_channel: None });
                             let _ = response_tx.send(Ok(session_id));
                         }
                         Err(e) => {
@@ -874,6 +915,118 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                     drop(terminals);
                     let _ = response_tx.send(result);
                 }
+
+                WorkerCommand::StartPacketCapture { session_id, interface, filter, count, window, response_tx } => {
+                    let result = if let Some(session) = sessions.get_mut(&session_id) {
+                        // Stop existing capture if any
+                        if let Some(tx) = session.packet_capture_channel.take() {
+                            let _ = tx.send(());
+                        }
+
+                        // Create new cancellation channel
+                        let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+                        session.packet_capture_channel = Some(cancel_tx);
+
+                        // Generate command
+                        let cmd = crate::packet_capture::generate_tcpdump_command(&interface, filter.as_deref(), count);
+                        let window_clone = window.clone();
+
+                        // Open the channel BEFORE spawning the task (can't clone Handle)
+                        match session.handle.channel_open_session().await {
+                            Ok(mut channel) => {
+                                // Execute the capture command
+                                let cmd_bytes: Vec<u8> = cmd.as_bytes().to_vec();
+                                if let Err(e) = channel.exec(true, cmd_bytes.as_slice()).await {
+                                    let _ = window_clone.emit("packet_capture_error", format!("Failed to execute command: {}", e));
+                                } else {
+                                    // Spawn capture task to read output
+                                    tokio::spawn(async move {
+                                        let mut cancel_rx = cancel_rx;
+                                        let mut buffer = Vec::new();
+                                        let mut packet_id = 0;
+
+                                        loop {
+                                            tokio::select! {
+                                                _ = &mut cancel_rx => {
+                                                    // Cancelled
+                                                    let _ = channel.close().await;
+                                                    break;
+                                                }
+                                                msg = channel.wait() => {
+                                                    match msg {
+                                                        Some(ChannelMsg::Data { data }) => {
+                                                            buffer.extend_from_slice(&data);
+                                                            
+                                                            // Process lines
+                                                            while let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
+                                                                let line_bytes = buffer.drain(..=pos).collect::<Vec<u8>>();
+                                                                let line = String::from_utf8_lossy(&line_bytes);
+                                                                let trimmed_line = line.trim();
+                                                                
+                                                                if !trimmed_line.is_empty() {
+                                                                    packet_id += 1;
+                                                                    let packet = crate::packet_capture::parse_tcpdump_line(trimmed_line, packet_id);
+                                                                    let _ = window_clone.emit("packet_capture_data", packet);
+                                                                }
+                                                            }
+                                                        }
+                                                        Some(ChannelMsg::ExtendedData { data, .. }) => {
+                                                            let info = String::from_utf8_lossy(&data);
+                                                            let _ = window_clone.emit("packet_capture_info", info.to_string());
+                                                        }
+                                                        Some(ChannelMsg::ExitStatus { .. }) | Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => {
+                                                            break;
+                                                        }
+                                                        _ => {}
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        
+                                        let _ = window_clone.emit("packet_capture_stopped", ());
+                                    });
+                                }
+                            }
+                            Err(e) => {
+                                let _ = window_clone.emit("packet_capture_error", format!("Failed to open channel: {}", e));
+                            }
+                        }
+
+                        Ok(())
+                    } else {
+                        Err(format!("Session not found: {}", session_id))
+                    };
+                    let _ = response_tx.send(result);
+                }
+
+                WorkerCommand::StopPacketCapture { session_id, response_tx } => {
+                    let result = if let Some(session) = sessions.get_mut(&session_id) {
+                        if let Some(tx) = session.packet_capture_channel.take() {
+                            let _ = tx.send(());
+                            Ok(())
+                        } else {
+                            Ok(()) // Already stopped
+                        }
+                    } else {
+                        Err(format!("Session not found: {}", session_id))
+                    };
+                    let _ = response_tx.send(result);
+                }
+                
+                WorkerCommand::ExecuteBatch { session_id, commands, response_tx } => {
+                    let result = if let Some(session) = sessions.get(&session_id) {
+                        // Execute all commands in parallel using separate SSH channels
+                        let mut futures = Vec::with_capacity(commands.len());
+                        for cmd in &commands {
+                            futures.push(execute_command_async(&session.handle, cmd));
+                        }
+                        let results = futures::future::join_all(futures).await;
+                        Ok(results)
+                    } else {
+                        Err(format!("Session not found: {}", session_id))
+                    };
+                    let _ = response_tx.send(result);
+                }
                 
                 WorkerCommand::Shutdown => {
                     // Disconnect all sessions before shutdown
@@ -947,9 +1100,9 @@ impl SSHManagerRussh {
             .map_err(|_| "Worker thread has shut down".to_string())?;
         
         let result = response_rx
-            .recv()
-            .map_err(|_| "Failed to receive response from worker".to_string())??;
-        
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .map_err(|_| "连接超时：服务器在 30 秒内未响应".to_string())??;
+
         // Set as current session
         self.set_current_session(Some(result.clone()));
         
@@ -975,10 +1128,30 @@ impl SSHManagerRussh {
             .map_err(|_| "Worker thread has shut down".to_string())?;
         
         response_rx
-            .recv()
-            .map_err(|_| "Failed to receive response from worker".to_string())?
+            .recv_timeout(std::time::Duration::from_secs(60))
+            .map_err(|_| "命令执行超时（60 秒）".to_string())?
     }
-    
+
+    /// Execute multiple commands in parallel on the current session
+    pub fn execute_batch_commands(&self, commands: &[String]) -> Result<Vec<Result<TerminalOutput, String>>, String> {
+        let session_id = self.get_current_session()?;
+        let (response_tx, response_rx) = mpsc::channel();
+        
+        self.worker_tx
+            .send(WorkerCommand::ExecuteBatch {
+                session_id,
+                commands: commands.to_vec(),
+                response_tx,
+            })
+            .map_err(|_| "Worker thread has shut down".to_string())?;
+        
+        // Longer timeout for batch: 60s base + 5s per command
+        let timeout_secs = 60 + (commands.len() as u64 * 5);
+        response_rx
+            .recv_timeout(std::time::Duration::from_secs(timeout_secs))
+            .map_err(|_| format!("批量命令执行超时（{} 秒）", timeout_secs))?
+    }
+
     // ================== SFTP Methods ==================
     
     /// List files in directory on current session
@@ -1000,8 +1173,8 @@ impl SSHManagerRussh {
             .map_err(|_| "Worker thread has shut down".to_string())?;
         
         response_rx
-            .recv()
-            .map_err(|_| "Failed to receive response from worker".to_string())?
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .map_err(|_| "操作超时（120 秒）".to_string())?
     }
     
     /// Read file contents on current session
@@ -1023,8 +1196,8 @@ impl SSHManagerRussh {
             .map_err(|_| "Worker thread has shut down".to_string())?;
         
         response_rx
-            .recv()
-            .map_err(|_| "Failed to receive response from worker".to_string())?
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .map_err(|_| "操作超时（120 秒）".to_string())?
     }
     
     /// Write file on current session
@@ -1047,8 +1220,8 @@ impl SSHManagerRussh {
             .map_err(|_| "Worker thread has shut down".to_string())?;
         
         response_rx
-            .recv()
-            .map_err(|_| "Failed to receive response from worker".to_string())?
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .map_err(|_| "操作超时（120 秒）".to_string())?
     }
     
     /// Delete file on current session
@@ -1070,8 +1243,8 @@ impl SSHManagerRussh {
             .map_err(|_| "Worker thread has shut down".to_string())?;
         
         response_rx
-            .recv()
-            .map_err(|_| "Failed to receive response from worker".to_string())?
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .map_err(|_| "操作超时（120 秒）".to_string())?
     }
     
     /// Create directory on current session
@@ -1093,8 +1266,8 @@ impl SSHManagerRussh {
             .map_err(|_| "Worker thread has shut down".to_string())?;
         
         response_rx
-            .recv()
-            .map_err(|_| "Failed to receive response from worker".to_string())?
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .map_err(|_| "操作超时（120 秒）".to_string())?
     }
     
     /// Rename file on current session
@@ -1117,8 +1290,8 @@ impl SSHManagerRussh {
             .map_err(|_| "Worker thread has shut down".to_string())?;
         
         response_rx
-            .recv()
-            .map_err(|_| "Failed to receive response from worker".to_string())?
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .map_err(|_| "操作超时（120 秒）".to_string())?
     }
     
     // ================== Session Management ==================
@@ -1144,8 +1317,8 @@ impl SSHManagerRussh {
             .map_err(|_| "Worker thread has shut down".to_string())?;
         
         let result = response_rx
-            .recv()
-            .map_err(|_| "Failed to receive response from worker".to_string())?;
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .map_err(|_| "操作超时（120 秒）".to_string())?;
         
         // If disconnecting current session, clear it
         if let Ok(guard) = self.current_session.lock() {
@@ -1171,8 +1344,8 @@ impl SSHManagerRussh {
         self.set_current_session(None);
         
         response_rx
-            .recv()
-            .map_err(|_| "Failed to receive response from worker".to_string())?
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .map_err(|_| "操作超时（120 秒）".to_string())?
     }
     
     /// Check if current session is connected (backward compatible)
@@ -1198,9 +1371,9 @@ impl SSHManagerRussh {
             return false;
         }
         
-        response_rx.recv().unwrap_or(false)
+        response_rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap_or(false)
     }
-    
+
     /// Get connection info for current session
     pub fn get_connection_info(&self) -> Option<ConnectionInfo> {
         let session_id = self.current_session.lock().ok()?.clone()?;
@@ -1221,9 +1394,9 @@ impl SSHManagerRussh {
             return None;
         }
         
-        response_rx.recv().ok().flatten()
+        response_rx.recv_timeout(std::time::Duration::from_secs(10)).ok().flatten()
     }
-    
+
     /// List all active sessions
     pub fn list_sessions(&self) -> Vec<String> {
         let (response_tx, response_rx) = mpsc::channel();
@@ -1237,7 +1410,7 @@ impl SSHManagerRussh {
             return Vec::new();
         }
         
-        response_rx.recv().unwrap_or_default()
+        response_rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap_or_default()
     }
     
     /// Get current session ID
@@ -1479,6 +1652,52 @@ impl SSHManagerRussh {
         let cmd = format!("chmod {:o} '{}'", mode, path.replace("'", "'\\''"));
         self.execute_command(&cmd)?;
         Ok(())
+    }
+
+    // ================== Packet Capture Methods ==================
+
+    pub fn start_packet_capture(
+        &self,
+        interface: &str,
+        filter: Option<String>,
+        count: Option<u32>,
+        window: tauri::Window,
+    ) -> Result<(), String> {
+        let session_id = self.get_current_session()?;
+        
+        let (response_tx, response_rx) = mpsc::channel();
+        
+        self.worker_tx
+            .send(WorkerCommand::StartPacketCapture {
+                session_id,
+                interface: interface.to_string(),
+                filter,
+                count,
+                window,
+                response_tx,
+            })
+            .map_err(|_| "Worker thread has shut down".to_string())?;
+        
+        response_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .map_err(|_| "Timeout waiting for packet capture start".to_string())?
+    }
+
+    pub fn stop_packet_capture(&self) -> Result<(), String> {
+        let session_id = self.get_current_session()?;
+        
+        let (response_tx, response_rx) = mpsc::channel();
+        
+        self.worker_tx
+            .send(WorkerCommand::StopPacketCapture {
+                session_id,
+                response_tx,
+            })
+            .map_err(|_| "Worker thread has shut down".to_string())?;
+        
+        response_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .map_err(|_| "Timeout waiting for packet capture stop".to_string())?
     }
     
     /// Get bash environment info
