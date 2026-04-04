@@ -50,6 +50,8 @@ pub struct SftpFileInfo {
     pub size: u64,
     pub modified: Option<String>,
     pub permissions: Option<String>,
+    pub owner: Option<String>,
+    pub group: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -453,6 +455,12 @@ async fn list_sftp_files_async(
         
         let permissions = attrs.permissions.map(|p| format!("{:o}", p));
         
+        // Extract owner/group: prefer string names (SFTP v4+), fall back to uid/gid
+        let owner = attrs.user.clone()
+            .or_else(|| attrs.uid.map(|u| u.to_string()));
+        let group = attrs.group.clone()
+            .or_else(|| attrs.gid.map(|g| g.to_string()));
+        
         files.push(SftpFileInfo {
             name: file_name,
             path: file_path,
@@ -461,6 +469,8 @@ async fn list_sftp_files_async(
             size,
             modified,
             permissions,
+            owner,
+            group,
         });
     }
     

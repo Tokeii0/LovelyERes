@@ -24,7 +24,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 60px;
+  min-height: 60px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .sftp-title {
@@ -38,7 +40,72 @@
 
 .sftp-actions {
   display: flex;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+/* Quick Jump Bar */
+.sftp-quick-jump-bar {
+  padding: 6px var(--spacing-lg);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+}
+
+.sftp-quick-jump-bar::-webkit-scrollbar {
+  height: 3px;
+}
+
+.sftp-quick-jump-bar::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 2px;
+}
+
+.quick-jump-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.quick-jump-buttons {
+  display: flex;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.quick-jump-btn {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.quick-jump-btn:hover {
+  background: var(--primary-color-alpha-10);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.quick-jump-btn.risk-highlight {
+  border-color: var(--error-color);
+  color: var(--error-color);
+  opacity: 0.8;
+}
+
+.quick-jump-btn.risk-highlight:hover {
+  background: rgba(239, 68, 68, 0.1);
+  opacity: 1;
 }
 
 /* Toolbar & Navigation */
@@ -67,11 +134,74 @@
   padding: 4px 12px;
   height: 32px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
 }
 
 .sftp-breadcrumb-bar:focus-within {
   border-color: var(--primary-color);
   box-shadow: 0 0 0 2px var(--primary-color-alpha-20);
+}
+
+/* Breadcrumb navigation */
+.sftp-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sftp-breadcrumb-bar.editing .sftp-breadcrumb {
+  display: none;
+}
+
+.sftp-breadcrumb-bar:not(.editing) .sftp-path-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+}
+
+.sftp-breadcrumb-bar.editing .sftp-path-input {
+  position: static;
+  opacity: 1;
+  pointer-events: auto;
+  width: 100%;
+}
+
+.breadcrumb-segment {
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: all 0.15s ease;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breadcrumb-segment:hover {
+  background: var(--primary-color-alpha-10);
+  color: var(--primary-color);
+}
+
+.breadcrumb-current {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.breadcrumb-root {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.breadcrumb-sep {
+  color: var(--text-secondary);
+  opacity: 0.4;
+  font-size: 12px;
+  margin: 0 1px;
 }
 
 .sftp-path-input {
@@ -110,6 +240,30 @@
   border-bottom: 1px solid var(--border-color);
   z-index: 10;
   backdrop-filter: blur(8px);
+  user-select: none;
+}
+
+.sftp-th-sortable {
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.sftp-th-sortable:hover {
+  color: var(--primary-color);
+}
+
+.sftp-th-sortable.sort-active {
+  color: var(--primary-color);
+}
+
+.sort-indicator {
+  font-size: 10px;
+  margin-left: 4px;
+  opacity: 0.6;
+}
+
+.sort-active .sort-indicator {
+  opacity: 1;
 }
 
 .sftp-table td {
@@ -136,6 +290,78 @@
   background-color: var(--primary-color-alpha-10);
 }
 
+/* Risk Highlighting */
+.sftp-file-row.risk-critical {
+  background-color: rgba(239, 68, 68, 0.08);
+}
+
+.sftp-file-row.risk-critical:hover {
+  background-color: rgba(239, 68, 68, 0.15);
+}
+
+.sftp-file-row.risk-critical .file-name {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.sftp-file-row.risk-warning {
+  background-color: rgba(245, 158, 11, 0.08);
+}
+
+.sftp-file-row.risk-warning:hover {
+  background-color: rgba(245, 158, 11, 0.15);
+}
+
+.sftp-file-row.risk-warning .file-name {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.sftp-file-row.risk-info {
+  opacity: 0.75;
+}
+
+.sftp-file-row.risk-info:hover {
+  opacity: 1;
+}
+
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.risk-badge-critical {
+  color: #ef4444;
+}
+
+.risk-badge-warning {
+  color: #f59e0b;
+}
+
+.risk-badge-info {
+  color: var(--text-secondary);
+  font-size: 8px;
+}
+
+/* Permissions & Owner styling */
+.perms-cell {
+  color: var(--text-secondary);
+}
+
+.owner-cell {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.owner-cell.owner-root {
+  color: #ef4444;
+  font-weight: 600;
+}
+
 .file-icon-cell {
   display: flex;
   align-items: center;
@@ -156,7 +382,7 @@
 
 /* Status Bar */
 .sftp-status-bar {
-  height: 32px;
+  min-height: 32px;
   background: var(--bg-tertiary);
   border-top: 1px solid var(--border-color);
   padding: 0 var(--spacing-lg);
@@ -165,6 +391,13 @@
   justify-content: space-between;
   font-size: 11px;
   color: var(--text-secondary);
+}
+
+.sftp-status-left,
+.sftp-status-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .status-item {

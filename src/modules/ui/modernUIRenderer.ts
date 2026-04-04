@@ -791,12 +791,41 @@ export class ModernUIRenderer {
             </button>
             <button id="sftp-create-folder-btn" class="modern-btn secondary" onclick="window.sftpOpenCreateFolder && window.sftpOpenCreateFolder()" title="新建文件夹">
               ${FolderPlus({ theme: 'outline', size: '16', fill: 'currentColor' })}
-              <span>新建</span>
+              <span>新建文件夹</span>
+            </button>
+            <button class="modern-btn secondary" onclick="window.sftpCreateFile && window.sftpCreateFile()" title="新建文件">
+              ${FileText({ theme: 'outline', size: '16', fill: 'currentColor' })}
+              <span>新建文件</span>
+            </button>
+            <button class="modern-btn secondary" onclick="window.sftpIntegritySnapshot && window.sftpIntegritySnapshot()" title="生成当前目录文件哈希清单">
+              ${Shield({ theme: 'outline', size: '16', fill: 'currentColor' })}
+              <span>完整性快照</span>
             </button>
             <button id="sftp-upload-btn" class="modern-btn primary" onclick="window.sftpOpenUpload && window.sftpOpenUpload()" title="上传文件">
               ${Upload({ theme: 'outline', size: '16', fill: 'currentColor' })}
               <span>上传</span>
             </button>
+          </div>
+        </div>
+
+        <!-- Quick Jump Bar for Emergency Response -->
+        <div class="sftp-quick-jump-bar">
+          <span class="quick-jump-label">快速跳转</span>
+          <div class="quick-jump-buttons">
+            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/')" title="根目录">/</button>
+            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/tmp')" title="临时文件">/tmp</button>
+            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/var/log')" title="系统日志">/var/log</button>
+            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/etc')" title="配置文件">/etc</button>
+            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/etc/cron.d')" title="计划任务">/etc/cron.d</button>
+            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/etc/crontab')" title="全局Crontab" style="display:none;">/etc/crontab</button>
+            <button class="quick-jump-btn risk-highlight" onclick="sftpManager.navigateToPath('/root/.ssh')" title="Root SSH密钥">/root/.ssh</button>
+            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/home')" title="用户主目录">/home</button>
+            <button class="quick-jump-btn risk-highlight" onclick="sftpManager.navigateToPath('/var/spool/cron')" title="用户计划任务">/var/spool/cron</button>
+            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/etc/init.d')" title="启动脚本">/etc/init.d</button>
+            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/var/www')" title="Web根目录">/var/www</button>
+            <button class="quick-jump-btn risk-highlight" onclick="sftpManager.navigateToPath('/dev/shm')" title="内存文件系统(常被利用)">/dev/shm</button>
+            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/opt')" title="第三方软件">/opt</button>
+            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/usr/local/bin')" title="本地二进制">/usr/local/bin</button>
           </div>
         </div>
 
@@ -812,13 +841,17 @@ export class ModernUIRenderer {
           </div>
           
           <div class="sftp-breadcrumb-bar">
-            <span style="color: var(--text-secondary); margin-right: 8px;">/</span>
+            <div id="sftp-breadcrumb" class="sftp-breadcrumb">
+              <span class="breadcrumb-segment breadcrumb-root" onclick="sftpManager.navigateToPath('/')" title="根目录">/</span>
+            </div>
             <input
               type="text"
               id="sftp-path-input"
               class="sftp-path-input"
               placeholder="输入路径..."
               onkeydown="if(event.key === 'Enter') sftpManager.navigateToPath(this.value)"
+              onfocus="this.parentElement.classList.add('editing')"
+              onblur="this.parentElement.classList.remove('editing')"
             />
           </div>
         </div>
@@ -828,22 +861,23 @@ export class ModernUIRenderer {
           <table class="sftp-table">
             <thead>
               <tr>
-                <th style="width: 50%; cursor: pointer;" onclick="window.setSftpSortMode(sftpManager.getSortMode() === 'name-asc' ? 'name-desc' : 'name-asc')">
-                  名称
+                <th class="sftp-th-sortable" style="width: 38%;" onclick="window.setSftpSortMode(sftpManager.getSortMode() === 'name-asc' ? 'name-desc' : 'name-asc')" id="sftp-th-name">
+                  名称 <span class="sort-indicator" id="sort-ind-name">▲</span>
                 </th>
-                <th style="width: 15%; cursor: pointer;" onclick="window.setSftpSortMode(sftpManager.getSortMode() === 'size-asc' ? 'size-desc' : 'size-asc')">
-                  大小
+                <th class="sftp-th-sortable" style="width: 10%;" onclick="window.setSftpSortMode(sftpManager.getSortMode() === 'size-asc' ? 'size-desc' : 'size-asc')" id="sftp-th-size">
+                  大小 <span class="sort-indicator" id="sort-ind-size"></span>
                 </th>
-                <th style="width: 15%;">权限</th>
-                <th style="width: 20%; cursor: pointer;" onclick="window.setSftpSortMode(sftpManager.getSortMode() === 'modified-asc' ? 'modified-desc' : 'modified-asc')">
-                  修改时间
+                <th style="width: 12%;">权限</th>
+                <th style="width: 12%;">所有者</th>
+                <th class="sftp-th-sortable" style="width: 16%;" onclick="window.setSftpSortMode(sftpManager.getSortMode() === 'modified-asc' ? 'modified-desc' : 'modified-asc')" id="sftp-th-modified">
+                  修改时间 <span class="sort-indicator" id="sort-ind-modified"></span>
                 </th>
               </tr>
             </thead>
             <tbody id="sftp-file-list">
               <!-- File list content will be injected here -->
               <tr>
-                <td colspan="4" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                <td colspan="5" style="text-align: center; padding: 40px; color: var(--text-secondary);">
                   <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
                     <div class="loading-spinner" style="width: 24px; height: 24px;"></div>
                     <span>正在加载文件列表...</span>
@@ -856,11 +890,21 @@ export class ModernUIRenderer {
 
         <!-- Status Bar -->
         <div class="sftp-status-bar">
-          <div class="status-item" id="sftp-status-count">
-            <span>0 项</span>
+          <div class="sftp-status-left">
+            <div class="status-item" id="sftp-status-count">
+              <span>0 项</span>
+            </div>
+            <div class="status-item" id="sftp-status-risk" style="display: none;">
+              <span style="color: var(--error-color);">⚠ <span id="sftp-risk-count">0</span> 个可疑项</span>
+            </div>
           </div>
-          <div class="status-item">
-            ${this.state.isConnected ? '<span style="color: var(--success-color);">● 已连接</span>' : '<span style="color: var(--error-color);">● 未连接</span>'}
+          <div class="sftp-status-right">
+            <div class="status-item" id="sftp-status-path" style="opacity: 0.7;">
+              <span>/</span>
+            </div>
+            <div class="status-item">
+              ${this.state.isConnected ? '<span style="color: var(--success-color);">● 已连接</span>' : '<span style="color: var(--error-color);">● 未连接</span>'}
+            </div>
           </div>
         </div>
       </div>
