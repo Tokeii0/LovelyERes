@@ -218,8 +218,9 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
       app.render();
 
       if (pageId === 'docker') {
-        dockerPageManager.initialize();
-        dockerPageManager.refresh(true);
+        // initialize is already called inside renderDockerPage()
+        // Use setTimeout to ensure DOM is mounted before refresh
+        setTimeout(() => dockerPageManager.refresh(true), 50);
       } else if (pageId === 'emergency-commands') {
         emergencyPageManager.initialize();
       } else if (pageId === 'log-analysis') {

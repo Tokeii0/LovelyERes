@@ -282,7 +282,7 @@ export class KubernetesRenderer {
                 <input type="text" class="k8s-search-input" placeholder="搜索资源..." value="${this.searchTerm}" data-k8s-action="search" />
                 <button class="modern-btn ${this.emergencyMode ? 'danger' : 'secondary'}" data-k8s-action="toggle-emergency" style="display:flex;align-items:center;gap:6px;">
                     ${icon(Fire, '16')}
-                    ${this.emergencyMode ? '退出应急' : '应急���式'}
+                    ${this.emergencyMode ? '退出应急' : '应急模式'}
                 </button>
                 <button class="modern-btn secondary" data-k8s-action="refresh" style="display:flex;align-items:center;gap:6px;">
                     ${icon(Refresh, '16')}
@@ -316,8 +316,8 @@ export class KubernetesRenderer {
     private renderTabs(): string {
         const tabs: { id: K8sMainTab; label: string; iconFn: any; badge?: number }[] = [
             { id: 'overview', label: '概览', iconFn: LinkCloud },
-            { id: 'workloads', label: '工作���载', iconFn: Cube },
-            { id: 'networking', label: '网��', iconFn: NetworkTree },
+            { id: 'workloads', label: '工作负载', iconFn: Cube },
+            { id: 'networking', label: '网络', iconFn: NetworkTree },
             { id: 'storage', label: '存储', iconFn: Config },
             { id: 'security', label: '安全', iconFn: Shield },
             { id: 'events', label: '事件与日志', iconFn: Log },
@@ -623,7 +623,7 @@ export class KubernetesRenderer {
             <tbody>${items.map(c => `
                 <tr><td class="cell-name">${c.name}</td><td><span class="k8s-chip">${c.namespace}</span></td>
                 <td class="cell-mono">${c.schedule}</td>
-                <td>${c.suspend ? '<span class="k8s-status-badge k8s-status-pending">暂停</span>' : '<span class="k8s-status-badge k8s-status-running">活��</span>'}</td>
+                <td>${c.suspend ? '<span class="k8s-status-badge k8s-status-pending">暂停</span>' : '<span class="k8s-status-badge k8s-status-running">活跃</span>'}</td>
                 <td>${c.activeJobs}</td><td>${c.lastScheduleTime ? this.timeAgo(c.lastScheduleTime) : '-'}</td>
                 <td>${this.calculateAge(c.creationTimestamp)}</td>
                 </tr>`).join('')}</tbody></table></div>`;
@@ -654,7 +654,7 @@ export class KubernetesRenderer {
         const items = this.filterBySearch(this.data.services, s => `${s.name} ${s.namespace} ${s.type} ${s.clusterIP}`);
         if (items.length === 0) return this.renderEmptyInline('暂无 Services');
         return `<div style="overflow-x:auto;"><table class="k8s-table">
-            <thead><tr><th>名称</th><th>命名空间</th><th>类型</th><th>Cluster IP</th><th>端口</th><th>Age</th><th style="text-align:right;">操��</th></tr></thead>
+            <thead><tr><th>名称</th><th>命名空间</th><th>类型</th><th>Cluster IP</th><th>端口</th><th>Age</th><th style="text-align:right;">操作</th></tr></thead>
             <tbody>${items.map(s => `
                 <tr><td class="cell-name">${s.name}</td><td><span class="k8s-chip">${s.namespace}</span></td>
                 <td><span class="k8s-chip type">${s.type}</span></td>
@@ -683,7 +683,7 @@ export class KubernetesRenderer {
         const items = this.filterBySearch(this.data.networkPolicies, n => `${n.name} ${n.namespace}`);
         if (items.length === 0) return this.renderEmptyInline('暂无 NetworkPolicies');
         return `<div style="overflow-x:auto;"><table class="k8s-table">
-            <thead><tr><th>名��</th><th>命名空间</th><th>Pod 选择器</th><th>类型</th><th>Ingress 规则</th><th>Egress 规则</th><th>来源</th></tr></thead>
+            <thead><tr><th>名称</th><th>命名空间</th><th>Pod 选择器</th><th>类型</th><th>Ingress 规则</th><th>Egress 规则</th><th>来源</th></tr></thead>
             <tbody>${items.map(n => `
                 <tr>
                 <td class="cell-name">${n.name} ${n.isIsolationPolicy ? '<span class="k8s-severity-badge k8s-severity-critical" style="margin-left:4px;">应急隔离</span>' : ''}</td>
@@ -722,7 +722,7 @@ export class KubernetesRenderer {
         const items = this.data.pvcs;
         if (items.length === 0) return this.renderEmptyInline('暂无 PVC');
         return `<div style="overflow-x:auto;"><table class="k8s-table">
-            <thead><tr><th>名称</th><th>���名空间</th><th>状态</th><th>Volume</th><th>容量</th><th>访问模式</th><th>Storage Class</th><th>Age</th></tr></thead>
+            <thead><tr><th>名称</th><th>命名空间</th><th>状态</th><th>Volume</th><th>容量</th><th>访问模式</th><th>Storage Class</th><th>Age</th></tr></thead>
             <tbody>${items.map(p => `
                 <tr><td class="cell-name">${p.name}</td><td><span class="k8s-chip">${p.namespace}</span></td>
                 <td><span class="k8s-status-badge k8s-status-${p.status.toLowerCase()}">${p.status}</span></td>
@@ -761,7 +761,7 @@ export class KubernetesRenderer {
         const items = this.data.secrets;
         if (items.length === 0) return this.renderEmptyInline('暂无 Secrets');
         return `<div style="overflow-x:auto;"><table class="k8s-table">
-            <thead><tr><th>名称</th><th>��名空间</th><th>类型</th><th>数据键数</th><th>Age</th></tr></thead>
+            <thead><tr><th>名称</th><th>命名空间</th><th>类型</th><th>数据键数</th><th>Age</th></tr></thead>
             <tbody>${items.map(s => `
                 <tr><td class="cell-name">${s.name}</td><td><span class="k8s-chip">${s.namespace}</span></td>
                 <td class="cell-mono cell-secondary">${s.type}</td><td>${s.dataCount}</td>
@@ -974,7 +974,7 @@ export class KubernetesRenderer {
             <div class="k8s-emergency-actions">
                 <button class="k8s-emergency-action-btn danger" data-k8s-action="emergency-isolate">
                     <div class="k8s-emergency-action-icon" style="background:rgba(220,38,38,0.1);color:#dc2626;">${icon(Lock, '24')}</div>
-                    <div class="k8s-emergency-action-title">��离 Pod</div>
+                    <div class="k8s-emergency-action-title">隔离 Pod</div>
                     <div class="k8s-emergency-action-desc">应用 deny-all NetworkPolicy</div>
                 </button>
                 <button class="k8s-emergency-action-btn danger" data-k8s-action="emergency-scale-zero">
@@ -984,7 +984,7 @@ export class KubernetesRenderer {
                 </button>
                 <button class="k8s-emergency-action-btn" data-k8s-action="emergency-cordon">
                     <div class="k8s-emergency-action-icon" style="background:rgba(245,158,11,0.1);color:#f59e0b;">${icon(Shield, '24')}</div>
-                    <div class="k8s-emergency-action-title">封锁节��</div>
+                    <div class="k8s-emergency-action-title">封锁节点</div>
                     <div class="k8s-emergency-action-desc">阻止新 Pod 调度到节点</div>
                 </button>
                 <button class="k8s-emergency-action-btn" data-k8s-action="emergency-drain">
@@ -1000,7 +1000,7 @@ export class KubernetesRenderer {
                 <button class="k8s-emergency-action-btn" data-k8s-action="run-audit">
                     <div class="k8s-emergency-action-icon" style="background:rgba(16,185,129,0.1);color:#10b981;">${icon(CheckOne, '24')}</div>
                     <div class="k8s-emergency-action-title">安全审计</div>
-                    <div class="k8s-emergency-action-desc">��键扫描集群安全风险</div>
+                    <div class="k8s-emergency-action-desc">一键扫描集群安全风险</div>
                 </button>
             </div>
         </div>`;
@@ -1100,7 +1100,17 @@ export class KubernetesRenderer {
     }
 
     private renderLoading(): string {
-        return `<div class="k8s-loading"><div class="k8s-loading-spinner"></div><span class="k8s-loading-text">加载中...</span></div>`;
+        return `<div style="display:flex;justify-content:center;align-items:center;height:200px;gap:10px;">
+            <svg width="28" height="28" viewBox="0 0 36 36" style="display:block;">
+                <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(148,163,184,0.2)" stroke-width="3"/>
+                <circle cx="18" cy="18" r="15" fill="none" stroke="#3b82f6" stroke-width="3"
+                    stroke-dasharray="28 66" stroke-linecap="round">
+                    <animateTransform attributeName="transform" type="rotate"
+                        from="0 18 18" to="360 18 18" dur="0.9s" repeatCount="indefinite"/>
+                </circle>
+            </svg>
+            <span style="font-size:13px;color:var(--text-secondary);">加载中...</span>
+        </div>`;
     }
 
     private renderEmptyInline(msg: string): string {

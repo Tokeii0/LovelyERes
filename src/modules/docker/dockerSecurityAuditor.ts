@@ -27,7 +27,6 @@ export class DockerSecurityAuditor {
 
         const containers = await this.manager.listContainers();
 
-        // Run all checks
         this.auditPrivileged(containers, findings, nextId);
         this.auditDangerousMounts(containers, findings, nextId);
         this.auditNetworkMode(containers, findings, nextId);
@@ -35,7 +34,6 @@ export class DockerSecurityAuditor {
         this.auditResourceLimits(containers, findings, nextId);
         this.auditHealthCheck(containers, findings, nextId);
 
-        // Sort by severity
         const order: Record<DockerSecuritySeverity, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
         findings.sort((a, b) => order[a.severity] - order[b.severity]);
 
@@ -58,8 +56,8 @@ export class DockerSecurityAuditor {
                 findings.push({
                     id: nextId(), severity: 'critical', category: 'privileged',
                     container: c.name,
-                    description: `Container "${c.name}" runs in privileged mode with full host access`,
-                    remediation: 'Remove --privileged flag. Use specific --cap-add for required capabilities instead.'
+                    description: `容器 "${c.name}" 以特权模式运行，拥有宿主机完全访问权限`,
+                    remediation: '移除 --privileged 标志。使用 --cap-add 添加所需的特定 Linux capabilities 代替。'
                 });
             }
         }
@@ -76,10 +74,10 @@ export class DockerSecurityAuditor {
                         severity: isDockerSocket ? 'critical' : 'high',
                         category: 'mount',
                         container: c.name,
-                        description: `Container "${c.name}" mounts dangerous host path: ${mount.source} → ${mount.destination}${isDockerSocket ? ' (Docker socket exposure!)' : ''}`,
+                        description: `容器 "${c.name}" 挂载了危险的宿主机路径: ${mount.source} -> ${mount.destination}${isDockerSocket ? ' (Docker Socket 暴露!)' : ''}`,
                         remediation: isDockerSocket
-                            ? 'Never mount Docker socket. Use Docker API over TLS or a Docker proxy with restricted access.'
-                            : 'Avoid mounting sensitive host paths. Use named volumes or tmpfs instead.'
+                            ? '绝不应挂载 Docker Socket。请使用基于 TLS 的 Docker API 或权限受限的 Docker 代理。'
+                            : '避免挂载敏感的宿主机路径。使用命名卷 (named volume) 或 tmpfs 替代。'
                     });
                 }
             }
@@ -92,18 +90,17 @@ export class DockerSecurityAuditor {
                 findings.push({
                     id: nextId(), severity: 'high', category: 'network',
                     container: c.name,
-                    description: `Container "${c.name}" uses host network mode - shares host network stack`,
-                    remediation: 'Use bridge or custom network. Only use host mode when absolutely necessary for performance.'
+                    description: `容器 "${c.name}" 使用 host 网络模式，与宿主机共享网络栈`,
+                    remediation: '使用 bridge 或自定义网络。仅在对性能有绝对需求时才使用 host 模式。'
                 });
             }
-            // Exposed ports on 0.0.0.0
             for (const port of c.ports) {
                 if (port.publicPort && (!port.ip || port.ip === '0.0.0.0')) {
                     findings.push({
                         id: nextId(), severity: 'medium', category: 'network',
                         container: c.name,
-                        description: `Container "${c.name}" exposes port ${port.publicPort}→${port.privatePort} on all interfaces (0.0.0.0)`,
-                        remediation: 'Bind ports to specific interfaces (e.g., 127.0.0.1:8080:80) instead of all interfaces.'
+                        description: `容器 "${c.name}" 在所有网络接口 (0.0.0.0) 上暴露了端口 ${port.publicPort}->${port.privatePort}`,
+                        remediation: '将端口绑定到特定接口 (例如 127.0.0.1:8080:80) 而非所有接口。'
                     });
                 }
             }
@@ -116,8 +113,8 @@ export class DockerSecurityAuditor {
                 findings.push({
                     id: nextId(), severity: 'medium', category: 'image',
                     container: c.name,
-                    description: `Container "${c.name}" uses :latest or untagged image: ${c.image}`,
-                    remediation: 'Pin images to specific versions (e.g., nginx:1.25.3) for reproducibility and security.'
+                    description: `容器 "${c.name}" 使用了 :latest 或未指定标签的镜像: ${c.image}`,
+                    remediation: '将镜像固定到具体版本 (例如 nginx:1.25.3) 以确保可复现性和安全性。'
                 });
             }
         }
@@ -126,13 +123,12 @@ export class DockerSecurityAuditor {
     private auditResourceLimits(containers: DockerContainerSummary[], findings: DockerSecurityFinding[], nextId: () => string): void {
         for (const c of containers) {
             if (c.state !== 'running') continue;
-            // Check if memory is unlimited (memoryUsage will show but no limit indicator)
             if (c.memoryUsage && !c.memoryPercent) {
                 findings.push({
                     id: nextId(), severity: 'low', category: 'resourceLimits',
                     container: c.name,
-                    description: `Container "${c.name}" may not have memory limits configured`,
-                    remediation: 'Set memory limits with --memory flag to prevent resource exhaustion (e.g., --memory=512m).'
+                    description: `容器 "${c.name}" 可能未配置内存限制`,
+                    remediation: '使用 --memory 标志设置内存限制以防止资源耗尽 (例如 --memory=512m)。'
                 });
             }
         }
@@ -145,8 +141,8 @@ export class DockerSecurityAuditor {
                 findings.push({
                     id: nextId(), severity: 'high', category: 'capabilities',
                     container: c.name,
-                    description: `Container "${c.name}" health check reports unhealthy status`,
-                    remediation: 'Investigate container health issues. Check logs and fix the underlying health check failures.'
+                    description: `容器 "${c.name}" 健康检查报告不健康状态`,
+                    remediation: '排查容器健康问题。检查日志并修复导致健康检查失败的根本原因。'
                 });
             }
         }

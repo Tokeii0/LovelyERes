@@ -226,8 +226,33 @@
 .docker-disk-item-sub { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
 
 /* Loading */
+/* Loading */
 .docker-loading-spinner {
-    display: flex; justify-content: center; align-items: center; height: 200px; gap: 10px;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    height: 200px; gap: 16px;
+}
+.docker-loading-ring {
+    width: 36px;
+    height: 36px;
+    border-width: 3px;
+    border-style: solid;
+    border-color: rgba(148,163,184,0.2) rgba(148,163,184,0.2) rgba(148,163,184,0.2) #3b82f6;
+    border-radius: 50%;
+    display: inline-block;
+    box-sizing: border-box;
+    -webkit-animation: dockerLoadingSpin 0.9s linear infinite;
+    animation: dockerLoadingSpin 0.9s linear infinite;
+}
+.docker-loading-text {
+    font-size: 13px; color: var(--text-secondary);
+}
+@-webkit-keyframes dockerLoadingSpin {
+    0% { -webkit-transform: rotate(0deg); }
+    100% { -webkit-transform: rotate(360deg); }
+}
+@keyframes dockerLoadingSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 /* Forms */

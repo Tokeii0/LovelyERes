@@ -100,7 +100,11 @@ export class DockerManager {
   // ============================================================
 
   async listImages(): Promise<DockerImage[]> {
-    const result = await this.execSSH('docker images --format \'{{json .}}\'');
+    // Try --format json first (Docker 23.0+), fallback to Go template
+    let result = await this.execSSH('docker images --format json');
+    if (!result || result.exit_code !== 0 || !result.output.trim()) {
+      result = await this.execSSH('docker images --format "{{json .}}"');
+    }
     if (!result || result.exit_code !== 0) return [];
 
     return result.output.trim().split('\n').filter(Boolean).map(line => {
@@ -140,7 +144,10 @@ export class DockerManager {
   // ============================================================
 
   async listNetworks(): Promise<DockerNetwork[]> {
-    const result = await this.execSSH('docker network ls --format \'{{json .}}\'');
+    let result = await this.execSSH('docker network ls --format json');
+    if (!result || result.exit_code !== 0 || !result.output.trim()) {
+      result = await this.execSSH('docker network ls --format "{{json .}}"');
+    }
     if (!result || result.exit_code !== 0) return [];
 
     return result.output.trim().split('\n').filter(Boolean).map(line => {
@@ -185,7 +192,10 @@ export class DockerManager {
   // ============================================================
 
   async listVolumes(): Promise<DockerVolume[]> {
-    const result = await this.execSSH('docker volume ls --format \'{{json .}}\'');
+    let result = await this.execSSH('docker volume ls --format json');
+    if (!result || result.exit_code !== 0 || !result.output.trim()) {
+      result = await this.execSSH('docker volume ls --format "{{json .}}"');
+    }
     if (!result || result.exit_code !== 0) return [];
 
     return result.output.trim().split('\n').filter(Boolean).map(line => {
@@ -254,7 +264,10 @@ export class DockerManager {
   // ============================================================
 
   async getSystemInfo(): Promise<DockerSystemInfo | null> {
-    const result = await this.execSSH('docker info --format \'{{json .}}\'');
+    let result = await this.execSSH('docker info --format json');
+    if (!result || result.exit_code !== 0 || !result.output.trim()) {
+      result = await this.execSSH('docker info --format "{{json .}}"');
+    }
     if (!result || result.exit_code !== 0) return null;
 
     try {
@@ -277,7 +290,10 @@ export class DockerManager {
   }
 
   async getDiskUsage(): Promise<DockerDiskUsage | null> {
-    const result = await this.execSSH('docker system df --format \'{{json .}}\'');
+    let result = await this.execSSH('docker system df --format json');
+    if (!result || result.exit_code !== 0 || !result.output.trim()) {
+      result = await this.execSSH('docker system df --format "{{json .}}"');
+    }
     if (!result || result.exit_code !== 0) return null;
 
     try {
@@ -368,7 +384,7 @@ export class DockerManager {
 
   async disconnectAllNetworks(containerRef: string): Promise<{ success: boolean; output: string }> {
     const networks = await this.execSSH(
-      `docker inspect ${containerRef} --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}'`
+      `docker inspect ${containerRef} --format "{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}"`
     );
     if (!networks || !networks.output.trim()) {
       return { success: false, output: 'No networks found' };

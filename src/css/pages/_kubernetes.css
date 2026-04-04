@@ -428,11 +428,24 @@
     height: 200px; gap: 10px;
 }
 .k8s-loading-spinner {
-    border: 3px solid var(--bg-tertiary);
-    border-top: 3px solid var(--primary-color);
+    width: 28px;
+    height: 28px;
+    border-width: 3px;
+    border-style: solid;
+    border-color: rgba(148,163,184,0.2) rgba(148,163,184,0.2) rgba(148,163,184,0.2) #3b82f6;
     border-radius: 50%;
-    width: 28px; height: 28px;
-    animation: spin 1s linear infinite;
+    display: inline-block;
+    box-sizing: border-box;
+    -webkit-animation: k8sLoadingSpin 0.9s linear infinite;
+    animation: k8sLoadingSpin 0.9s linear infinite;
+}
+@-webkit-keyframes k8sLoadingSpin {
+    0% { -webkit-transform: rotate(0deg); }
+    100% { -webkit-transform: rotate(360deg); }
+}
+@keyframes k8sLoadingSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 .k8s-loading-text { font-size: 13px; color: var(--text-secondary); }
 
@@ -480,7 +493,7 @@
     0%, 100% { border-color: rgba(220, 38, 38, 0.3); }
     50% { border-color: rgba(220, 38, 38, 0.6); }
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+/* spin keyframe is defined globally in _animations.css */
 
 /* Responsive */
 @media (max-width: 768px) {

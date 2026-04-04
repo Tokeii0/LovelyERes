@@ -6,6 +6,7 @@
 import type { StateManager } from '../core/stateManager';
 import type { AppState } from '../core/app';
 import { KubernetesRenderer } from './kubernetesRenderer';
+import { dockerPageManager } from '../docker/dockerPageManager';
 import { SftpContextMenuRenderer } from './sftpContextMenu';
 import { LogAnalysisRenderer } from './logAnalysisRenderer';
 import { DatabaseRenderer } from './databaseRenderer';
@@ -909,30 +910,9 @@ export class ModernUIRenderer {
    * 渲染Docker页面
    */
   private renderDockerPage(): string {
-    return `
-      <div class="docker-page">
-        <div class="docker-toolbar">
-          <div class="toolbar-left">
-            <button class="modern-btn primary" data-docker-action="refresh">刷新</button>
-            <button class="modern-btn secondary" data-docker-action="toggle-auto-refresh">自动刷新·关</button>
-          </div>
-          <div class="toolbar-right">
-            <input
-              type="text"
-              id="docker-search"
-              class="docker-search-input"
-              placeholder="搜索容器名称 / 镜像 / 状态"
-              autocomplete="off"
-            />
-          </div>
-        </div>
-        <div id="docker-stats" class="docker-stats"></div>
-        <div id="docker-container-grid" class="docker-grid docker-grid-loading">
-          <div class="docker-loading">加载容器信息中...</div>
-        </div>
-        <div id="docker-empty-state" class="docker-empty-state"></div>
-      </div>
-    `;
+    // dockerPageManager is a singleton import, always available
+    dockerPageManager.initialize();
+    return dockerPageManager.renderPage();
   }
 
   /**
