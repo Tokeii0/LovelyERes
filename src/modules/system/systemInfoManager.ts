@@ -191,9 +191,9 @@ export class SystemInfoManager {
     this.isUpdating = true;
 
     try {
-      console.log('📊 正在获取系统信息（包括详细信息）...');
+      console.log('📊 正在获取基础系统信息...');
 
-      // 并行执行所有命令获取系统信息和详细信息
+      // 仅获取基础系统信息（14条快速命令），详细信息将渐进式加载
       const [
         hostname,
         uptime,
@@ -208,33 +208,13 @@ export class SystemInfoManager {
         networkInterfaces,
         dnsInfo,
         gatewayInfo,
-        // 详细信息命令
-        processesData,
-        networkDetailsData,
-        servicesData,
-        usersData,
-        autostartData,
-        cronJobsData,
-        firewallRulesData,
-        networkTraffic,
-        // 新增应急响应增强数据
-        sshKeysData,
-        loginHistoryData,
-        suidFilesData,
-        envVariablesData,
-        shellConfigsData,
-        installedPackagesData,
-        sudoersConfigData,
-        systemdTimersData,
-        kernelModulesData,
-        recentFilesData
+        networkTraffic
       ] = (await Promise.allSettled([
-        // 基础系统信息
         this.executeCommand('hostname'),
         this.executeCommand('uptime'),
         this.executeCommand('cat /proc/loadavg'),
         this.executeCommand('cat /proc/meminfo'),
-        this.executeCommand('df -hP'), // 获取所有分区信息
+        this.executeCommand('df -hP'),
         this.executeCommand('cat /proc/cpuinfo | grep "model name" | head -1 && nproc'),
         this.executeCommand('top -bn2 -d0.5 | grep "Cpu(s)" | tail -1 | awk \'{print 100-$8"%"}\' || echo "0%"'),
         this.getNetworkConnectionCount(),
@@ -243,26 +223,7 @@ export class SystemInfoManager {
         this.executeCommand('ip addr show | grep -E "inet |UP|DOWN"'),
         this.executeCommand('cat /etc/resolv.conf | grep nameserver'),
         this.executeCommand('ip route | grep default'),
-        // 详细信息 - 添加STAT列，使用完整命令
-        this.executeCommand('ps aux --no-headers | awk \'BEGIN{OFS=","} {cmd=""; for(i=11;i<=NF;i++) cmd=cmd $i" "; print $2,$1,$8,$3,$4,cmd}\''),
-        this.getNetworkConnectionDetails(),
-        this.executeCommand('systemctl list-units --type=service --no-pager --no-legend | awk \'BEGIN{OFS=","} {print $1,$3,$4,$5" "$6" "$7" "$8" "$9}\''),
-        this.executeCommand('getent passwd | awk -F: \'BEGIN{OFS=","} {print $1,$3,$4,$6,$7}\''),
-        this.executeCommand('systemctl list-unit-files --type=service --state=enabled --no-pager --no-legend | awk \'BEGIN{OFS=","} {print $1,$2,"enabled","systemd"}\''),
-        this.getCronJobs(),
-        this.getFirewallRules(),
-        this.getNetworkTraffic(),
-        // 新增应急响应增强命令
-        this.getSSHKeys(),
-        this.getLoginHistory(),
-        this.getSUIDFiles(),
-        this.getEnvVariables(),
-        this.getShellConfigs(),
-        this.getInstalledPackages(),
-        this.getSudoersConfig(),
-        this.getSystemdTimers(),
-        this.getKernelModules(),
-        this.getRecentFiles()
+        this.getNetworkTraffic()
       ])).map(r => r.status === 'fulfilled' ? r.value : '') as any[];
 
       // 解析基础系统信息
@@ -283,33 +244,13 @@ export class SystemInfoManager {
         networkTraffic
       });
 
-      // 解析详细信息并缓存
-      this.detailedInfo = {
-        processes: this.parseProcesses(processesData as string),
-        networkDetails: this.parseNetworkDetails(networkDetailsData as string),
-        services: this.parseServices(servicesData as string),
-        users: this.parseUsers(usersData as string),
-        autostart: this.parseAutostart(autostartData as string),
-        cronJobs: this.parseCronJobs(cronJobsData as string),
-        firewallRules: this.parseFirewallRules(firewallRulesData as string),
-        sshKeys: this.parseSSHKeys(sshKeysData as string),
-        loginHistory: this.parseLoginHistory(loginHistoryData as string),
-        suidFiles: this.parseSUIDFiles(suidFilesData as string),
-        envVariables: this.parseEnvVariables(envVariablesData as string),
-        shellConfigs: this.parseShellConfigs(shellConfigsData as string),
-        installedPackages: this.parseInstalledPackages(installedPackagesData as string),
-        sudoersConfig: this.parseSudoersConfig(sudoersConfigData as string),
-        systemdTimers: this.parseSystemdTimers(systemdTimersData as string),
-        kernelModules: this.parseKernelModules(kernelModulesData as string),
-        recentFiles: this.parseRecentFiles(recentFilesData as string)
-      };
-
-      // 将详细信息附加到系统信息对象中
+      // 详细信息将通过 fetchDetailedInfoProgressive 渐进式加载
+      this.detailedInfo = undefined;
       if (this.systemInfo) {
-        this.systemInfo.detailedInfo = this.detailedInfo;
+        this.systemInfo.detailedInfo = undefined;
       }
 
-      console.log('✅ 系统信息和详细信息获取完成');
+      console.log('✅ 基础系统信息获取完成，详细信息将渐进式加载');
       return this.systemInfo;
 
     } catch (error) {
@@ -598,84 +539,107 @@ export class SystemInfoManager {
 
   /**
    * 获取详细系统信息
-   * 如果已经缓存，直接返回缓存的数据
+   * 如果已经缓存，直接返回缓存的数据；否则渐进式获取
    */
   async getDetailedSystemInfo(): Promise<any> {
     try {
-      // 如果已经有缓存的详细信息，直接返回
+      // 如果已经有缓存的详细信息且有实际数据，直接返回
       if (this.detailedInfo) {
-        console.log('✅ 返回缓存的详细系统信息');
-        return this.detailedInfo;
+        const hasData = Object.values(this.detailedInfo).some(
+          (arr: any) => Array.isArray(arr) && arr.length > 0
+        );
+        if (hasData) {
+          console.log('✅ 返回缓存的详细系统信息');
+          return this.detailedInfo;
+        }
       }
 
-      // 如果没有缓存，重新获取（这种情况应该很少发生，因为在 fetchSystemInfo 中已经获取了）
-      console.log('🔍 缓存未命中，重新获取详细系统信息...');
-
-      const [
-        processesData,
-        networkDetailsData,
-        servicesData,
-        usersData,
-        autostartData,
-        cronJobsData,
-        firewallRulesData,
-        sshKeysData,
-        loginHistoryData,
-        suidFilesData,
-        envVariablesData,
-        shellConfigsData,
-        installedPackagesData,
-        sudoersConfigData,
-        systemdTimersData,
-        kernelModulesData,
-        recentFilesData
-      ] = (await Promise.allSettled([
-        this.executeCommand('ps aux --no-headers | awk \'BEGIN{OFS=","} {cmd=""; for(i=11;i<=NF;i++) cmd=cmd $i" "; print $2,$1,$8,$3,$4,cmd}\''),
-        this.getNetworkConnectionDetails(),
-        this.executeCommand('systemctl list-units --type=service --no-pager --no-legend | awk \'BEGIN{OFS=","} {print $1,$3,$4,$5" "$6" "$7" "$8" "$9}\''),
-        this.executeCommand('getent passwd | awk -F: \'BEGIN{OFS=","} {print $1,$3,$4,$6,$7}\''),
-        this.executeCommand('systemctl list-unit-files --type=service --state=enabled --no-pager --no-legend | awk \'BEGIN{OFS=","} {print $1,$2,"enabled","systemd"}\''),
-        this.getCronJobs(),
-        this.getFirewallRules(),
-        this.getSSHKeys(),
-        this.getLoginHistory(),
-        this.getSUIDFiles(),
-        this.getEnvVariables(),
-        this.getShellConfigs(),
-        this.getInstalledPackages(),
-        this.getSudoersConfig(),
-        this.getSystemdTimers(),
-        this.getKernelModules(),
-        this.getRecentFiles()
-      ])).map(r => r.status === 'fulfilled' ? r.value : '');
-
-      this.detailedInfo = {
-        processes: this.parseProcesses(processesData),
-        networkDetails: this.parseNetworkDetails(networkDetailsData),
-        services: this.parseServices(servicesData),
-        users: this.parseUsers(usersData),
-        autostart: this.parseAutostart(autostartData),
-        cronJobs: this.parseCronJobs(cronJobsData),
-        firewallRules: this.parseFirewallRules(firewallRulesData),
-        sshKeys: this.parseSSHKeys(sshKeysData as string),
-        loginHistory: this.parseLoginHistory(loginHistoryData as string),
-        suidFiles: this.parseSUIDFiles(suidFilesData as string),
-        envVariables: this.parseEnvVariables(envVariablesData as string),
-        shellConfigs: this.parseShellConfigs(shellConfigsData as string),
-        installedPackages: this.parseInstalledPackages(installedPackagesData as string),
-        sudoersConfig: this.parseSudoersConfig(sudoersConfigData as string),
-        systemdTimers: this.parseSystemdTimers(systemdTimersData as string),
-        kernelModules: this.parseKernelModules(kernelModulesData as string),
-        recentFiles: this.parseRecentFiles(recentFilesData as string)
-      };
-
-      console.log('✅ 详细系统信息获取完成');
-      return this.detailedInfo;
+      console.log('🔍 缓存未命中，渐进式获取详细系统信息...');
+      return await this.fetchDetailedInfoProgressive();
 
     } catch (error) {
       console.error('❌ 获取详细系统信息失败:', error);
       return this.getDefaultDetailedInfo();
     }
+  }
+
+  /**
+   * 渐进式获取详细系统信息
+   * 每个数据类别独立加载，完成后立即通过回调通知UI更新
+   */
+  async fetchDetailedInfoProgressive(
+    onDataReady?: (key: string, data: any[]) => void
+  ): Promise<any> {
+    if (!this.detailedInfo) {
+      this.detailedInfo = this.getDefaultDetailedInfo();
+    }
+
+    const tasks: Array<{ key: string; fetch: () => Promise<string>; parse: (data: string) => any[] }> = [
+      {
+        key: 'processes',
+        fetch: () => this.executeCommand('ps aux --no-headers | awk \'BEGIN{OFS=","} {cmd=""; for(i=11;i<=NF;i++) cmd=cmd $i" "; print $2,$1,$8,$3,$4,cmd}\''),
+        parse: (d) => this.parseProcesses(d)
+      },
+      {
+        key: 'networkDetails',
+        fetch: () => this.getNetworkConnectionDetails(),
+        parse: (d) => this.parseNetworkDetails(d)
+      },
+      {
+        key: 'services',
+        fetch: () => this.executeCommand('systemctl list-units --type=service --no-pager --no-legend | awk \'BEGIN{OFS=","} {print $1,$3,$4,$5" "$6" "$7" "$8" "$9}\''),
+        parse: (d) => this.parseServices(d)
+      },
+      {
+        key: 'users',
+        fetch: () => this.executeCommand('getent passwd | awk -F: \'BEGIN{OFS=","} {print $1,$3,$4,$6,$7}\''),
+        parse: (d) => this.parseUsers(d)
+      },
+      {
+        key: 'autostart',
+        fetch: () => this.executeCommand('systemctl list-unit-files --type=service --state=enabled --no-pager --no-legend | awk \'BEGIN{OFS=","} {print $1,$2,"enabled","systemd"}\''),
+        parse: (d) => this.parseAutostart(d)
+      },
+      { key: 'cronJobs', fetch: () => this.getCronJobs(), parse: (d) => this.parseCronJobs(d) },
+      { key: 'firewallRules', fetch: () => this.getFirewallRules(), parse: (d) => this.parseFirewallRules(d) },
+      { key: 'sshKeys', fetch: () => this.getSSHKeys(), parse: (d) => this.parseSSHKeys(d) },
+      { key: 'loginHistory', fetch: () => this.getLoginHistory(), parse: (d) => this.parseLoginHistory(d) },
+      { key: 'suidFiles', fetch: () => this.getSUIDFiles(), parse: (d) => this.parseSUIDFiles(d) },
+      { key: 'envVariables', fetch: () => this.getEnvVariables(), parse: (d) => this.parseEnvVariables(d) },
+      { key: 'shellConfigs', fetch: () => this.getShellConfigs(), parse: (d) => this.parseShellConfigs(d) },
+      { key: 'installedPackages', fetch: () => this.getInstalledPackages(), parse: (d) => this.parseInstalledPackages(d) },
+      { key: 'sudoersConfig', fetch: () => this.getSudoersConfig(), parse: (d) => this.parseSudoersConfig(d) },
+      { key: 'systemdTimers', fetch: () => this.getSystemdTimers(), parse: (d) => this.parseSystemdTimers(d) },
+      { key: 'kernelModules', fetch: () => this.getKernelModules(), parse: (d) => this.parseKernelModules(d) },
+      { key: 'recentFiles', fetch: () => this.getRecentFiles(), parse: (d) => this.parseRecentFiles(d) },
+    ];
+
+    // 所有任务并行启动，但每个任务独立完成后立即回调
+    const promises = tasks.map(async (task) => {
+      try {
+        const rawData = await task.fetch();
+        const parsed = task.parse(rawData);
+        (this.detailedInfo as any)[task.key] = parsed;
+        if (onDataReady) {
+          onDataReady(task.key, parsed);
+        }
+      } catch (err) {
+        console.error(`❌ 获取 ${task.key} 失败:`, err);
+        (this.detailedInfo as any)[task.key] = [];
+        if (onDataReady) {
+          onDataReady(task.key, []);
+        }
+      }
+    });
+
+    await Promise.all(promises);
+
+    if (this.systemInfo) {
+      this.systemInfo.detailedInfo = this.detailedInfo;
+    }
+
+    console.log('✅ 所有详细系统信息渐进式加载完成');
+    return this.detailedInfo;
   }
 
   /**

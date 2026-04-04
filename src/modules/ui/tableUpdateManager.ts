@@ -10,6 +10,16 @@ import { UserContextMenu } from './userContextMenu';
 import { StartupContextMenu } from './startupContextMenu';
 import { CronContextMenu } from './cronContextMenu';
 import { FirewallContextMenu } from './firewallContextMenu';
+import { SSHKeyContextMenu } from './sshKeyContextMenu';
+import { LoginHistoryContextMenu } from './loginHistoryContextMenu';
+import { SUIDFileContextMenu } from './suidFileContextMenu';
+import { EnvVarContextMenu } from './envVarContextMenu';
+import { ShellConfigContextMenu } from './shellConfigContextMenu';
+import { PackageContextMenu } from './packageContextMenu';
+import { SudoersContextMenu } from './sudoersContextMenu';
+import { TimerContextMenu } from './timerContextMenu';
+import { KernelModuleContextMenu } from './kernelModuleContextMenu';
+import { RecentFileContextMenu } from './recentFileContextMenu';
 
 // 创建右键菜单实例
 const processContextMenu = new ProcessContextMenu();
@@ -19,6 +29,16 @@ const userContextMenu = new UserContextMenu();
 const startupContextMenu = new StartupContextMenu();
 const cronContextMenu = new CronContextMenu();
 const firewallContextMenu = new FirewallContextMenu();
+const sshKeyContextMenu = new SSHKeyContextMenu();
+const loginHistoryContextMenu = new LoginHistoryContextMenu();
+const suidFileContextMenu = new SUIDFileContextMenu();
+const envVarContextMenu = new EnvVarContextMenu();
+const shellConfigContextMenu = new ShellConfigContextMenu();
+const packageContextMenu = new PackageContextMenu();
+const sudoersContextMenu = new SudoersContextMenu();
+const timerContextMenu = new TimerContextMenu();
+const kernelModuleContextMenu = new KernelModuleContextMenu();
+const recentFileContextMenu = new RecentFileContextMenu();
 
 /** 为表格行添加右键菜单事件 */
 function addContextMenuListener(
@@ -314,7 +334,7 @@ function updateSSHKeysTable(sshKeys: any[]): void {
     return;
   }
   tbody.innerHTML = sshKeys.map((key) => `
-    <tr style="border-bottom: 1px solid var(--border-color);">
+    <tr data-sshkey-user="${key.user}" data-sshkey-type="${key.keyType}" data-sshkey-content="${key.keyContent}" data-sshkey-comment="${key.comment || ''}" data-sshkey-file="${key.file}" style="border-bottom: 1px solid var(--border-color); cursor: context-menu;">
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-weight: 600;">${key.user}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-family: monospace;">${key.keyType}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-family: monospace; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${key.keyContent}">${key.keyContent}</td>
@@ -322,6 +342,16 @@ function updateSSHKeysTable(sshKeys: any[]): void {
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-secondary); font-family: monospace;">${key.file}</td>
     </tr>
   `).join('');
+
+  addContextMenuListener(tbody, 'tr[data-sshkey-user]', (mouseEvent, row) => {
+    sshKeyContextMenu.showContextMenu(mouseEvent.clientX, mouseEvent.clientY, {
+      user: row.getAttribute('data-sshkey-user') || '',
+      keyType: row.getAttribute('data-sshkey-type') || '',
+      keyContent: row.getAttribute('data-sshkey-content') || '',
+      comment: row.getAttribute('data-sshkey-comment') || '',
+      file: row.getAttribute('data-sshkey-file') || ''
+    });
+  });
 }
 
 function updateLoginHistoryTable(loginHistory: any[]): void {
@@ -336,7 +366,7 @@ function updateLoginHistoryTable(loginHistory: any[]): void {
     const statusLabel = entry.status === 'failed' ? '❌ 失败' : entry.status === 'active' ? '🟢 在线' : '登录';
     const rowBg = entry.status === 'failed' ? 'background: #ff4d4f08;' : '';
     return `
-    <tr style="border-bottom: 1px solid var(--border-color); ${rowBg}">
+    <tr data-login-user="${entry.user}" data-login-terminal="${entry.terminal}" data-login-source="${entry.source}" data-login-time="${entry.loginTime}" data-login-status="${entry.status}" style="border-bottom: 1px solid var(--border-color); ${rowBg} cursor: context-menu;">
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-weight: 600;">${entry.user}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-family: monospace;">${entry.terminal}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light);">${entry.source}</td>
@@ -344,6 +374,16 @@ function updateLoginHistoryTable(loginHistory: any[]): void {
       <td style="padding: var(--spacing-sm); font-size: 12px; color: ${statusColor}; font-weight: 500;">${statusLabel}</td>
     </tr>`;
   }).join('');
+
+  addContextMenuListener(tbody, 'tr[data-login-user]', (mouseEvent, row) => {
+    loginHistoryContextMenu.showContextMenu(mouseEvent.clientX, mouseEvent.clientY, {
+      user: row.getAttribute('data-login-user') || '',
+      terminal: row.getAttribute('data-login-terminal') || '',
+      source: row.getAttribute('data-login-source') || '',
+      loginTime: row.getAttribute('data-login-time') || '',
+      status: row.getAttribute('data-login-status') || ''
+    });
+  });
 }
 
 function updateSUIDFilesTable(suidFiles: any[]): void {
@@ -354,7 +394,7 @@ function updateSUIDFilesTable(suidFiles: any[]): void {
     return;
   }
   tbody.innerHTML = suidFiles.map((file) => `
-    <tr style="border-bottom: 1px solid var(--border-color); ${riskRowStyle(file.risk)}">
+    <tr data-suid-path="${file.path}" data-suid-perms="${file.permissions}" data-suid-owner="${file.owner}" data-suid-risk="${file.risk}" style="border-bottom: 1px solid var(--border-color); ${riskRowStyle(file.risk)} cursor: context-menu;">
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-family: monospace; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${file.path}">${file.path}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-family: monospace;">${file.permissions}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light);">${file.owner}</td>
@@ -363,6 +403,15 @@ function updateSUIDFilesTable(suidFiles: any[]): void {
       <td style="padding: var(--spacing-sm); font-size: 12px;">${renderRiskBadge(file.risk)}</td>
     </tr>
   `).join('');
+
+  addContextMenuListener(tbody, 'tr[data-suid-path]', (mouseEvent, row) => {
+    suidFileContextMenu.showContextMenu(mouseEvent.clientX, mouseEvent.clientY, {
+      path: row.getAttribute('data-suid-path') || '',
+      permissions: row.getAttribute('data-suid-perms') || '',
+      owner: row.getAttribute('data-suid-owner') || '',
+      risk: row.getAttribute('data-suid-risk') || 'normal'
+    });
+  });
 }
 
 function updateEnvVariablesTable(envVariables: any[]): void {
@@ -373,12 +422,22 @@ function updateEnvVariablesTable(envVariables: any[]): void {
     return;
   }
   tbody.innerHTML = envVariables.map((v) => `
-    <tr style="border-bottom: 1px solid var(--border-color); ${riskRowStyle(v.risk)}">
+    <tr data-env-name="${v.name}" data-env-risk="${v.risk}" style="border-bottom: 1px solid var(--border-color); ${riskRowStyle(v.risk)} cursor: context-menu;">
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-weight: 600; font-family: monospace; white-space: nowrap;">${v.name}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-family: monospace; max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${v.value}">${v.value}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px;">${renderRiskBadge(v.risk)}</td>
     </tr>
   `).join('');
+
+  addContextMenuListener(tbody, 'tr[data-env-name]', (mouseEvent, row) => {
+    const name = row.getAttribute('data-env-name') || '';
+    const valueCell = row.querySelector('td:nth-child(2)');
+    envVarContextMenu.showContextMenu(mouseEvent.clientX, mouseEvent.clientY, {
+      name,
+      value: valueCell?.getAttribute('title') || valueCell?.textContent || '',
+      risk: row.getAttribute('data-env-risk') || 'normal'
+    });
+  });
 }
 
 function updateShellConfigsTable(shellConfigs: any[]): void {
@@ -392,13 +451,22 @@ function updateShellConfigsTable(shellConfigs: any[]): void {
     return;
   }
   tbody.innerHTML = shellConfigs.map((cfg) => `
-    <tr style="border-bottom: 1px solid var(--border-color); ${riskRowStyle(cfg.risk)}">
+    <tr data-shellcfg-file="${cfg.file}" data-shellcfg-line="${cfg.lineNum}" data-shellcfg-risk="${cfg.risk}" style="border-bottom: 1px solid var(--border-color); ${riskRowStyle(cfg.risk)} cursor: context-menu;">
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-family: monospace;">${cfg.file}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); text-align: center;">${cfg.lineNum}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-family: monospace; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${cfg.content}">${cfg.content}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px;">${renderRiskBadge(cfg.risk)}</td>
     </tr>
   `).join('');
+
+  addContextMenuListener(tbody, 'tr[data-shellcfg-file]', (mouseEvent, row) => {
+    shellConfigContextMenu.showContextMenu(mouseEvent.clientX, mouseEvent.clientY, {
+      file: row.getAttribute('data-shellcfg-file') || '',
+      lineNum: parseInt(row.getAttribute('data-shellcfg-line') || '1'),
+      content: row.querySelector('td:nth-child(3)')?.getAttribute('title') || '',
+      risk: row.getAttribute('data-shellcfg-risk') || 'normal'
+    });
+  });
 }
 
 function updateInstalledPackagesTable(installedPackages: any[]): void {
@@ -409,13 +477,22 @@ function updateInstalledPackagesTable(installedPackages: any[]): void {
     return;
   }
   tbody.innerHTML = installedPackages.map((pkg) => `
-    <tr style="border-bottom: 1px solid var(--border-color);">
+    <tr data-pkg-name="${pkg.name}" data-pkg-version="${pkg.version || ''}" data-pkg-time="${pkg.installTime}" data-pkg-source="${pkg.source}" style="border-bottom: 1px solid var(--border-color); cursor: context-menu;">
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-weight: 500;">${pkg.name}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-family: monospace;">${pkg.version || '-'}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light);">${pkg.installTime}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-secondary);">${pkg.source}</td>
     </tr>
   `).join('');
+
+  addContextMenuListener(tbody, 'tr[data-pkg-name]', (mouseEvent, row) => {
+    packageContextMenu.showContextMenu(mouseEvent.clientX, mouseEvent.clientY, {
+      name: row.getAttribute('data-pkg-name') || '',
+      version: row.getAttribute('data-pkg-version') || '',
+      installTime: row.getAttribute('data-pkg-time') || '',
+      source: row.getAttribute('data-pkg-source') || ''
+    });
+  });
 }
 
 function updateSudoersTable(sudoersConfig: any[]): void {
@@ -430,7 +507,7 @@ function updateSudoersTable(sudoersConfig: any[]): void {
     const isAllCmd = entry.command.includes('ALL');
     const risk = isNopasswd && isAllCmd ? 'high' : isNopasswd ? 'warning' : 'normal';
     return `
-    <tr style="border-bottom: 1px solid var(--border-color); ${riskRowStyle(risk)}">
+    <tr data-sudoer-user="${entry.user}" data-sudoer-host="${entry.host}" data-sudoer-nopasswd="${entry.nopasswd}" data-sudoer-source="${entry.source}" style="border-bottom: 1px solid var(--border-color); ${riskRowStyle(risk)} cursor: context-menu;">
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-weight: 600;">${entry.user}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light);">${entry.host}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-family: monospace; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${entry.command}">${entry.command}</td>
@@ -438,6 +515,16 @@ function updateSudoersTable(sudoersConfig: any[]): void {
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-secondary); font-family: monospace;">${entry.source}</td>
     </tr>`;
   }).join('');
+
+  addContextMenuListener(tbody, 'tr[data-sudoer-user]', (mouseEvent, row) => {
+    sudoersContextMenu.showContextMenu(mouseEvent.clientX, mouseEvent.clientY, {
+      user: row.getAttribute('data-sudoer-user') || '',
+      host: row.getAttribute('data-sudoer-host') || '',
+      command: row.querySelector('td:nth-child(3)')?.getAttribute('title') || '',
+      nopasswd: row.getAttribute('data-sudoer-nopasswd') || 'NO',
+      source: row.getAttribute('data-sudoer-source') || ''
+    });
+  });
 }
 
 function updateSystemdTimersTable(systemdTimers: any[]): void {
@@ -448,7 +535,7 @@ function updateSystemdTimersTable(systemdTimers: any[]): void {
     return;
   }
   tbody.innerHTML = systemdTimers.map((timer) => `
-    <tr style="border-bottom: 1px solid var(--border-color);">
+    <tr data-timer-name="${timer.timer}" data-timer-next="${timer.next}" data-timer-left="${timer.left}" data-timer-last="${timer.last}" data-timer-activates="${timer.activates}" style="border-bottom: 1px solid var(--border-color); cursor: context-menu;">
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-weight: 500;">${timer.timer}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light);">${timer.next}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light);">${timer.left}</td>
@@ -456,6 +543,16 @@ function updateSystemdTimersTable(systemdTimers: any[]): void {
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); font-family: monospace;">${timer.activates}</td>
     </tr>
   `).join('');
+
+  addContextMenuListener(tbody, 'tr[data-timer-name]', (mouseEvent, row) => {
+    timerContextMenu.showContextMenu(mouseEvent.clientX, mouseEvent.clientY, {
+      timer: row.getAttribute('data-timer-name') || '',
+      next: row.getAttribute('data-timer-next') || '',
+      left: row.getAttribute('data-timer-left') || '',
+      last: row.getAttribute('data-timer-last') || '',
+      activates: row.getAttribute('data-timer-activates') || ''
+    });
+  });
 }
 
 function updateKernelModulesTable(kernelModules: any[]): void {
@@ -466,13 +563,22 @@ function updateKernelModulesTable(kernelModules: any[]): void {
     return;
   }
   tbody.innerHTML = kernelModules.map((mod) => `
-    <tr style="border-bottom: 1px solid var(--border-color); ${riskRowStyle(mod.risk)}">
+    <tr data-module-name="${mod.name}" data-module-size="${mod.size}" data-module-usedby="${mod.usedBy}" data-module-risk="${mod.risk}" style="border-bottom: 1px solid var(--border-color); ${riskRowStyle(mod.risk)} cursor: context-menu;">
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-weight: 500; font-family: monospace;">${mod.name}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light);">${mod.size}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light);">${mod.usedBy}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px;">${renderRiskBadge(mod.risk)}</td>
     </tr>
   `).join('');
+
+  addContextMenuListener(tbody, 'tr[data-module-name]', (mouseEvent, row) => {
+    kernelModuleContextMenu.showContextMenu(mouseEvent.clientX, mouseEvent.clientY, {
+      name: row.getAttribute('data-module-name') || '',
+      size: row.getAttribute('data-module-size') || '',
+      usedBy: row.getAttribute('data-module-usedby') || '',
+      risk: row.getAttribute('data-module-risk') || 'normal'
+    });
+  });
 }
 
 function updateRecentFilesTable(recentFiles: any[]): void {
@@ -483,7 +589,7 @@ function updateRecentFilesTable(recentFiles: any[]): void {
     return;
   }
   tbody.innerHTML = recentFiles.map((file) => `
-    <tr style="border-bottom: 1px solid var(--border-color); ${riskRowStyle(file.risk)}">
+    <tr data-file-path="${file.path}" data-file-modified="${file.modified}" data-file-size="${file.size}" data-file-owner="${file.owner}" data-file-risk="${file.risk}" style="border-bottom: 1px solid var(--border-color); ${riskRowStyle(file.risk)} cursor: context-menu;">
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light); font-family: monospace; max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${file.path}">${file.path}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light);">${file.modified}</td>
       <td style="padding: var(--spacing-sm); font-size: 12px; color: var(--text-primary); border-right: 1px solid var(--border-color-light);">${file.size}</td>
@@ -491,6 +597,16 @@ function updateRecentFilesTable(recentFiles: any[]): void {
       <td style="padding: var(--spacing-sm); font-size: 12px;">${renderRiskBadge(file.risk)}</td>
     </tr>
   `).join('');
+
+  addContextMenuListener(tbody, 'tr[data-file-path]', (mouseEvent, row) => {
+    recentFileContextMenu.showContextMenu(mouseEvent.clientX, mouseEvent.clientY, {
+      path: row.getAttribute('data-file-path') || '',
+      modified: row.getAttribute('data-file-modified') || '',
+      size: row.getAttribute('data-file-size') || '',
+      owner: row.getAttribute('data-file-owner') || '',
+      risk: row.getAttribute('data-file-risk') || 'normal'
+    });
+  });
 }
 
 /**

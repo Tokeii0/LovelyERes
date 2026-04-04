@@ -719,7 +719,14 @@ export class ModernUIRenderer {
     return `
       <div class="workspace-connecting-center">
         <div class="connecting-card">
-          <div class="connecting-spinner-ring"></div>
+          <svg width="36" height="36" viewBox="0 0 36 36" style="display:block;">
+            <circle cx="18" cy="18" r="15" fill="none" stroke="var(--border-color, #334155)" stroke-width="3"/>
+            <circle cx="18" cy="18" r="15" fill="none" stroke="var(--primary-color, #4299e1)" stroke-width="3"
+              stroke-dasharray="28 66" stroke-linecap="round">
+              <animateTransform attributeName="transform" type="rotate"
+                from="0 18 18" to="360 18 18" dur="0.9s" repeatCount="indefinite"/>
+            </circle>
+          </svg>
           <span class="connecting-step">${step}</span>
           <div class="connecting-progress-track">
             <div class="connecting-progress-fill"></div>
