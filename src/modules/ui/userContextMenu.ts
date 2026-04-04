@@ -404,7 +404,8 @@ export class UserContextMenu extends BaseContextMenu {
 
           <div style="padding: var(--spacing-sm); background: var(--bg-secondary); border-radius: var(--border-radius-sm); font-family: var(--font-mono); font-size: 12px;">
             <strong>执行命令：</strong><br>
-            sudo userdel -r ${username}
+            sudo pkill -9 -u ${username}  <span style="color: var(--text-secondary);"># 终止所有进程</span><br>
+            sudo userdel -rf ${username}  <span style="color: var(--text-secondary);"># 强制删除用户</span>
           </div>
         </div>
         <div class="modal-footer" style="
@@ -458,28 +459,46 @@ export class UserContextMenu extends BaseContextMenu {
   }
 
   /**
-   * 执行删除用户操作
+   * 执行删除用户操作 — 先杀进程再删除
    */
   private async executeDeleteUser(username: string) {
-    const command = `sudo userdel -r ${username}`
     const title = `删除用户 - ${username}`
 
     try {
       const accountInfo = this.selectedUsername ? ` (账号: ${this.selectedUsername})` : ''
       this.showModal(title, `⏳ 正在删除用户: ${username}${accountInfo}...`)
 
-      const params: any = { command }
-      if (this.selectedUsername) {
-        params.username = this.selectedUsername
-        console.log('👤 使用账号执行删除用户命令:', this.selectedUsername)
+      const makeParams = (command: string) => {
+        const p: any = { command }
+        if (this.selectedUsername) p.username = this.selectedUsername
+        return p
       }
 
-      const result = await invoke('ssh_execute_command_direct', params) as { output: string; exit_code: number }
+      // Step 1: 查询该用户的运行中进程
+      const psResult = await invoke('ssh_execute_command_direct', makeParams(
+        `ps -u ${username} -o pid,comm --no-headers 2>/dev/null`
+      )) as { output: string; exit_code: number }
+
+      const hasProcesses = psResult.exit_code === 0 && psResult.output.trim().length > 0
+
+      // Step 2: 如果有进程，先强制终止
+      if (hasProcesses) {
+        this.showModal(title, `⏳ 正在终止用户 ${username} 的所有进程...\n\n运行中进程:\n${psResult.output.trim()}`)
+        await invoke('ssh_execute_command_direct', makeParams(
+          `sudo pkill -9 -u ${username} 2>/dev/null; sleep 1`
+        ))
+      }
+
+      // Step 3: 执行 userdel -rf 强制删除
+      const result = await invoke('ssh_execute_command_direct', makeParams(
+        `sudo userdel -rf ${username} 2>&1`
+      )) as { output: string; exit_code: number }
 
       if (result.exit_code === 0) {
-        this.showModal(title, `✓ 用户 ${username} 删除成功！\n\n${result.output || ''}`)
+        const killInfo = hasProcesses ? '\n(已自动终止该用户的所有进程)' : ''
+        this.showModal(title, `✅ 用户 ${username} 删除成功！${killInfo}\n\n${result.output || ''}`)
       } else {
-        this.showModal(title, `❌ 删除用户失败：\n\n${result.output || '未知错误'}`)
+        this.showModal(title, `❌ 删除用户失败：\n\n${result.output || '未知错误'}\n\n💡 提示: 可在终端中手动执行:\nsudo pkill -9 -u ${username} && sudo userdel -rf ${username}`)
       }
     } catch (error) {
       this.showModal(title, `❌ 删除用户失败: ${error}`)
