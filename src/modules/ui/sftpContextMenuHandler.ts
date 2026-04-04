@@ -100,21 +100,30 @@ function showSftpContextMenu(ev: MouseEvent, index: number): void {
   // 定位菜单
   const padding = 8;
   const { clientX: x, clientY: y } = ev;
-  menu.style.display = 'block';
-  menu.style.left = x + 'px';
-  menu.style.top = y + 'px';
-  const rect = menu.getBoundingClientRect();
-  const vw = window.innerWidth;
+
+  // 先设置 max-height 防止菜单超出视口
   const vh = window.innerHeight;
+  const vw = window.innerWidth;
+  menu.style.maxHeight = (vh - padding * 2) + 'px';
+  menu.style.overflowY = 'auto';
+
+  // 显示菜单以获取尺寸
+  menu.style.display = 'block';
+  menu.style.left = '-9999px';
+  menu.style.top = '-9999px';
+  const rect = menu.getBoundingClientRect();
+  const menuW = rect.width;
+  const menuH = rect.height;
+
+  // 计算最终位置，确保完全在视口内
   let left = x;
   let top = y;
 
-  if (rect.right > vw - padding) {
-    left = Math.max(padding, vw - rect.width - padding);
+  if (left + menuW > vw - padding) {
+    left = Math.max(padding, vw - menuW - padding);
   }
-  if (rect.bottom > vh - padding) {
-    top = Math.max(padding, vh - rect.height - padding);
-    top = Math.max(padding, top - 20);
+  if (top + menuH > vh - padding) {
+    top = Math.max(padding, vh - menuH - padding);
   }
 
   menu.style.left = left + 'px';

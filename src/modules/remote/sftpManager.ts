@@ -299,19 +299,10 @@ export class SftpManager {
   }
 
   /**
-   * 获取风险标签 HTML
+   * 获取风险标签 HTML — 仅用颜色高亮，不加图标
    */
-  private getFileRiskBadge(riskClass: string): string {
-    switch (riskClass) {
-      case 'risk-critical':
-        return '<span class="risk-badge risk-badge-critical" title="高危: SUID/SGID 或 777权限">⚠</span>';
-      case 'risk-warning':
-        return '<span class="risk-badge risk-badge-warning" title="可疑: 文件名或位置异常">⚡</span>';
-      case 'risk-info':
-        return '<span class="risk-badge risk-badge-info" title="提示: 隐藏文件或世界可写">●</span>';
-      default:
-        return '';
-    }
+  private getFileRiskBadge(_riskClass: string): string {
+    return '';
   }
 
   /**

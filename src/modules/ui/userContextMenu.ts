@@ -318,12 +318,15 @@ export class UserContextMenu extends BaseContextMenu {
    * 显示删除用户确认对话框
    */
   private async showDeleteConfirmation(username: string) {
-    // 先查询用户真实主目录
+    // 查询用户真实主目录（多方法兜底）
     let homeDir = `/home/${username}`;
     try {
-      const result = await invoke('ssh_execute_command_direct', { command: `getent passwd ${username} | cut -d: -f6` }) as { output: string; exit_code: number };
-      if (result.exit_code === 0 && result.output.trim()) {
-        homeDir = result.output.trim();
+      const result = await invoke('ssh_execute_command_direct', {
+        command: `getent passwd ${username} 2>/dev/null | cut -d: -f6 | grep -v '^$' || awk -F: -v u="${username}" '$1==u{print $6}' /etc/passwd 2>/dev/null`
+      }) as { output: string; exit_code: number };
+      const parsed = (result.output || '').split('\n').map(l => l.trim()).filter(l => l.startsWith('/'))[0];
+      if (parsed) {
+        homeDir = parsed;
       }
     } catch (_) { /* fallback to default */ }
 
@@ -459,7 +462,7 @@ export class UserContextMenu extends BaseContextMenu {
   }
 
   /**
-   * 执行删除用户操作 — 先杀进程再删除
+   * 执行删除用户操作 — 先杀进程再删除，验证结果
    */
   private async executeDeleteUser(username: string) {
     const title = `删除用户 - ${username}`
@@ -490,15 +493,21 @@ export class UserContextMenu extends BaseContextMenu {
       }
 
       // Step 3: 执行 userdel -rf 强制删除
-      const result = await invoke('ssh_execute_command_direct', makeParams(
+      await invoke('ssh_execute_command_direct', makeParams(
         `sudo userdel -rf ${username} 2>&1`
+      ))
+
+      // Step 4: 验证用户是否真的被删除（不依赖 userdel 的 exit_code）
+      const verifyResult = await invoke('ssh_execute_command_direct', makeParams(
+        `id ${username} 2>&1`
       )) as { output: string; exit_code: number }
 
-      if (result.exit_code === 0) {
+      if (verifyResult.exit_code !== 0) {
+        // id 命令返回非0 = 用户已不存在 = 删除成功
         const killInfo = hasProcesses ? '\n(已自动终止该用户的所有进程)' : ''
-        this.showModal(title, `✅ 用户 ${username} 删除成功！${killInfo}\n\n${result.output || ''}`)
+        this.showModal(title, `✅ 用户 ${username} 删除成功！${killInfo}`)
       } else {
-        this.showModal(title, `❌ 删除用户失败：\n\n${result.output || '未知错误'}\n\n💡 提示: 可在终端中手动执行:\nsudo pkill -9 -u ${username} && sudo userdel -rf ${username}`)
+        this.showModal(title, `❌ 删除用户失败，用户仍然存在\n\n${verifyResult.output}\n\n💡 提示: 可在终端中手动执行:\nsudo pkill -9 -u ${username} && sudo userdel -rf ${username}`)
       }
     } catch (error) {
       this.showModal(title, `❌ 删除用户失败: ${error}`)

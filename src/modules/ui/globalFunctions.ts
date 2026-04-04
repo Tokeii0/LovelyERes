@@ -200,6 +200,7 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
   (window as any).switchPage = (pageId: string) => {
     console.log('🔄 切换页面:', pageId);
 
+    // SFTP: 切走时标记需要重新绑定DOM事件，但不丢弃数据
     if (pageId !== 'remote-operations') {
       remoteOperationsPageInitialized = false;
     }
@@ -237,13 +238,13 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
         dockerPageManager.deactivate();
       }
 
-      const shouldLoadDetail = pageId === 'system-info';
-      const isConnected = sshConnectionManager.isConnected();
-
-      if (shouldLoadDetail && isConnected) {
+      // 系统概览：仅在无缓存时才重新加载
+      if (pageId === 'system-info' && sshConnectionManager.isConnected()) {
         const cache = (window as any).systemInfoCache;
-        if (cache) cache.isLoading = false;
-        (window as any).loadSystemDetailedInfo(false);
+        if (cache && cache.detailedInfo) {
+          // 有缓存，直接用缓存渲染，不重新请求
+          (window as any).loadSystemDetailedInfo(false);
+        }
       }
     }
   };
@@ -317,11 +318,20 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
     await sshConnectionManager.checkConnectionStatus();
     const connectionStatus = sshConnectionManager.getConnectionStatus();
 
-    if (connectionStatus?.connected) {
+    const hasExistingData = sftpManager.getCurrentFiles().length > 0;
+
+    if (connectionStatus?.connected && !hasExistingData) {
+      // 首次加载：请求文件列表
       await sftpManager.refreshFileList();
     } else {
+      // 已有数据或未连接：直接用现有数据渲染
       const sftpFileList = document.getElementById('sftp-file-list');
       if (sftpFileList) sftpFileList.innerHTML = sftpManager.renderFileListHTML();
+      const breadcrumb = document.getElementById('sftp-breadcrumb');
+      if (breadcrumb) breadcrumb.innerHTML = sftpManager.renderBreadcrumbHTML();
+      const pathInput = document.getElementById('sftp-path-input') as HTMLInputElement;
+      if (pathInput) pathInput.value = sftpManager.getCurrentPath();
+      sftpManager.updateSortIndicators();
     }
 
     // 修正排序下拉潜在的编码异常
