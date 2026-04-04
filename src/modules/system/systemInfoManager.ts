@@ -97,6 +97,76 @@ export interface SystemInfo {
       destination: string;
       options: string;
     }>;
+    // 新增应急响应增强栏目
+    sshKeys: Array<{
+      user: string;
+      keyType: string;
+      keyContent: string;
+      comment: string;
+      file: string;
+    }>;
+    loginHistory: Array<{
+      user: string;
+      terminal: string;
+      source: string;
+      loginTime: string;
+      status: string;
+    }>;
+    suidFiles: Array<{
+      path: string;
+      permissions: string;
+      owner: string;
+      group: string;
+      size: string;
+      modified: string;
+      risk: string;
+    }>;
+    envVariables: Array<{
+      name: string;
+      value: string;
+      risk: string;
+    }>;
+    shellConfigs: Array<{
+      file: string;
+      lineNum: string;
+      content: string;
+      risk: string;
+    }>;
+    installedPackages: Array<{
+      name: string;
+      version: string;
+      installTime: string;
+      source: string;
+    }>;
+    sudoersConfig: Array<{
+      user: string;
+      host: string;
+      runas: string;
+      command: string;
+      nopasswd: string;
+      source: string;
+    }>;
+    systemdTimers: Array<{
+      timer: string;
+      next: string;
+      left: string;
+      last: string;
+      unit: string;
+      activates: string;
+    }>;
+    kernelModules: Array<{
+      name: string;
+      size: string;
+      usedBy: string;
+      risk: string;
+    }>;
+    recentFiles: Array<{
+      path: string;
+      modified: string;
+      size: string;
+      owner: string;
+      risk: string;
+    }>;
   };
 }
 
@@ -146,8 +216,19 @@ export class SystemInfoManager {
         autostartData,
         cronJobsData,
         firewallRulesData,
-        networkTraffic
-      ] = await Promise.all([
+        networkTraffic,
+        // 新增应急响应增强数据
+        sshKeysData,
+        loginHistoryData,
+        suidFilesData,
+        envVariablesData,
+        shellConfigsData,
+        installedPackagesData,
+        sudoersConfigData,
+        systemdTimersData,
+        kernelModulesData,
+        recentFilesData
+      ] = (await Promise.allSettled([
         // 基础系统信息
         this.executeCommand('hostname'),
         this.executeCommand('uptime'),
@@ -170,36 +251,57 @@ export class SystemInfoManager {
         this.executeCommand('systemctl list-unit-files --type=service --state=enabled --no-pager --no-legend | awk \'BEGIN{OFS=","} {print $1,$2,"enabled","systemd"}\''),
         this.getCronJobs(),
         this.getFirewallRules(),
-        this.getNetworkTraffic()
-      ]);
+        this.getNetworkTraffic(),
+        // 新增应急响应增强命令
+        this.getSSHKeys(),
+        this.getLoginHistory(),
+        this.getSUIDFiles(),
+        this.getEnvVariables(),
+        this.getShellConfigs(),
+        this.getInstalledPackages(),
+        this.getSudoersConfig(),
+        this.getSystemdTimers(),
+        this.getKernelModules(),
+        this.getRecentFiles()
+      ])).map(r => r.status === 'fulfilled' ? r.value : '') as any[];
 
       // 解析基础系统信息
       this.systemInfo = this.parseSystemInfo({
-        hostname: hostname.trim(),
-        uptime: uptime.trim(),
-        loadAvg: loadAvg.trim(),
-        memInfo: memInfo.trim(),
-        diskInfo: diskInfo.trim(),
-        cpuInfo: cpuInfo.trim(),
-        cpuUsage: cpuUsage.trim(),
-        netConnections: netConnections.trim(),
-        processCount: processCount.trim(),
-        userCount: userCount.trim(),
-        networkInterfaces: networkInterfaces.trim(),
-        dnsInfo: dnsInfo.trim(),
-        gatewayInfo: gatewayInfo.trim(),
+        hostname: (hostname as string).trim(),
+        uptime: (uptime as string).trim(),
+        loadAvg: (loadAvg as string).trim(),
+        memInfo: (memInfo as string).trim(),
+        diskInfo: (diskInfo as string).trim(),
+        cpuInfo: (cpuInfo as string).trim(),
+        cpuUsage: (cpuUsage as string).trim(),
+        netConnections: (netConnections as string).trim(),
+        processCount: (processCount as string).trim(),
+        userCount: (userCount as string).trim(),
+        networkInterfaces: (networkInterfaces as string).trim(),
+        dnsInfo: (dnsInfo as string).trim(),
+        gatewayInfo: (gatewayInfo as string).trim(),
         networkTraffic
       });
 
       // 解析详细信息并缓存
       this.detailedInfo = {
-        processes: this.parseProcesses(processesData),
-        networkDetails: this.parseNetworkDetails(networkDetailsData),
-        services: this.parseServices(servicesData),
-        users: this.parseUsers(usersData),
-        autostart: this.parseAutostart(autostartData),
-        cronJobs: this.parseCronJobs(cronJobsData),
-        firewallRules: this.parseFirewallRules(firewallRulesData)
+        processes: this.parseProcesses(processesData as string),
+        networkDetails: this.parseNetworkDetails(networkDetailsData as string),
+        services: this.parseServices(servicesData as string),
+        users: this.parseUsers(usersData as string),
+        autostart: this.parseAutostart(autostartData as string),
+        cronJobs: this.parseCronJobs(cronJobsData as string),
+        firewallRules: this.parseFirewallRules(firewallRulesData as string),
+        sshKeys: this.parseSSHKeys(sshKeysData as string),
+        loginHistory: this.parseLoginHistory(loginHistoryData as string),
+        suidFiles: this.parseSUIDFiles(suidFilesData as string),
+        envVariables: this.parseEnvVariables(envVariablesData as string),
+        shellConfigs: this.parseShellConfigs(shellConfigsData as string),
+        installedPackages: this.parseInstalledPackages(installedPackagesData as string),
+        sudoersConfig: this.parseSudoersConfig(sudoersConfigData as string),
+        systemdTimers: this.parseSystemdTimers(systemdTimersData as string),
+        kernelModules: this.parseKernelModules(kernelModulesData as string),
+        recentFiles: this.parseRecentFiles(recentFilesData as string)
       };
 
       // 将详细信息附加到系统信息对象中
@@ -224,22 +326,11 @@ export class SystemInfoManager {
    */
   private async executeCommand(command: string): Promise<string> {
     try {
-      // 使用仪表盘专用的快速执行命令
-      const result = await invoke('ssh_execute_dashboard_command_direct', { command });
-
-      // 确保返回值是字符串类型
-      if (typeof result === 'string') {
-        return result;
-      } else if (result && typeof result === 'object' && 'output' in result) {
-        // 如果返回的是对象，尝试获取output字段
-        return String((result as any).output || '');
-      } else {
-        // 其他情况转换为字符串
-        return String(result || '');
-      }
+      const result = await invoke('ssh_execute_dashboard_command_direct', { command }) as { output: string; exit_code?: number };
+      return result?.output ?? '';
     } catch (error) {
       console.error(`❌ 命令执行失败: ${command}`, error);
-      throw new Error(`命令执行失败: ${error}`);
+      return ''; // 不再抛出，配合 Promise.allSettled 降级处理
     }
   }
 
@@ -527,16 +618,36 @@ export class SystemInfoManager {
         usersData,
         autostartData,
         cronJobsData,
-        firewallRulesData
-      ] = await Promise.all([
+        firewallRulesData,
+        sshKeysData,
+        loginHistoryData,
+        suidFilesData,
+        envVariablesData,
+        shellConfigsData,
+        installedPackagesData,
+        sudoersConfigData,
+        systemdTimersData,
+        kernelModulesData,
+        recentFilesData
+      ] = (await Promise.allSettled([
         this.executeCommand('ps aux --no-headers | awk \'BEGIN{OFS=","} {cmd=""; for(i=11;i<=NF;i++) cmd=cmd $i" "; print $2,$1,$8,$3,$4,cmd}\''),
         this.getNetworkConnectionDetails(),
         this.executeCommand('systemctl list-units --type=service --no-pager --no-legend | awk \'BEGIN{OFS=","} {print $1,$3,$4,$5" "$6" "$7" "$8" "$9}\''),
         this.executeCommand('getent passwd | awk -F: \'BEGIN{OFS=","} {print $1,$3,$4,$6,$7}\''),
         this.executeCommand('systemctl list-unit-files --type=service --state=enabled --no-pager --no-legend | awk \'BEGIN{OFS=","} {print $1,$2,"enabled","systemd"}\''),
         this.getCronJobs(),
-        this.getFirewallRules()
-      ]);
+        this.getFirewallRules(),
+        this.getSSHKeys(),
+        this.getLoginHistory(),
+        this.getSUIDFiles(),
+        this.getEnvVariables(),
+        this.getShellConfigs(),
+        this.getInstalledPackages(),
+        this.getSudoersConfig(),
+        this.getSystemdTimers(),
+        this.getKernelModules(),
+        this.getRecentFiles()
+      ])).map(r => r.status === 'fulfilled' ? r.value : '');
 
       this.detailedInfo = {
         processes: this.parseProcesses(processesData),
@@ -545,7 +656,17 @@ export class SystemInfoManager {
         users: this.parseUsers(usersData),
         autostart: this.parseAutostart(autostartData),
         cronJobs: this.parseCronJobs(cronJobsData),
-        firewallRules: this.parseFirewallRules(firewallRulesData)
+        firewallRules: this.parseFirewallRules(firewallRulesData),
+        sshKeys: this.parseSSHKeys(sshKeysData as string),
+        loginHistory: this.parseLoginHistory(loginHistoryData as string),
+        suidFiles: this.parseSUIDFiles(suidFilesData as string),
+        envVariables: this.parseEnvVariables(envVariablesData as string),
+        shellConfigs: this.parseShellConfigs(shellConfigsData as string),
+        installedPackages: this.parseInstalledPackages(installedPackagesData as string),
+        sudoersConfig: this.parseSudoersConfig(sudoersConfigData as string),
+        systemdTimers: this.parseSystemdTimers(systemdTimersData as string),
+        kernelModules: this.parseKernelModules(kernelModulesData as string),
+        recentFiles: this.parseRecentFiles(recentFilesData as string)
       };
 
       console.log('✅ 详细系统信息获取完成');
@@ -944,6 +1065,295 @@ export class SystemInfoManager {
     }).filter(r => r.chain);
   }
 
+  // ==================== 新增应急响应增强数据采集 ====================
+
+  /** 采集所有用户的 authorized_keys */
+  private async getSSHKeys(): Promise<string> {
+    return this.executeCommand(
+      `for f in $(find /root /home -name authorized_keys -type f 2>/dev/null); do
+        user=$(echo "$f" | awk -F/ '{if($2=="root") print "root"; else print $3}');
+        while IFS= read -r line; do
+          [ -z "$line" ] && continue;
+          echo "$line" | grep -q "^#" && continue;
+          type=$(echo "$line" | awk '{print $1}');
+          content=$(echo "$line" | awk '{print substr($2,1,40)"..."}');
+          comment=$(echo "$line" | awk '{$1=$2=""; print $0}' | sed 's/^ *//');
+          echo "$user,$type,$content,$comment,$f";
+        done < "$f";
+      done 2>/dev/null | head -200`
+    );
+  }
+
+  /** 采集登录历史（成功+失败） */
+  private async getLoginHistory(): Promise<string> {
+    return this.executeCommand(
+      `{ last -n 80 -F 2>/dev/null || last -n 80 2>/dev/null; } | grep -v "^$" | grep -v "^wtmp" | head -80 | awk 'BEGIN{OFS=","} {
+        user=$1; term=$2; src=$3;
+        if(NF>=10) { logintime=$4" "$5" "$6" "$7; status="login" }
+        else if($0 ~ /still logged in/) { logintime=$4" "$5" "$6" "$7; status="active" }
+        else { logintime=$4" "$5" "$6" "$7; status="logout" }
+        print user,term,src,logintime,status
+      }' 2>/dev/null; echo "===FAILED==="; lastb -n 30 2>/dev/null | grep -v "^$" | grep -v "^btmp" | awk 'BEGIN{OFS=","} {print $1,$2,$3,$4" "$5" "$6" "$7,"failed"}' 2>/dev/null | head -30`
+    );
+  }
+
+  /** 采集 SUID/SGID 文件 */
+  private async getSUIDFiles(): Promise<string> {
+    return this.executeCommand(
+      `find / -xdev \\( -perm -4000 -o -perm -2000 \\) -type f -exec ls -lh {} \\; 2>/dev/null | awk 'BEGIN{OFS=","} {print $NF,$1,$3,$4,$5,$6" "$7}' | head -300`
+    );
+  }
+
+  /** 采集关键环境变量 */
+  private async getEnvVariables(): Promise<string> {
+    return this.executeCommand(
+      `env 2>/dev/null | sort | awk -F= 'BEGIN{OFS=","} {name=$1; $1=""; val=substr($0,2); print name,val}' | head -200`
+    );
+  }
+
+  /** 检测 Shell 配置文件中的可疑内容 */
+  private async getShellConfigs(): Promise<string> {
+    return this.executeCommand(
+      `for f in /etc/profile /etc/bash.bashrc /etc/bashrc /root/.bashrc /root/.bash_profile /root/.profile /home/*/.bashrc /home/*/.bash_profile /home/*/.profile /etc/environment; do
+        [ -f "$f" ] && grep -n -E '(wget|curl|nc |ncat|/dev/tcp|/dev/udp|eval|base64|python.*-c|perl.*-e|ruby.*-e|LD_PRELOAD|LD_LIBRARY_PATH|export PATH=)' "$f" 2>/dev/null | while IFS=: read -r num content; do
+          echo "$f,$num,$content";
+        done;
+      done 2>/dev/null | head -200`
+    );
+  }
+
+  /** 采集最近安装的软件包 */
+  private async getInstalledPackages(): Promise<string> {
+    return this.executeCommand(
+      `if command -v dpkg >/dev/null 2>&1; then
+        zgrep " install " /var/log/dpkg.log* 2>/dev/null | sort -t' ' -k1,2 -r | head -100 | awk '{print $4","$1" "$2",dpkg"}';
+      elif command -v rpm >/dev/null 2>&1; then
+        rpm -qa --last 2>/dev/null | head -100 | awk '{name=$1; $1=""; time=substr($0,2); print name","time",rpm"}';
+      elif command -v pacman >/dev/null 2>&1; then
+        grep "\\[ALPM\\] installed" /var/log/pacman.log 2>/dev/null | tail -100 | awk -F'[][]' '{split($2,d," "); pkg=$3; gsub(/^ installed /,"",pkg); print pkg","d[1]",pacman"}';
+      elif command -v apk >/dev/null 2>&1; then
+        apk list --installed 2>/dev/null | head -100 | awk '{print $1",unknown,apk"}';
+      else
+        echo "unknown,unknown,unknown";
+      fi`
+    );
+  }
+
+  /** 采集 sudoers 配置 */
+  private async getSudoersConfig(): Promise<string> {
+    return this.executeCommand(
+      `{ cat /etc/sudoers 2>/dev/null; find /etc/sudoers.d -type f -exec cat {} \\; 2>/dev/null; } | grep -vE '^(#|$|Defaults)' | awk '{
+        src="/etc/sudoers";
+        line=$0;
+        if(line ~ /NOPASSWD/) nopasswd="YES"; else nopasswd="NO";
+        user=$1;
+        # extract host, runas, command
+        split(line, parts, "=");
+        if(length(parts)>=2) {
+          hostpart=parts[1]; sub(user" *","",hostpart);
+          cmdpart=parts[2];
+        } else { hostpart="ALL"; cmdpart=line; }
+        gsub(/^ +| +$/,"",hostpart);
+        gsub(/^ +| +$/,"",cmdpart);
+        print user","hostpart",ALL,"cmdpart","nopasswd","src
+      }' 2>/dev/null | head -100`
+    );
+  }
+
+  /** 采集 systemd timers */
+  private async getSystemdTimers(): Promise<string> {
+    return this.executeCommand(
+      `systemctl list-timers --all --no-pager --no-legend 2>/dev/null | head -100 | awk 'BEGIN{OFS=","} {
+        next_=$1" "$2" "$3; left=$4" "$5; last=$6" "$7" "$8; passed=$9; unit=$10; activates=$11;
+        if(unit=="") { unit=$1; activates=$2; next_="-"; left="-"; last="-"; }
+        print unit,next_,left,last,activates
+      }'`
+    );
+  }
+
+  /** 采集已加载内核模块 */
+  private async getKernelModules(): Promise<string> {
+    return this.executeCommand(
+      `lsmod 2>/dev/null | tail -n +2 | awk 'BEGIN{OFS=","} {print $1,$2,$3}' | head -200`
+    );
+  }
+
+  /** 采集最近修改的关键文件 */
+  private async getRecentFiles(): Promise<string> {
+    return this.executeCommand(
+      `find /etc /usr/bin /usr/sbin /usr/lib /usr/local/bin /var/www /tmp /var/tmp /dev/shm -xdev -type f -mtime -3 -printf '%T+ %s %u %p\\n' 2>/dev/null | sort -r | head -200 | awk 'BEGIN{OFS=","} {print $4,$1,$2,$3}'`
+    );
+  }
+
+  // ==================== 新增数据解析器 ====================
+
+  private parseSSHKeys(data: string): Array<{ user: string; keyType: string; keyContent: string; comment: string; file: string }> {
+    if (!data || !data.trim()) return [];
+    return data.trim().split('\n').filter(l => l.includes(',')).map(line => {
+      const parts = line.split(',');
+      return {
+        user: parts[0] || '',
+        keyType: parts[1] || '',
+        keyContent: parts[2] || '',
+        comment: parts[3] || '',
+        file: parts[4] || ''
+      };
+    }).filter(k => k.user);
+  }
+
+  private parseLoginHistory(data: string): Array<{ user: string; terminal: string; source: string; loginTime: string; status: string }> {
+    if (!data || !data.trim()) return [];
+    const results: Array<{ user: string; terminal: string; source: string; loginTime: string; status: string }> = [];
+    const lines = data.trim().split('\n');
+    for (const line of lines) {
+      if (line === '===FAILED===') continue;
+      if (!line.includes(',')) continue;
+      const parts = line.split(',');
+      if (parts.length >= 4) {
+        results.push({
+          user: parts[0] || '',
+          terminal: parts[1] || '',
+          source: parts[2] || '',
+          loginTime: parts[3] || '',
+          status: parts[4] || 'unknown'
+        });
+      }
+    }
+    return results;
+  }
+
+  private parseSUIDFiles(data: string): Array<{ path: string; permissions: string; owner: string; group: string; size: string; modified: string; risk: string }> {
+    if (!data || !data.trim()) return [];
+    const HIGH_RISK_SUID = ['nmap', 'vim', 'find', 'bash', 'sh', 'python', 'perl', 'ruby', 'nano', 'less', 'more', 'cp', 'mv', 'tar', 'rsync', 'dd', 'env', 'awk', 'strace', 'ltrace', 'gdb', 'node', 'php'];
+    return data.trim().split('\n').filter(l => l.includes(',')).map(line => {
+      const parts = line.split(',');
+      const path = parts[0] || '';
+      const filename = path.split('/').pop() || '';
+      const isHighRisk = HIGH_RISK_SUID.some(r => filename.includes(r));
+      return {
+        path,
+        permissions: parts[1] || '',
+        owner: parts[2] || '',
+        group: parts[3] || '',
+        size: parts[4] || '',
+        modified: parts[5] || '',
+        risk: isHighRisk ? 'high' : 'normal'
+      };
+    }).filter(f => f.path);
+  }
+
+  private parseEnvVariables(data: string): Array<{ name: string; value: string; risk: string }> {
+    if (!data || !data.trim()) return [];
+    const RISK_VARS = ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'http_proxy', 'https_proxy', 'HISTFILE', 'HISTSIZE'];
+    return data.trim().split('\n').filter(l => l.includes(',')).map(line => {
+      const idx = line.indexOf(',');
+      const name = line.substring(0, idx);
+      const value = line.substring(idx + 1);
+      const isRisk = RISK_VARS.some(r => name.toUpperCase().includes(r.toUpperCase()));
+      const hasRiskValue = name === 'HISTSIZE' && parseInt(value) === 0;
+      return {
+        name,
+        value,
+        risk: (isRisk || hasRiskValue) ? 'warning' : 'normal'
+      };
+    }).filter(v => v.name);
+  }
+
+  private parseShellConfigs(data: string): Array<{ file: string; lineNum: string; content: string; risk: string }> {
+    if (!data || !data.trim()) return [];
+    const HIGH_RISK_PATTERNS = ['wget', 'curl', '/dev/tcp', '/dev/udp', 'nc ', 'ncat', 'base64', 'eval'];
+    return data.trim().split('\n').filter(l => l.includes(',')).map(line => {
+      const parts = line.split(',');
+      const content = parts.slice(2).join(',');
+      const isHighRisk = HIGH_RISK_PATTERNS.some(p => content.toLowerCase().includes(p));
+      return {
+        file: parts[0] || '',
+        lineNum: parts[1] || '',
+        content: content.trim(),
+        risk: isHighRisk ? 'high' : 'warning'
+      };
+    }).filter(c => c.file);
+  }
+
+  private parseInstalledPackages(data: string): Array<{ name: string; version: string; installTime: string; source: string }> {
+    if (!data || !data.trim()) return [];
+    return data.trim().split('\n').filter(l => l.includes(',')).map(line => {
+      const parts = line.split(',');
+      const nameParts = (parts[0] || '').split(/[: ]/);
+      return {
+        name: nameParts[0] || parts[0] || '',
+        version: nameParts[1] || '',
+        installTime: parts[1] || '',
+        source: parts[2] || ''
+      };
+    }).filter(p => p.name && p.name !== 'unknown');
+  }
+
+  private parseSudoersConfig(data: string): Array<{ user: string; host: string; runas: string; command: string; nopasswd: string; source: string }> {
+    if (!data || !data.trim()) return [];
+    return data.trim().split('\n').filter(l => l.includes(',')).map(line => {
+      const parts = line.split(',');
+      return {
+        user: parts[0] || '',
+        host: parts[1] || 'ALL',
+        runas: parts[2] || 'ALL',
+        command: parts[3] || '',
+        nopasswd: parts[4] || 'NO',
+        source: parts[5] || '/etc/sudoers'
+      };
+    }).filter(s => s.user && !s.user.startsWith('#'));
+  }
+
+  private parseSystemdTimers(data: string): Array<{ timer: string; next: string; left: string; last: string; unit: string; activates: string }> {
+    if (!data || !data.trim()) return [];
+    return data.trim().split('\n').filter(l => l.includes(',')).map(line => {
+      const parts = line.split(',');
+      return {
+        timer: parts[0] || '',
+        next: parts[1] || '-',
+        left: parts[2] || '-',
+        last: parts[3] || '-',
+        unit: parts[0] || '',
+        activates: parts[4] || ''
+      };
+    }).filter(t => t.timer);
+  }
+
+  private parseKernelModules(data: string): Array<{ name: string; size: string; usedBy: string; risk: string }> {
+    if (!data || !data.trim()) return [];
+    const KNOWN_SUSPICIOUS = ['rootkit', 'hide', 'diamorphine', 'reptile', 'bdvl', 'suterusu', 'adore'];
+    return data.trim().split('\n').filter(l => l.includes(',')).map(line => {
+      const parts = line.split(',');
+      const name = parts[0] || '';
+      const isSuspicious = KNOWN_SUSPICIOUS.some(s => name.toLowerCase().includes(s));
+      return {
+        name,
+        size: parts[1] || '0',
+        usedBy: parts[2] || '0',
+        risk: isSuspicious ? 'high' : 'normal'
+      };
+    }).filter(m => m.name);
+  }
+
+  private parseRecentFiles(data: string): Array<{ path: string; modified: string; size: string; owner: string; risk: string }> {
+    if (!data || !data.trim()) return [];
+    const HIGH_RISK_PATHS = ['/etc/passwd', '/etc/shadow', '/etc/sudoers', '/etc/ssh/', '/etc/crontab', '/etc/ld.so.preload', '/etc/pam.d/'];
+    const SUSPICIOUS_DIRS = ['/tmp/', '/var/tmp/', '/dev/shm/'];
+    return data.trim().split('\n').filter(l => l.includes(',')).map(line => {
+      const parts = line.split(',');
+      const path = parts[0] || '';
+      const isHighRisk = HIGH_RISK_PATHS.some(r => path.includes(r));
+      const isSuspiciousDir = SUSPICIOUS_DIRS.some(d => path.startsWith(d));
+      return {
+        path,
+        modified: parts[1] || '',
+        size: parts[2] || '0',
+        owner: parts[3] || '',
+        risk: isHighRisk ? 'high' : (isSuspiciousDir ? 'warning' : 'normal')
+      };
+    }).filter(f => f.path);
+  }
+
   /**
    * 获取默认详细信息
    */
@@ -955,7 +1365,17 @@ export class SystemInfoManager {
       users: [],
       autostart: [],
       cronJobs: [],
-      firewallRules: []
+      firewallRules: [],
+      sshKeys: [],
+      loginHistory: [],
+      suidFiles: [],
+      envVariables: [],
+      shellConfigs: [],
+      installedPackages: [],
+      sudoersConfig: [],
+      systemdTimers: [],
+      kernelModules: [],
+      recentFiles: []
     };
   }
 
