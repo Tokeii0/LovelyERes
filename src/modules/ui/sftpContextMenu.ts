@@ -247,6 +247,10 @@ export class SftpContextMenuRenderer {
           ${IconPark.Search({ theme: 'outline', size: '14', fill: 'currentColor' })}
           <span>快速编辑/查看文件</span>
         </div>
+        <div class="ctx-item" id="sftp-ctx-rename">
+          ${IconPark.Edit({ theme: 'outline', size: '14', fill: 'currentColor' })}
+          <span>重命名</span>
+        </div>
         <div class="ctx-item" id="sftp-ctx-edit-perms">
           ${IconPark.Lock({ theme: 'outline', size: '14', fill: 'currentColor' })}
           <span>修改权限</span>
@@ -263,14 +267,31 @@ export class SftpContextMenuRenderer {
           ${IconPark.Save({ theme: 'outline', size: '14', fill: 'currentColor' })}
           <span>下载</span>
         </div>
+
+        <div style="height: 1px; background: var(--border-color); margin: 4px 0;"></div>
+
         <div class="ctx-item" id="sftp-ctx-copy-path">
           ${IconPark.Clipboard({ theme: 'outline', size: '14', fill: 'currentColor' })}
           <span>复制完整路径</span>
         </div>
-
+        <div class="ctx-item" id="sftp-ctx-copy-name">
+          ${IconPark.Copy({ theme: 'outline', size: '14', fill: 'currentColor' })}
+          <span>复制文件名</span>
+        </div>
+        <div class="ctx-item" id="sftp-ctx-open-terminal">
+          ${IconPark.Terminal({ theme: 'outline', size: '14', fill: 'currentColor' })}
+          <span>在终端中打开</span>
+        </div>
         <div class="ctx-item" id="sftp-ctx-file-details">
           ${IconPark.ChartHistogramOne({ theme: 'outline', size: '14', fill: 'currentColor' })}
           <span>查看详细信息</span>
+        </div>
+
+        <div style="height: 1px; background: var(--border-color); margin: 4px 0;"></div>
+
+        <div class="ctx-item ctx-item-danger" id="sftp-ctx-delete">
+          ${IconPark.Delete({ theme: 'outline', size: '14', fill: 'currentColor' })}
+          <span>删除</span>
         </div>
       </div>
     `

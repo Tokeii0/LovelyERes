@@ -772,37 +772,50 @@ export class ModernUIRenderer {
 
     return `
       <div class="sftp-page-container">
-        <!-- Header -->
-        <div class="sftp-header">
-          <div class="sftp-title">
-            <div style="width: 32px; height: 32px; background: var(--primary-color-alpha-10); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--primary-color);">
-              ${FolderOpen({ theme: 'filled', size: '18', fill: 'currentColor' })}
-            </div>
-            <span>SFTP 文件管理</span>
+        <!-- Compact Toolbar: nav + breadcrumb + actions -->
+        <div class="sftp-toolbar">
+          <div class="sftp-nav-controls">
+            <button class="modern-btn icon-only secondary" onclick="sftpManager.navigateToParent()" title="返回上一级">
+              ${Up({ theme: 'outline', size: '16', fill: 'currentColor' })}
+            </button>
+            <button class="modern-btn icon-only secondary" onclick="sftpManager.navigateToPath('/')" title="返回根目录">
+              ${Home({ theme: 'outline', size: '16', fill: 'currentColor' })}
+            </button>
           </div>
+
+          <div class="sftp-breadcrumb-bar">
+            <div id="sftp-breadcrumb" class="sftp-breadcrumb">
+              <span class="breadcrumb-segment breadcrumb-root" onclick="sftpManager.navigateToPath('/')" title="根目录">/</span>
+            </div>
+            <input
+              type="text"
+              id="sftp-path-input"
+              class="sftp-path-input"
+              placeholder="输入路径..."
+              onkeydown="if(event.key === 'Enter') sftpManager.navigateToPath(this.value)"
+              onfocus="this.parentElement.classList.add('editing')"
+              onblur="this.parentElement.classList.remove('editing')"
+            />
+          </div>
+
           <div class="sftp-actions">
-            <button id="sftp-history-btn" class="modern-btn secondary" onclick="window.toggleSftpHistory && window.toggleSftpHistory()" title="传输历史">
-              ${History({ theme: 'outline', size: '16', fill: 'currentColor' })}
-              <span>历史</span>
-            </button>
-            <button id="sftp-refresh-btn" class="modern-btn secondary" onclick="window.sftpRefresh && window.sftpRefresh()" title="刷新列表">
+            <button class="modern-btn icon-only secondary" onclick="window.sftpRefresh && window.sftpRefresh()" title="刷新列表">
               ${Refresh({ theme: 'outline', size: '16', fill: 'currentColor' })}
-              <span>刷新</span>
             </button>
-            <button id="sftp-create-folder-btn" class="modern-btn secondary" onclick="window.sftpOpenCreateFolder && window.sftpOpenCreateFolder()" title="新建文件夹">
+            <button class="modern-btn icon-only secondary" onclick="window.sftpOpenCreateFolder && window.sftpOpenCreateFolder()" title="新建文件夹">
               ${FolderPlus({ theme: 'outline', size: '16', fill: 'currentColor' })}
-              <span>新建文件夹</span>
             </button>
-            <button class="modern-btn secondary" onclick="window.sftpCreateFile && window.sftpCreateFile()" title="新建文件">
+            <button class="modern-btn icon-only secondary" onclick="window.sftpCreateFile && window.sftpCreateFile()" title="新建文件">
               ${FileText({ theme: 'outline', size: '16', fill: 'currentColor' })}
-              <span>新建文件</span>
             </button>
-            <button class="modern-btn secondary" onclick="window.sftpIntegritySnapshot && window.sftpIntegritySnapshot()" title="生成当前目录文件哈希清单">
+            <button class="modern-btn icon-only secondary" onclick="window.sftpIntegritySnapshot && window.sftpIntegritySnapshot()" title="完整性快照">
               ${Shield({ theme: 'outline', size: '16', fill: 'currentColor' })}
-              <span>完整性快照</span>
             </button>
-            <button id="sftp-upload-btn" class="modern-btn primary" onclick="window.sftpOpenUpload && window.sftpOpenUpload()" title="上传文件">
-              ${Upload({ theme: 'outline', size: '16', fill: 'currentColor' })}
+            <button class="modern-btn icon-only secondary" onclick="window.toggleSftpHistory && window.toggleSftpHistory()" title="传输历史">
+              ${History({ theme: 'outline', size: '16', fill: 'currentColor' })}
+            </button>
+            <button id="sftp-upload-btn" class="modern-btn primary small" onclick="window.sftpOpenUpload && window.sftpOpenUpload()" title="上传文件">
+              ${Upload({ theme: 'outline', size: '14', fill: 'currentColor' })}
               <span>上传</span>
             </button>
           </div>
@@ -817,7 +830,6 @@ export class ModernUIRenderer {
             <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/var/log')" title="系统日志">/var/log</button>
             <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/etc')" title="配置文件">/etc</button>
             <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/etc/cron.d')" title="计划任务">/etc/cron.d</button>
-            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/etc/crontab')" title="全局Crontab" style="display:none;">/etc/crontab</button>
             <button class="quick-jump-btn risk-highlight" onclick="sftpManager.navigateToPath('/root/.ssh')" title="Root SSH密钥">/root/.ssh</button>
             <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/home')" title="用户主目录">/home</button>
             <button class="quick-jump-btn risk-highlight" onclick="sftpManager.navigateToPath('/var/spool/cron')" title="用户计划任务">/var/spool/cron</button>
@@ -826,33 +838,6 @@ export class ModernUIRenderer {
             <button class="quick-jump-btn risk-highlight" onclick="sftpManager.navigateToPath('/dev/shm')" title="内存文件系统(常被利用)">/dev/shm</button>
             <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/opt')" title="第三方软件">/opt</button>
             <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/usr/local/bin')" title="本地二进制">/usr/local/bin</button>
-          </div>
-        </div>
-
-        <!-- Toolbar & Navigation -->
-        <div class="sftp-toolbar">
-          <div class="sftp-nav-controls">
-            <button class="modern-btn icon-only secondary" onclick="sftpManager.navigateToParent()" title="返回上一级">
-              ${Up({ theme: 'outline', size: '16', fill: 'currentColor' })}
-            </button>
-            <button class="modern-btn icon-only secondary" onclick="sftpManager.navigateToPath('/')" title="返回根目录">
-              ${Home({ theme: 'outline', size: '16', fill: 'currentColor' })}
-            </button>
-          </div>
-          
-          <div class="sftp-breadcrumb-bar">
-            <div id="sftp-breadcrumb" class="sftp-breadcrumb">
-              <span class="breadcrumb-segment breadcrumb-root" onclick="sftpManager.navigateToPath('/')" title="根目录">/</span>
-            </div>
-            <input
-              type="text"
-              id="sftp-path-input"
-              class="sftp-path-input"
-              placeholder="输入路径..."
-              onkeydown="if(event.key === 'Enter') sftpManager.navigateToPath(this.value)"
-              onfocus="this.parentElement.classList.add('editing')"
-              onblur="this.parentElement.classList.remove('editing')"
-            />
           </div>
         </div>
 

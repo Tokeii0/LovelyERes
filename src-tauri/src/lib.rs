@@ -90,6 +90,8 @@ pub fn run() {
             commands::sftp_commands::sftp_upload,
             commands::sftp_commands::sftp_download,
             commands::sftp_commands::sftp_create_directory,
+            commands::sftp_commands::sftp_rename,
+            commands::sftp_commands::sftp_delete,
             commands::sftp_commands::sftp_compress,
             commands::sftp_commands::sftp_extract,
             commands::sftp_commands::sftp_chmod,
