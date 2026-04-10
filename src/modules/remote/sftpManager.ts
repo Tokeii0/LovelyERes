@@ -188,7 +188,7 @@ export class SftpManager {
     try {
       // Load uid cache in background on first access
       if (!this.uidCacheLoaded) {
-        this.loadUidNameCache().catch(() => {});
+        this.loadUidNameCache().catch((e) => console.warn('UID缓存加载失败:', e));
       }
 
       const files = await (window as any).__TAURI__.core.invoke('sftp_list_files', {

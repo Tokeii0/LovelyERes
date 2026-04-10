@@ -5,6 +5,7 @@
 
 import * as IconPark from '@icon-park/svg'
 import { CommandHistoryManager, type CommandHistoryItem } from '../utils/commandHistoryManager'
+import { showConfirm } from './confirmDialog'
 
 export class CommandHistoryModal {
   private modal: HTMLElement | null = null;
@@ -127,8 +128,8 @@ export class CommandHistoryModal {
     }
 
     // 清空历史
-    document.getElementById('cmd-history-clear')?.addEventListener('click', () => {
-      if (confirm('确定要清空所有命令历史吗？此操作不可恢复。')) {
+    document.getElementById('cmd-history-clear')?.addEventListener('click', async () => {
+      if (await showConfirm({ title: '清空历史', message: '确定要清空所有命令历史吗？此操作不可恢复。', dangerous: true })) {
         CommandHistoryManager.clearHistory();
         this.renderHistory();
         (window as any).showNotification?.('命令历史已清空', 'success');
@@ -287,8 +288,8 @@ export class CommandHistoryModal {
     }
   }
 
-  private deleteCommand(id: string): void {
-    if (confirm('确定要删除这条历史记录吗？')) {
+  private async deleteCommand(id: string): Promise<void> {
+    if (await showConfirm({ title: '删除记录', message: '确定要删除这条历史记录吗？' })) {
       CommandHistoryManager.deleteById(id);
       this.renderHistory();
       (window as any).showNotification?.('历史记录已删除', 'success');

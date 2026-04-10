@@ -4,6 +4,7 @@
 
 import { apiService } from '../api/apiService';
 import { invoke } from '@tauri-apps/api/core';
+import { showConfirm } from '../ui/confirmDialog';
 
 interface DeviceInfo {
   device_uuid: string;
@@ -46,11 +47,11 @@ export class BindDeviceModal {
       this.createModal();
     }
 
-    // 获取当前设备信息
-    await this.loadCurrentDeviceInfo();
-
-    // 获取已绑定设备列表
-    await this.loadBoundDevices();
+    // 并行获取设备信息和已绑定设备列表
+    await Promise.all([
+      this.loadCurrentDeviceInfo(),
+      this.loadBoundDevices(),
+    ]);
 
     // 渲染设备列表
     this.renderDeviceList();
@@ -274,7 +275,7 @@ export class BindDeviceModal {
    * 解绑设备
    */
   public async unbindDevice(deviceId: number): Promise<void> {
-    if (!confirm('确定要解绑此设备吗？')) {
+    if (!(await showConfirm({ title: '解绑设备', message: '确定要解绑此设备吗？' }))) {
       return;
     }
 

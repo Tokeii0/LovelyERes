@@ -96,6 +96,25 @@ export const MLPS2_RULES: ComplianceRule[] = [
     standard: 'mlps2', clause: '8.1.4.3 b)',
     severity: 'medium', detectionItemId: 'log_analysis', category: '安全审计',
   },
+  // 竞赛级检测新增规则
+  {
+    id: 'mlps2-11', title: '恶意代码防范 — Webshell 检测',
+    description: '应能检测 Web 应用中的恶意脚本文件',
+    standard: 'mlps2', clause: '8.1.4.5 b)',
+    severity: 'critical', detectionItemId: 'webshell_scan', category: '恶意代码防范',
+  },
+  {
+    id: 'mlps2-12', title: '入侵防范 — Rootkit 检测',
+    description: '应能检测隐藏进程、内核后门等 Rootkit 行为',
+    standard: 'mlps2', clause: '8.1.4.4 c)',
+    severity: 'critical', detectionItemId: 'rootkit_scan', category: '入侵防范',
+  },
+  {
+    id: 'mlps2-13', title: '安全审计 — 日志完整性',
+    description: '审计记录不应被未授权删除或修改',
+    standard: 'mlps2', clause: '8.1.4.3 c)',
+    severity: 'high', detectionItemId: 'log_tamper', category: '安全审计',
+  },
 ];
 
 // ========== CIS Benchmark 检查模板 ==========
@@ -148,6 +167,19 @@ export const CIS_RULES: ComplianceRule[] = [
     description: 'Network-related kernel params for security',
     standard: 'cis', clause: 'CIS 3.1-3.3',
     severity: 'medium', detectionItemId: 'kernel_params', category: 'Kernel Parameters',
+  },
+  // 竞赛级检测新增规则
+  {
+    id: 'cis-6.1', title: 'Ensure no persistence mechanisms are planted',
+    description: 'Check for unauthorized cron jobs, bashrc trojans, systemd backdoors',
+    standard: 'cis', clause: 'CIS 6.1',
+    severity: 'high', detectionItemId: 'persistence_scan', category: 'Persistence Detection',
+  },
+  {
+    id: 'cis-4.2', title: 'Ensure log file integrity',
+    description: 'Log files should not be truncated, deleted, or tampered with',
+    standard: 'cis', clause: 'CIS 4.2',
+    severity: 'high', detectionItemId: 'log_tamper', category: 'Logging and Auditing',
   },
 ];
 

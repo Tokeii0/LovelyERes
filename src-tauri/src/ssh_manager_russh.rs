@@ -226,7 +226,7 @@ enum WorkerCommand {
 // ================== Session Data ==================
 
 struct SessionData {
-    handle: Handle<ClientHandler>,
+    handle: Arc<Handle<ClientHandler>>,
     info: ConnectionInfo,
     // Store active packet capture channel to allow stopping it
     packet_capture_channel: Option<tokio::sync::oneshot::Sender<()>>,
@@ -280,7 +280,18 @@ async fn connect_async(
     )
     .await
     .map_err(|_| format!("SSH connection timed out (15s) to {}:{}", host, port))?
-    .map_err(|e| format!("Failed to connect: {}", e))?;
+    .map_err(|e| {
+        let err_str = e.to_string();
+        if err_str.contains("10061") || err_str.contains("Connection refused") {
+            format!("连接被拒绝 ({}:{})：目标端口未开放或 SSH 服务未运行。请检查：\n1. 端口号是否正确\n2. SSH 服务是否启动\n3. 防火墙是否放行", host, port)
+        } else if err_str.contains("10060") || err_str.contains("timed out") {
+            format!("连接超时 ({}:{})：无法到达目标主机。请检查：\n1. IP 地址是否正确\n2. 网络是否可达\n3. 防火墙是否阻止", host, port)
+        } else if err_str.contains("10065") || err_str.contains("No route") {
+            format!("无法路由到主机 ({}:{})：网络不可达", host, port)
+        } else {
+            format!("连接失败 ({}:{}): {}", host, port, err_str)
+        }
+    })?;
     
     // Authenticate with timeout
     let auth_result = if let Some(key_str) = private_key {
@@ -649,7 +660,7 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                                 username: username.clone(),
                                 auth_method: if private_key.is_some() { "key".to_string() } else { "password".to_string() },
                             };
-                            sessions.insert(session_id.clone(), SessionData { handle, info, packet_capture_channel: None });
+                            sessions.insert(session_id.clone(), SessionData { handle: Arc::new(handle), info, packet_capture_channel: None });
                             let _ = response_tx.send(Ok(session_id));
                         }
                         Err(e) => {
@@ -659,66 +670,87 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                 }
                 
                 WorkerCommand::ExecuteCommand { session_id, command, response_tx } => {
-                    let result = if let Some(session) = sessions.get(&session_id) {
-                        execute_command_async(&session.handle, &command).await
+                    if let Some(session) = sessions.get(&session_id) {
+                        let handle = Arc::clone(&session.handle);
+                        tokio::spawn(async move {
+                            let result = execute_command_async(&handle, &command).await;
+                            let _ = response_tx.send(result);
+                        });
                     } else {
-                        Err(format!("Session not found: {}", session_id))
-                    };
-                    let _ = response_tx.send(result);
+                        let _ = response_tx.send(Err(format!("Session not found: {}", session_id)));
+                    }
                 }
                 
                 WorkerCommand::ListSftpFiles { session_id, path, response_tx } => {
-                    let result = if let Some(session) = sessions.get(&session_id) {
-                        list_sftp_files_async(&session.handle, &path).await
+                    if let Some(session) = sessions.get(&session_id) {
+                        let handle = Arc::clone(&session.handle);
+                        tokio::spawn(async move {
+                            let result = list_sftp_files_async(&handle, &path).await;
+                            let _ = response_tx.send(result);
+                        });
                     } else {
-                        Err(format!("Session not found: {}", session_id))
-                    };
-                    let _ = response_tx.send(result);
+                        let _ = response_tx.send(Err(format!("Session not found: {}", session_id)));
+                    }
                 }
-                
+
                 WorkerCommand::ReadSftpFile { session_id, path, response_tx } => {
-                    let result = if let Some(session) = sessions.get(&session_id) {
-                        read_sftp_file_async(&session.handle, &path).await
+                    if let Some(session) = sessions.get(&session_id) {
+                        let handle = Arc::clone(&session.handle);
+                        tokio::spawn(async move {
+                            let result = read_sftp_file_async(&handle, &path).await;
+                            let _ = response_tx.send(result);
+                        });
                     } else {
-                        Err(format!("Session not found: {}", session_id))
-                    };
-                    let _ = response_tx.send(result);
+                        let _ = response_tx.send(Err(format!("Session not found: {}", session_id)));
+                    }
                 }
                 
                 WorkerCommand::WriteSftpFile { session_id, path, content, response_tx } => {
-                    let result = if let Some(session) = sessions.get(&session_id) {
-                        write_sftp_file_async(&session.handle, &path, &content).await
+                    if let Some(session) = sessions.get(&session_id) {
+                        let handle = Arc::clone(&session.handle);
+                        tokio::spawn(async move {
+                            let result = write_sftp_file_async(&handle, &path, &content).await;
+                            let _ = response_tx.send(result);
+                        });
                     } else {
-                        Err(format!("Session not found: {}", session_id))
-                    };
-                    let _ = response_tx.send(result);
+                        let _ = response_tx.send(Err(format!("Session not found: {}", session_id)));
+                    }
                 }
-                
+
                 WorkerCommand::DeleteSftpFile { session_id, path, response_tx } => {
-                    let result = if let Some(session) = sessions.get(&session_id) {
-                        delete_sftp_file_async(&session.handle, &path).await
+                    if let Some(session) = sessions.get(&session_id) {
+                        let handle = Arc::clone(&session.handle);
+                        tokio::spawn(async move {
+                            let result = delete_sftp_file_async(&handle, &path).await;
+                            let _ = response_tx.send(result);
+                        });
                     } else {
-                        Err(format!("Session not found: {}", session_id))
-                    };
-                    let _ = response_tx.send(result);
+                        let _ = response_tx.send(Err(format!("Session not found: {}", session_id)));
+                    }
                 }
-                
+
                 WorkerCommand::CreateSftpDirectory { session_id, path, response_tx } => {
-                    let result = if let Some(session) = sessions.get(&session_id) {
-                        create_sftp_directory_async(&session.handle, &path).await
+                    if let Some(session) = sessions.get(&session_id) {
+                        let handle = Arc::clone(&session.handle);
+                        tokio::spawn(async move {
+                            let result = create_sftp_directory_async(&handle, &path).await;
+                            let _ = response_tx.send(result);
+                        });
                     } else {
-                        Err(format!("Session not found: {}", session_id))
-                    };
-                    let _ = response_tx.send(result);
+                        let _ = response_tx.send(Err(format!("Session not found: {}", session_id)));
+                    }
                 }
-                
+
                 WorkerCommand::RenameSftpFile { session_id, old_path, new_path, response_tx } => {
-                    let result = if let Some(session) = sessions.get(&session_id) {
-                        rename_sftp_file_async(&session.handle, &old_path, &new_path).await
+                    if let Some(session) = sessions.get(&session_id) {
+                        let handle = Arc::clone(&session.handle);
+                        tokio::spawn(async move {
+                            let result = rename_sftp_file_async(&handle, &old_path, &new_path).await;
+                            let _ = response_tx.send(result);
+                        });
                     } else {
-                        Err(format!("Session not found: {}", session_id))
-                    };
-                    let _ = response_tx.send(result);
+                        let _ = response_tx.send(Err(format!("Session not found: {}", session_id)));
+                    }
                 }
                 
                 WorkerCommand::Disconnect { session_id, response_tx } => {
@@ -1024,18 +1056,20 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                 }
                 
                 WorkerCommand::ExecuteBatch { session_id, commands, response_tx } => {
-                    let result = if let Some(session) = sessions.get(&session_id) {
-                        // Execute all commands in parallel using separate SSH channels
-                        let mut futures = Vec::with_capacity(commands.len());
-                        for cmd in &commands {
-                            futures.push(execute_command_async(&session.handle, cmd));
-                        }
-                        let results = futures::future::join_all(futures).await;
-                        Ok(results)
+                    if let Some(session) = sessions.get(&session_id) {
+                        let handle = Arc::clone(&session.handle);
+                        tokio::spawn(async move {
+                            // Execute all commands in parallel using separate SSH channels
+                            let mut futures = Vec::with_capacity(commands.len());
+                            for cmd in &commands {
+                                futures.push(execute_command_async(&handle, cmd));
+                            }
+                            let results = futures::future::join_all(futures).await;
+                            let _ = response_tx.send(Ok(results));
+                        });
                     } else {
-                        Err(format!("Session not found: {}", session_id))
-                    };
-                    let _ = response_tx.send(result);
+                        let _ = response_tx.send(Err(format!("Session not found: {}", session_id)));
+                    }
                 }
                 
                 WorkerCommand::Shutdown => {
@@ -1053,22 +1087,37 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
 // ================== Main SSHManager Struct ==================
 
 pub struct SSHManagerRussh {
-    worker_tx: mpsc::Sender<WorkerCommand>,
-    _worker_handle: thread::JoinHandle<()>,
+    /// Wrapped in Mutex to make SSHManagerRussh Sync-safe.
+    /// The Mutex is only held for the duration of send() (microseconds),
+    /// NOT for the entire command execution, enabling true concurrency.
+    worker_tx: Mutex<mpsc::Sender<WorkerCommand>>,
+    _worker_handle: Mutex<thread::JoinHandle<()>>,
     // Track current active session for backward compatibility
     current_session: Arc<Mutex<Option<String>>>,
+    /// busybox 路径 (None = 未启用, Some = 已启用，存储远端路径如 /tmp/busybox)
+    busybox_path: Mutex<Option<String>>,
 }
 
 impl SSHManagerRussh {
     pub fn new() -> Self {
         let (tx, rx) = mpsc::channel();
         let handle = thread::spawn(move || run_worker(rx));
-        
+
         Self {
-            worker_tx: tx,
-            _worker_handle: handle,
+            worker_tx: Mutex::new(tx),
+            _worker_handle: Mutex::new(handle),
             current_session: Arc::new(Mutex::new(None)),
+            busybox_path: Mutex::new(None),
         }
+    }
+
+    /// Send a command to the worker thread. The Mutex is only held for send().
+    fn send_to_worker(&self, cmd: WorkerCommand) -> Result<(), String> {
+        self.worker_tx
+            .lock()
+            .map_err(|_| "Failed to acquire worker lock".to_string())?
+            .send(cmd)
+            .map_err(|_| "Worker thread has shut down".to_string())
     }
     
     fn get_current_session(&self) -> Result<String, String> {
@@ -1098,8 +1147,7 @@ impl SSHManagerRussh {
     ) -> Result<String, String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::Connect {
+        self.send_to_worker(WorkerCommand::Connect {
                 host: host.to_string(),
                 port,
                 username: username.to_string(),
@@ -1107,7 +1155,7 @@ impl SSHManagerRussh {
                 private_key: private_key.map(|s| s.to_string()),
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         let result = response_rx
             .recv_timeout(std::time::Duration::from_secs(30))
@@ -1120,22 +1168,55 @@ impl SSHManagerRussh {
     }
     
     /// Execute command on current session (backward compatible)
+    /// 如果启用了 busybox 模式，自动用 busybox sh -c 包裹命令
     pub fn execute_command(&self, command: &str) -> Result<TerminalOutput, String> {
         let session_id = self.get_current_session()?;
-        self.execute_command_on_session(&session_id, command)
+        let final_command = self.wrap_with_busybox(command);
+        self.execute_command_on_session(&session_id, &final_command)
+    }
+
+    /// 如果 busybox 已启用，用 busybox sh -c 执行命令
+    /// busybox sh 是静态链接的，不受 LD_PRELOAD 和被篡改的系统命令影响
+    fn wrap_with_busybox(&self, command: &str) -> String {
+        if let Ok(guard) = self.busybox_path.lock() {
+            if let Some(ref bb) = *guard {
+                // 用 busybox sh -c 执行，确保 PATH 优先使用 busybox 自带命令
+                // 设置 PATH 让 busybox 内置命令优先于系统命令
+                return format!(
+                    "export BUSYBOX='{}'; {} sh -c '{}'",
+                    bb,
+                    bb,
+                    command.replace('\'', "'\\''")
+                );
+            }
+        }
+        command.to_string()
+    }
+
+    // ── busybox 管理 ──
+
+    /// 设置 busybox 路径（启用 busybox 模式）
+    pub fn set_busybox_path(&self, path: Option<String>) {
+        if let Ok(mut guard) = self.busybox_path.lock() {
+            *guard = path;
+        }
+    }
+
+    /// 获取当前 busybox 路径
+    pub fn get_busybox_path(&self) -> Option<String> {
+        self.busybox_path.lock().ok().and_then(|g| g.clone())
     }
     
     /// Execute command on specific session
     pub fn execute_command_on_session(&self, session_id: &str, command: &str) -> Result<TerminalOutput, String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::ExecuteCommand {
+        self.send_to_worker(WorkerCommand::ExecuteCommand {
                 session_id: session_id.to_string(),
                 command: command.to_string(),
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(60))
@@ -1147,13 +1228,12 @@ impl SSHManagerRussh {
         let session_id = self.get_current_session()?;
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::ExecuteBatch {
+        self.send_to_worker(WorkerCommand::ExecuteBatch {
                 session_id,
                 commands: commands.to_vec(),
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         // Longer timeout for batch: 60s base + 5s per command
         let timeout_secs = 60 + (commands.len() as u64 * 5);
@@ -1174,13 +1254,12 @@ impl SSHManagerRussh {
     pub fn list_sftp_files_on_session(&self, session_id: &str, path: &str) -> Result<Vec<SftpFileInfo>, String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::ListSftpFiles {
+        self.send_to_worker(WorkerCommand::ListSftpFiles {
                 session_id: session_id.to_string(),
                 path: path.to_string(),
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(120))
@@ -1197,13 +1276,12 @@ impl SSHManagerRussh {
     pub fn read_sftp_file_on_session(&self, session_id: &str, path: &str) -> Result<Vec<u8>, String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::ReadSftpFile {
+        self.send_to_worker(WorkerCommand::ReadSftpFile {
                 session_id: session_id.to_string(),
                 path: path.to_string(),
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(120))
@@ -1220,14 +1298,13 @@ impl SSHManagerRussh {
     pub fn write_sftp_file_on_session(&self, session_id: &str, path: &str, content: &[u8]) -> Result<(), String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::WriteSftpFile {
+        self.send_to_worker(WorkerCommand::WriteSftpFile {
                 session_id: session_id.to_string(),
                 path: path.to_string(),
                 content: content.to_vec(),
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(120))
@@ -1244,13 +1321,12 @@ impl SSHManagerRussh {
     pub fn delete_sftp_file_on_session(&self, session_id: &str, path: &str) -> Result<(), String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::DeleteSftpFile {
+        self.send_to_worker(WorkerCommand::DeleteSftpFile {
                 session_id: session_id.to_string(),
                 path: path.to_string(),
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(120))
@@ -1267,13 +1343,12 @@ impl SSHManagerRussh {
     pub fn create_sftp_directory_on_session(&self, session_id: &str, path: &str) -> Result<(), String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::CreateSftpDirectory {
+        self.send_to_worker(WorkerCommand::CreateSftpDirectory {
                 session_id: session_id.to_string(),
                 path: path.to_string(),
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(120))
@@ -1290,14 +1365,13 @@ impl SSHManagerRussh {
     pub fn rename_sftp_file_on_session(&self, session_id: &str, old_path: &str, new_path: &str) -> Result<(), String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::RenameSftpFile {
+        self.send_to_worker(WorkerCommand::RenameSftpFile {
                 session_id: session_id.to_string(),
                 old_path: old_path.to_string(),
                 new_path: new_path.to_string(),
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(120))
@@ -1319,12 +1393,11 @@ impl SSHManagerRussh {
     pub fn disconnect_session(&self, session_id: &str) -> Result<(), String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::Disconnect {
+        self.send_to_worker(WorkerCommand::Disconnect {
                 session_id: session_id.to_string(),
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         let result = response_rx
             .recv_timeout(std::time::Duration::from_secs(120))
@@ -1345,11 +1418,10 @@ impl SSHManagerRussh {
     pub fn disconnect_all(&self) -> Result<(), String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::DisconnectAll {
+        self.send_to_worker(WorkerCommand::DisconnectAll {
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         self.set_current_session(None);
         
@@ -1371,12 +1443,10 @@ impl SSHManagerRussh {
     pub fn is_session_connected(&self, session_id: &str) -> bool {
         let (response_tx, response_rx) = mpsc::channel();
         
-        if self.worker_tx
-            .send(WorkerCommand::IsConnected {
+        if self.send_to_worker(WorkerCommand::IsConnected {
                 session_id: session_id.to_string(),
                 response_tx,
-            })
-            .is_err()
+            }).is_err()
         {
             return false;
         }
@@ -1394,12 +1464,10 @@ impl SSHManagerRussh {
     pub fn get_session_connection_info(&self, session_id: &str) -> Option<ConnectionInfo> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        if self.worker_tx
-            .send(WorkerCommand::GetConnectionInfo {
+        if self.send_to_worker(WorkerCommand::GetConnectionInfo {
                 session_id: session_id.to_string(),
                 response_tx,
-            })
-            .is_err()
+            }).is_err()
         {
             return None;
         }
@@ -1411,11 +1479,9 @@ impl SSHManagerRussh {
     pub fn list_sessions(&self) -> Vec<String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        if self.worker_tx
-            .send(WorkerCommand::ListSessions {
+        if self.send_to_worker(WorkerCommand::ListSessions {
                 response_tx,
-            })
-            .is_err()
+            }).is_err()
         {
             return Vec::new();
         }
@@ -1577,8 +1643,7 @@ impl SSHManagerRussh {
         
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::CreateTerminalSession {
+        self.send_to_worker(WorkerCommand::CreateTerminalSession {
                 session_id,
                 terminal_id: terminal_id.to_string(),
                 cols,
@@ -1586,7 +1651,7 @@ impl SSHManagerRussh {
                 window,
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(30))
@@ -1597,12 +1662,11 @@ impl SSHManagerRussh {
     pub fn close_terminal_session(&self, terminal_id: &str) -> Result<(), String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::CloseTerminalSession {
+        self.send_to_worker(WorkerCommand::CloseTerminalSession {
                 terminal_id: terminal_id.to_string(),
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(10))
@@ -1613,9 +1677,8 @@ impl SSHManagerRussh {
     pub fn close_all_terminal_sessions(&self) -> Result<(), String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::CloseAllTerminalSessions { response_tx })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+        self.send_to_worker(WorkerCommand::CloseAllTerminalSessions { response_tx })
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(10))
@@ -1626,13 +1689,12 @@ impl SSHManagerRussh {
     pub fn send_terminal_input(&self, terminal_id: &str, data: Vec<u8>) -> Result<(), String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::SendTerminalInput {
+        self.send_to_worker(WorkerCommand::SendTerminalInput {
                 terminal_id: terminal_id.to_string(),
                 data,
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(5))
@@ -1643,14 +1705,13 @@ impl SSHManagerRussh {
     pub fn resize_terminal(&self, terminal_id: &str, cols: u32, rows: u32) -> Result<(), String> {
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::ResizeTerminal {
+        self.send_to_worker(WorkerCommand::ResizeTerminal {
                 terminal_id: terminal_id.to_string(),
                 cols,
                 rows,
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(5))
@@ -1677,8 +1738,7 @@ impl SSHManagerRussh {
         
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::StartPacketCapture {
+        self.send_to_worker(WorkerCommand::StartPacketCapture {
                 session_id,
                 interface: interface.to_string(),
                 filter,
@@ -1686,7 +1746,7 @@ impl SSHManagerRussh {
                 window,
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(5))
@@ -1698,12 +1758,11 @@ impl SSHManagerRussh {
         
         let (response_tx, response_rx) = mpsc::channel();
         
-        self.worker_tx
-            .send(WorkerCommand::StopPacketCapture {
+        self.send_to_worker(WorkerCommand::StopPacketCapture {
                 session_id,
                 response_tx,
             })
-            .map_err(|_| "Worker thread has shut down".to_string())?;
+?;
         
         response_rx
             .recv_timeout(std::time::Duration::from_secs(5))
@@ -1892,6 +1951,6 @@ impl Default for SSHManagerRussh {
 impl Drop for SSHManagerRussh {
     fn drop(&mut self) {
         // Send shutdown command to worker thread
-        let _ = self.worker_tx.send(WorkerCommand::Shutdown);
+        let _ = self.send_to_worker(WorkerCommand::Shutdown);
     }
 }

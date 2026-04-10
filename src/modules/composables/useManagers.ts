@@ -10,6 +10,7 @@
 import { ref, computed, onUnmounted, type Ref, type ComputedRef } from 'vue';
 import { liveMonitor, type SystemMetrics, type MetricsHistory } from '../monitoring/liveMonitor';
 import { eventBus } from '../core/eventBus';
+import { i18n } from '../i18n';
 
 // ========== useSSHConnection ==========
 
@@ -132,8 +133,6 @@ export function useNotification() {
 // ========== useI18n ==========
 
 export function useI18n() {
-  // 动态导入避免循环依赖
-  const { i18n } = require('../i18n') as typeof import('../i18n');
   const lang = ref(i18n.lang);
 
   i18n.onChange((newLang) => {

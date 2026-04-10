@@ -1,0 +1,536 @@
+/* ═══════════════════════════════════════════════════
+   Java Hot Update Page — prefix: jhu-
+   ═══════════════════════════════════════════════════ */
+
+/* ──── Page Layout ──── */
+.jhu-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.jhu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+}
+
+.jhu-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.jhu-header-left h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.jhu-header-left .jhu-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--accent-color);
+  color: #fff;
+}
+
+.jhu-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ──── Tabs ──── */
+.jhu-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.jhu-tab-btn {
+  padding: 10px 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.jhu-tab-btn:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+}
+
+.jhu-tab-btn.active {
+  color: var(--accent-color);
+  border-bottom-color: var(--accent-color);
+  font-weight: 500;
+}
+
+/* ──── Content Area ──── */
+.jhu-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+/* ──── Table ──── */
+.jhu-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.jhu-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.jhu-table thead {
+  background: var(--bg-tertiary);
+  position: sticky;
+  top: 0;
+}
+
+.jhu-table th {
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.jhu-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.jhu-table tbody tr:hover {
+  background: var(--hover-bg);
+}
+
+.jhu-table tbody tr.selected {
+  background: rgba(var(--accent-rgb, 59, 130, 246), 0.1);
+}
+
+.jhu-process-row {
+  cursor: pointer;
+}
+
+.jhu-cell-pid {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  color: var(--accent-color);
+}
+
+.jhu-cell-class {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jhu-cell-user { color: var(--text-secondary); }
+.jhu-cell-cpu, .jhu-cell-mem { font-family: monospace; }
+
+.jhu-cell-actions {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* ──── Buttons ──── */
+.jhu-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.jhu-btn:hover { background: var(--hover-bg); }
+
+.jhu-btn.primary {
+  background: var(--accent-color);
+  color: #fff;
+  border-color: var(--accent-color);
+}
+
+.jhu-btn.primary:hover { opacity: 0.9; }
+
+.jhu-btn.secondary {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.jhu-action-btn {
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: background 0.15s;
+}
+
+.jhu-action-btn:hover { background: var(--hover-bg); }
+.jhu-action-btn.danger:hover { background: rgba(239, 68, 68, 0.15); }
+
+/* ──── Cards ──── */
+.jhu-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.jhu-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 16px;
+  transition: border-color 0.2s;
+}
+
+.jhu-card:hover {
+  border-color: var(--accent-color);
+}
+
+.jhu-card.compact { padding: 12px; }
+
+.jhu-card-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.jhu-card h5 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.jhu-card p {
+  margin: 0 0 10px 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ──── Tool Grid ──── */
+.jhu-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.jhu-tool-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-primary);
+}
+
+.jhu-tool-btn:hover {
+  border-color: var(--accent-color);
+  background: var(--hover-bg);
+}
+
+.jhu-tool-icon { font-size: 24px; }
+.jhu-tool-btn span { font-size: 12px; font-weight: 500; }
+.jhu-tool-btn small { font-size: 10px; color: var(--text-secondary); }
+
+/* ──── Section ──── */
+.jhu-section {
+  margin-bottom: 20px;
+}
+
+.jhu-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.jhu-section-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ──── Status ──── */
+.jhu-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.jhu-status-dot.running { background: #22c55e; }
+.jhu-status-dot.stopped { background: #ef4444; }
+.jhu-status-dot.unknown { background: #94a3b8; }
+
+.jhu-status-badge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.jhu-status-badge.running { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.jhu-status-badge.stopped { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.jhu-status-badge.unknown { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+
+.jhu-tag {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+/* ──── Output Panel ──── */
+.jhu-output-panel {
+  margin-top: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.jhu-output-pre {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
+/* ──── Dialog ──── */
+.jhu-dialog {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.jhu-dialog h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.jhu-dialog-section {
+  margin-bottom: 14px;
+}
+
+.jhu-dialog-section h5 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.jhu-dialog-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.jhu-cmd-box {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 6px 0;
+}
+
+.jhu-cmd-box code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.jhu-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 4px 0;
+}
+
+.jhu-steps {
+  font-size: 12px;
+  color: var(--text-primary);
+  padding-left: 20px;
+  margin: 6px 0;
+  line-height: 1.8;
+}
+
+.jhu-select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  min-width: 200px;
+}
+
+/* ──── Deploy Card ──── */
+.jhu-deploy-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.jhu-deploy-icon { font-size: 24px; }
+
+.jhu-deploy-info {
+  flex: 1;
+}
+
+.jhu-deploy-info h5 {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.jhu-deploy-info small {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+/* ──── Empty & Loading ──── */
+.jhu-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.jhu-empty-icon { font-size: 48px; opacity: 0.5; }
+
+.jhu-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.jhu-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: jhu-spin 0.8s linear infinite;
+}
+
+@keyframes jhu-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ──── Form Rows (jar uf 工作台) ──── */
+.jhu-form-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.jhu-form-row label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 80px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.jhu-input {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  transition: border-color 0.2s;
+}
+
+.jhu-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
+.jhu-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.jhu-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-left: 88px; /* align with inputs after label */
+}
+
+/* ──── Card Button Group ──── */
+.jhu-card-btn-group {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* ──── Docker selected container ──── */
+.jhu-deploy-card.jhu-selected {
+  border-color: var(--accent-color);
+  background: rgba(var(--accent-rgb, 59, 130, 246), 0.06);
+}

@@ -6,12 +6,21 @@ import type {
     DockerContainerSummary
 } from './types';
 
+const MAX_ACTION_HISTORY = 100;
+
 export class DockerEmergencyManager {
     private manager: DockerManager;
     private actionHistory: DockerEmergencyAction[] = [];
 
     constructor(manager: DockerManager) {
         this.manager = manager;
+    }
+
+    private recordAction(action: DockerEmergencyAction): void {
+        this.actionHistory.push(action);
+        if (this.actionHistory.length > MAX_ACTION_HISTORY) {
+            this.actionHistory.length = MAX_ACTION_HISTORY;
+        }
     }
 
     // ============================================================
@@ -34,7 +43,7 @@ export class DockerEmergencyManager {
             action.status = 'failed';
             action.error = String(e);
         }
-        this.actionHistory.unshift(action);
+        this.recordAction(action);
         return action;
     }
 
@@ -54,7 +63,7 @@ export class DockerEmergencyManager {
             action.status = 'failed';
             action.error = String(e);
         }
-        this.actionHistory.unshift(action);
+        this.recordAction(action);
         return action;
     }
 
@@ -74,7 +83,7 @@ export class DockerEmergencyManager {
             action.status = 'failed';
             action.error = String(e);
         }
-        this.actionHistory.unshift(action);
+        this.recordAction(action);
         return action;
     }
 
@@ -94,7 +103,7 @@ export class DockerEmergencyManager {
             action.status = 'failed';
             action.error = String(e);
         }
-        this.actionHistory.unshift(action);
+        this.recordAction(action);
         return action;
     }
 
@@ -115,7 +124,7 @@ export class DockerEmergencyManager {
             action.status = 'failed';
             action.error = String(e);
         }
-        this.actionHistory.unshift(action);
+        this.recordAction(action);
         return action;
     }
 
@@ -145,11 +154,16 @@ export class DockerEmergencyManager {
             this.manager.getContainerEnv(containerRef)
         ]);
 
-        if (inspect.status === 'fulfilled') report.inspect = inspect.value as string;
-        if (logs.status === 'fulfilled') report.logs = logs.value;
-        if (processes.status === 'fulfilled') report.processes = processes.value;
-        if (diff.status === 'fulfilled') report.diff = diff.value;
-        if (envVars.status === 'fulfilled') report.envVars = envVars.value;
+        if (inspect.status === 'fulfilled') report.inspect = inspect.value ?? '';
+        else console.warn('Forensic: inspect failed:', inspect.reason);
+        if (logs.status === 'fulfilled') report.logs = logs.value ?? '';
+        else console.warn('Forensic: logs failed:', logs.reason);
+        if (processes.status === 'fulfilled') report.processes = processes.value ?? '';
+        else console.warn('Forensic: processes failed:', processes.reason);
+        if (diff.status === 'fulfilled') report.diff = diff.value ?? '';
+        else console.warn('Forensic: diff failed:', diff.reason);
+        if (envVars.status === 'fulfilled') report.envVars = envVars.value ?? '';
+        else console.warn('Forensic: envVars failed:', envVars.reason);
 
         // Extract network settings and mounts from inspect
         if (report.inspect) {

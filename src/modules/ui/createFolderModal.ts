@@ -9,7 +9,7 @@ export class CreateFolderModal {
 
   constructor() {
     this.createModal();
-    this.setupEventListeners();
+    // setupEventListeners is called at the end of createModal after DOM insertion
   }
 
   private createModal(): void {
@@ -171,6 +171,9 @@ export class CreateFolderModal {
 
     this.modal.style.display = 'none';
     document.body.appendChild(this.modal);
+
+    // 绑定事件监听器（必须在 appendChild 之后，确保元素在 DOM 中）
+    this.setupEventListeners();
   }
 
   private setupEventListeners(): void {

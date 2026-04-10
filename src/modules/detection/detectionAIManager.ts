@@ -6,6 +6,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { aiService } from '../ai/aiService';
+import { showAlert, showConfirm } from '../ui/confirmDialog';
 import {
   Robot,
   ListBottom,
@@ -20,7 +21,7 @@ export class DetectionAIManager {
   async generateAISolutionStream(title: string, description: string, severity: string, containerId: string): Promise<void> {
     // 检查是否配置了 AI
     if (!aiService.isConfigured()) {
-      const goToSettings = await this.showConfirm({
+      const goToSettings = await showConfirm({
         title: 'AI 服务未配置',
         message: 'AI 服务尚未配置，无法生成解决方案。',
         description: '是否前往设置页面配置 AI API？',
@@ -263,151 +264,6 @@ export class DetectionAIManager {
   }
 
   /**
-   * 显示通用确认对话框
-   */
-  public showConfirm(options: {
-    title: string;
-    message: string;
-    description?: string;
-    confirmText?: string;
-    cancelText?: string;
-    dangerous?: boolean;
-  }): Promise<boolean> {
-    return new Promise((resolve) => {
-      const modal = document.createElement('div');
-      modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.7);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10002;
-        padding: 20px;
-        animation: fadeIn 0.2s ease-out;
-      `;
-
-      const iconBg = options.dangerous ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)';
-      const confirmBg = options.dangerous ? '#ef4444' : 'var(--primary-color)';
-
-      modal.innerHTML = `
-        <style>
-          @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-          }
-          @keyframes slideUp {
-            from {
-              transform: translateY(20px);
-              opacity: 0;
-            }
-            to {
-              transform: translateY(0);
-              opacity: 1;
-            }
-          }
-        </style>
-        <div style="
-          background: var(--bg-primary);
-          border-radius: 12px;
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-          max-width: 450px;
-          width: 100%;
-          animation: slideUp 0.3s ease-out;
-        ">
-          <!-- 头部 -->
-          <div style="
-            padding: 20px;
-            border-bottom: 1px solid var(--border-color);
-          ">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <div style="
-                width: 40px;
-                height: 40px;
-                border-radius: 50%;
-                background: ${iconBg};
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 20px;
-              ">${options.dangerous ? '⚠️' : 'ℹ️'}</div>
-              <div style="flex: 1;">
-                <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary);">${options.title}</h3>
-                ${options.description ? `<p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-secondary);">${options.description}</p>` : ''}
-              </div>
-            </div>
-          </div>
-
-          <!-- 内容 -->
-          <div style="padding: 20px;">
-            <div style="font-size: 14px; color: var(--text-primary); line-height: 1.6;">${options.message}</div>
-          </div>
-
-          <!-- 底部按钮 -->
-          <div style="
-            padding: 16px 20px;
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-          ">
-            <button id="confirm-cancel" class="modern-btn secondary" style="padding: 8px 20px; font-size: 13px;">
-              ${options.cancelText || '取消'}
-            </button>
-            <button id="confirm-execute" class="modern-btn primary" style="padding: 8px 20px; font-size: 13px; background: ${confirmBg};">
-              ${options.confirmText || '确认'}
-            </button>
-          </div>
-        </div>
-      `;
-
-      document.body.appendChild(modal);
-
-      // 绑定按钮事件
-      const cancelBtn = document.getElementById('confirm-cancel');
-      const executeBtn = document.getElementById('confirm-execute');
-
-      const cleanup = () => {
-        modal.style.opacity = '0';
-        setTimeout(() => {
-          document.body.removeChild(modal);
-        }, 200);
-      };
-
-      cancelBtn?.addEventListener('click', () => {
-        cleanup();
-        resolve(false);
-      });
-
-      executeBtn?.addEventListener('click', () => {
-        cleanup();
-        resolve(true);
-      });
-
-      // 点击背景关闭
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-          cleanup();
-          resolve(false);
-        }
-      });
-
-      // ESC键关闭
-      const handleEscape = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          cleanup();
-          resolve(false);
-          document.removeEventListener('keydown', handleEscape);
-        }
-      };
-      document.addEventListener('keydown', handleEscape);
-    });
-  }
-
-  /**
    * 显示命令确认对话框
    */
   public async showConfirmDialog(command: string): Promise<boolean> {
@@ -440,7 +296,7 @@ export class DetectionAIManager {
       </div>
     `;
 
-    return this.showConfirm({
+    return showConfirm({
       title: '确认执行命令',
       message: commandHtml,
       description: '此操作将在远程服务器上执行命令',
@@ -596,7 +452,7 @@ export class DetectionAIManager {
   async generateAISolution(title: string, description: string, severity: string = 'medium'): Promise<void> {
     // 检查是否配置了 AI
     if (!aiService.isConfigured()) {
-      const goToSettings = await this.showConfirm({
+      const goToSettings = await showConfirm({
         title: 'AI 服务未配置',
         message: 'AI 服务尚未配置，无法生成解决方案。',
         description: '是否前往设置页面配置 AI API？',
@@ -650,7 +506,7 @@ export class DetectionAIManager {
       this.closeLoadingModal(loadingModal);
 
       // 显示错误信息
-      alert(`AI 解决方案生成失败：\n\n${error.message}\n\n请检查：\n1. AI API 配置是否正确\n2. API Key 是否有效\n3. 网络连接是否正常`);
+      showAlert({ title: 'AI 解决方案生成失败', message: `${error.message}\n\n请检查：\n1. AI API 配置是否正确\n2. API Key 是否有效\n3. 网络连接是否正常`, type: 'error' });
       console.error('AI 解决方案生成失败:', error);
     }
   }
@@ -919,7 +775,7 @@ export class DetectionAIManager {
           justify-content: flex-end;
           gap: 12px;
         ">
-          <button onclick="navigator.clipboard.writeText(this.dataset.solution).then(() => alert('已复制到剪贴板'))" data-solution="${solution.solution.replace(/"/g, '&quot;')}" style="
+          <button onclick="navigator.clipboard.writeText(this.dataset.solution).then(() => window.showNotification?.('已复制到剪贴板', 'success'))" data-solution="${solution.solution.replace(/"/g, '&quot;')}" style="
             padding: 8px 16px;
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);

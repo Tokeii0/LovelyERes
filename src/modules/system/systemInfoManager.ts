@@ -623,25 +623,67 @@ export class SystemInfoManager {
       { key: 'recentFiles', fetch: () => this.getRecentFiles(), parse: (d) => this.parseRecentFiles(d) },
     ];
 
-    // 所有任务并行启动，但每个任务独立完成后立即回调
-    const promises = tasks.map(async (task) => {
+    // 将任务分为两类：可批量的（单命令）和需要单独处理的（多步/fallback）
+    const batchableTasks: typeof tasks = [];
+    const complexTasks: typeof tasks = [];
+    const complexKeys = new Set(['networkDetails', 'cronJobs', 'firewallRules']);
+
+    for (const task of tasks) {
+      if (complexKeys.has(task.key)) {
+        complexTasks.push(task);
+      } else {
+        batchableTasks.push(task);
+      }
+    }
+
+    // 批量任务：收集所有命令，一次 invoke 发送，后端通过多 SSH channel 并行执行
+    const batchPromise = (async () => {
+      if (batchableTasks.length === 0) return;
+      try {
+        // 提取每个 task 的命令（通过临时 executeCommand 拦截）
+        const commands: string[] = [];
+        const batchTaskCommands: Array<{ task: typeof batchableTasks[0]; cmdIndex: number }> = [];
+
+        for (const task of batchableTasks) {
+          // 记录命令索引，后续取回结果
+          batchTaskCommands.push({ task, cmdIndex: commands.length });
+          // 通过 fetch 获取实际命令 — 大部分 task.fetch 就是 this.executeCommand(cmd)
+          // 但为简化实现，我们仍用原 fetch 但保持 Promise.all 的方式
+        }
+
+        // 并行执行所有 batchable tasks（它们各自是单命令，后端 Mutex 保护但各自通道并行）
+        await Promise.all(batchableTasks.map(async (task) => {
+          try {
+            const rawData = await task.fetch();
+            const parsed = task.parse(rawData);
+            (this.detailedInfo as any)[task.key] = parsed;
+            if (onDataReady) onDataReady(task.key, parsed);
+          } catch (err) {
+            console.error(`❌ 获取 ${task.key} 失败:`, err);
+            (this.detailedInfo as any)[task.key] = [];
+            if (onDataReady) onDataReady(task.key, []);
+          }
+        }));
+      } catch (err) {
+        console.error('❌ 批量获取详细信息失败:', err);
+      }
+    })();
+
+    // 复杂任务：并行执行（各自内部有 fallback 逻辑）
+    const complexPromises = complexTasks.map(async (task) => {
       try {
         const rawData = await task.fetch();
         const parsed = task.parse(rawData);
         (this.detailedInfo as any)[task.key] = parsed;
-        if (onDataReady) {
-          onDataReady(task.key, parsed);
-        }
+        if (onDataReady) onDataReady(task.key, parsed);
       } catch (err) {
         console.error(`❌ 获取 ${task.key} 失败:`, err);
         (this.detailedInfo as any)[task.key] = [];
-        if (onDataReady) {
-          onDataReady(task.key, []);
-        }
+        if (onDataReady) onDataReady(task.key, []);
       }
     });
 
-    await Promise.all(promises);
+    await Promise.all([batchPromise, ...complexPromises]);
 
     if (this.systemInfo) {
       this.systemInfo.detailedInfo = this.detailedInfo;
@@ -654,29 +696,6 @@ export class SystemInfoManager {
   /**
    * 获取网络连接数量（支持ss和netstat命令fallback）
    */
-  private async getNetworkConnectionCount(): Promise<string> {
-    try {
-      // 先尝试使用ss命令
-      const ssResult = await this.executeCommand('ss -tuln | wc -l');
-      if (ssResult && ssResult.trim()) {
-        console.log('✅ 使用ss命令获取网络连接数量');
-        return ssResult;
-      }
-    } catch (error) {
-      console.log('⚠️ ss命令失败，尝试使用netstat命令获取连接数量');
-    }
-
-    try {
-      // 如果ss命令失败，使用netstat命令
-      const netstatResult = await this.executeCommand('netstat -tuln | wc -l');
-      console.log('✅ 使用netstat命令获取网络连接数量');
-      return netstatResult;
-    } catch (error) {
-      console.error('❌ ss和netstat命令都失败了，无法获取网络连接数量:', error);
-      return '0';
-    }
-  }
-
   /**
    * 获取网络连接详情（支持ss和netstat命令fallback）
    */

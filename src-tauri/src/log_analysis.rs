@@ -1,54 +1,107 @@
-// 日志分析模块
-// 用于读取和格式化Linux系统日志
+// 日志分析模块 — 应急响应增强版
+// 支持：威胁分析、IP/用户提取、auditd 解析、多日志关联、IOC 搜索
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+// ==================== 数据结构 ====================
 
 /// 日志条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {
-    /// 时间戳
     pub timestamp: String,
-    /// 日志级别
     pub level: String,
-    /// 服务/进程名
     pub service: String,
-    /// 日志内容
     pub message: String,
-    /// 原始日志行
     pub raw: String,
-    /// 是否高亮显示（匹配关键词）
     pub highlighted: bool,
+    /// 日志来源文件（多日志关联时使用）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// 日志文件信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogFileInfo {
-    /// 文件路径
     pub path: String,
-    /// 文件名
     pub name: String,
-    /// 文件大小（字节）
     pub size: u64,
-    /// 最后修改时间
     pub modified: String,
-    /// 是否可读
     pub readable: bool,
 }
 
-/// 日志分析结果
+/// IP 统计
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LogAnalysisResult {
-    /// 日志条目列表
-    pub entries: Vec<LogEntry>,
-    /// 总条目数
-    pub total_count: usize,
-    /// 高亮条目数
-    pub highlighted_count: usize,
-    /// 日志文件信息
-    pub file_info: Option<LogFileInfo>,
+pub struct IpCount {
+    pub ip: String,
+    pub count: usize,
+    pub last_seen: String,
+    /// 关联的动作类型: failed_login, accepted_login, sudo, other
+    pub action_type: String,
 }
 
-/// 常见的系统日志文件路径
+/// 用户名统计
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserCount {
+    pub username: String,
+    pub count: usize,
+    pub success_count: usize,
+    pub fail_count: usize,
+}
+
+/// 威胁分析摘要
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThreatSummary {
+    pub brute_force_count: usize,
+    pub successful_login_count: usize,
+    pub privilege_escalation_count: usize,
+    pub suspicious_activity_count: usize,
+    pub top_source_ips: Vec<IpCount>,
+    pub top_target_users: Vec<UserCount>,
+    /// 24 小时分布 (索引 0-23)
+    pub hourly_distribution: Vec<usize>,
+    /// critical / high / medium / low / none
+    pub threat_level: String,
+}
+
+/// 日志分析结果（增强版）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogAnalysisResult {
+    pub entries: Vec<LogEntry>,
+    pub total_count: usize,
+    pub highlighted_count: usize,
+    pub file_info: Option<LogFileInfo>,
+    /// 威胁分析摘要（仅在请求分析时填充）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threat_summary: Option<ThreatSummary>,
+}
+
+/// IOC 搜索结果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IocSearchResult {
+    pub results: Vec<IocMatch>,
+    pub total_matches: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IocMatch {
+    pub indicator: String,
+    pub log_file: String,
+    pub count: usize,
+    pub sample_lines: Vec<String>,
+}
+
+/// 多日志关联结果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MultiLogResult {
+    pub entries: Vec<LogEntry>,
+    pub total_count: usize,
+    pub sources: Vec<String>,
+    pub threat_summary: Option<ThreatSummary>,
+}
+
+// ==================== 常量 ====================
+
 pub const COMMON_LOG_FILES: &[(&str, &str)] = &[
     ("/var/log/auth.log", "认证日志"),
     ("/var/log/secure", "安全日志"),
@@ -62,97 +115,72 @@ pub const COMMON_LOG_FILES: &[(&str, &str)] = &[
     ("/var/log/audit/audit.log", "审计日志"),
 ];
 
-/// 高亮关键词（用于检测可疑活动）
 pub const HIGHLIGHT_KEYWORDS: &[&str] = &[
-    "Failed password",
-    "failed",
-    "Failed",
-    "FAILED",
-    "Accepted",
-    "accepted",
-    "sudo",
-    "SUDO",
-    "authentication failure",
-    "Invalid user",
-    "invalid",
-    "error",
-    "Error",
-    "ERROR",
-    "warning",
-    "Warning",
-    "WARNING",
-    "denied",
-    "Denied",
-    "DENIED",
-    "unauthorized",
-    "Unauthorized",
-    "root",
-    "ROOT",
-    "attack",
-    "Attack",
-    "ATTACK",
-    "intrusion",
-    "Intrusion",
-    "breach",
-    "Breach",
+    "Failed password", "failed", "Failed", "FAILED",
+    "Accepted", "accepted",
+    "sudo", "SUDO", "su:",
+    "authentication failure", "Invalid user", "invalid",
+    "error", "Error", "ERROR",
+    "warning", "Warning", "WARNING",
+    "denied", "Denied", "DENIED",
+    "unauthorized", "Unauthorized",
+    "root", "ROOT",
+    "attack", "Attack", "ATTACK",
+    "intrusion", "Intrusion",
+    "breach", "Breach",
+    "segfault", "oom-killer", "Out of memory",
+    "reverse mapping", "COMMAND=",
 ];
 
-/// 解析日志行
+/// 用于应急响应的高危关键词（权重更高）
+const SUSPICIOUS_KEYWORDS: &[&str] = &[
+    "reverse shell", "nc -e", "ncat", "/dev/tcp", "/dev/udp",
+    "base64", "eval", "wget http", "curl http",
+    "chmod 777", "chmod +s", "setuid",
+    "LD_PRELOAD", "LD_LIBRARY_PATH",
+    "crontab -e", "/etc/cron",
+    "useradd", "usermod", "passwd",
+    "iptables -F", "ufw disable", "firewalld stop",
+    "history -c", "unset HISTFILE",
+    ".ssh/authorized_keys",
+];
+
+// ==================== 解析函数 ====================
+
+/// 解析日志行（增强版 — 支持 syslog / journalctl / auditd 格式）
 pub fn parse_log_line(line: &str, keywords: &[&str]) -> LogEntry {
     let highlighted = keywords.iter().any(|kw| line.contains(kw));
-    
-    // 尝试解析不同格式的日志
-    // 格式1: syslog格式 - "Nov 22 19:43:01 hostname service[pid]: message"
-    // 格式2: systemd格式 - "Nov 22 19:43:01 hostname systemd[1]: message"
-    // 格式3: 简单格式 - "timestamp level message"
-    
-    let parts: Vec<&str> = line.splitn(2, |c: char| c == '[' || c == ':').collect();
-    
-    let (timestamp, service, message) = if parts.len() >= 2 {
-        // 尝试提取时间戳（前3个字段通常是月 日 时间）
-        let fields: Vec<&str> = line.split_whitespace().collect();
-        let timestamp = if fields.len() >= 3 {
-            format!("{} {} {}", fields.get(0).unwrap_or(&""), 
-                    fields.get(1).unwrap_or(&""), 
-                    fields.get(2).unwrap_or(&""))
-        } else {
-            String::new()
-        };
-        
-        // 提取服务名（通常在时间戳和消息之间）
-        let service = if fields.len() >= 5 {
-            fields.get(4).unwrap_or(&"").trim_end_matches(':').to_string()
-        } else {
-            "unknown".to_string()
-        };
-        
-        // 消息是剩余的部分
-        let message = if let Some(pos) = line.find(':') {
-            line[pos + 1..].trim().to_string()
-        } else {
-            line.to_string()
-        };
-        
-        (timestamp, service, message)
+
+    // 优先尝试 auditd 格式: type=XXX msg=audit(1234567890.123:456): ...
+    if line.contains("type=") && line.contains("msg=audit(") {
+        return parse_audit_line(line, highlighted);
+    }
+
+    // syslog / journalctl 格式
+    let fields: Vec<&str> = line.split_whitespace().collect();
+
+    let timestamp = if fields.len() >= 3 {
+        format!("{} {} {}", fields.get(0).unwrap_or(&""),
+                fields.get(1).unwrap_or(&""),
+                fields.get(2).unwrap_or(&""))
     } else {
-        (String::new(), "unknown".to_string(), line.to_string())
+        String::new()
     };
-    
-    // 确定日志级别
-    let level = if line.to_lowercase().contains("error") {
-        "ERROR".to_string()
-    } else if line.to_lowercase().contains("warn") {
-        "WARN".to_string()
-    } else if line.to_lowercase().contains("info") {
-        "INFO".to_string()
-    } else if line.to_lowercase().contains("debug") {
-        "DEBUG".to_string()
-    } else if line.to_lowercase().contains("fail") {
-        "ERROR".to_string()
+
+    let service = if fields.len() >= 5 {
+        fields.get(4).unwrap_or(&"").trim_end_matches(':').to_string()
     } else {
-        "INFO".to_string()
+        "unknown".to_string()
     };
-    
+
+    let message = if let Some(pos) = line.find(':') {
+        line[pos + 1..].trim().to_string()
+    } else {
+        line.to_string()
+    };
+
+    let level = detect_level(line);
+
     LogEntry {
         timestamp,
         level,
@@ -160,50 +188,297 @@ pub fn parse_log_line(line: &str, keywords: &[&str]) -> LogEntry {
         message,
         raw: line.to_string(),
         highlighted,
+        source: None,
     }
 }
 
-/// 生成获取日志的命令
+/// 解析 auditd 日志行
+fn parse_audit_line(line: &str, highlighted: bool) -> LogEntry {
+    // type=SYSCALL msg=audit(1709234567.123:456): arch=c000003e syscall=59 success=yes ...
+    let audit_type = extract_field(line, "type=");
+    let timestamp = extract_audit_timestamp(line);
+    let success = extract_field(line, "success=");
+    let exe = extract_field(line, "exe=").replace('"', "");
+    let comm = extract_field(line, "comm=").replace('"', "");
+
+    let level = if audit_type == "EXECVE" || audit_type == "SYSCALL" {
+        if success == "no" { "ERROR".to_string() } else { "WARN".to_string() }
+    } else if audit_type.contains("USER_AUTH") || audit_type.contains("USER_LOGIN") {
+        if success == "no" { "ERROR".to_string() } else { "INFO".to_string() }
+    } else {
+        "INFO".to_string()
+    };
+
+    let service = format!("audit({})", audit_type);
+    let message = if !exe.is_empty() {
+        format!("{} exe={} comm={}", line.split("):").nth(1).unwrap_or("").trim(), exe, comm)
+    } else {
+        line.split("):").nth(1).unwrap_or(line).trim().to_string()
+    };
+
+    LogEntry {
+        timestamp,
+        level,
+        service,
+        message,
+        raw: line.to_string(),
+        highlighted,
+        source: None,
+    }
+}
+
+fn extract_field(line: &str, prefix: &str) -> String {
+    if let Some(start) = line.find(prefix) {
+        let rest = &line[start + prefix.len()..];
+        if rest.starts_with('"') {
+            // quoted value
+            rest[1..].split('"').next().unwrap_or("").to_string()
+        } else {
+            rest.split_whitespace().next().unwrap_or("").to_string()
+        }
+    } else {
+        String::new()
+    }
+}
+
+fn extract_audit_timestamp(line: &str) -> String {
+    // msg=audit(1709234567.123:456)
+    if let Some(start) = line.find("audit(") {
+        let rest = &line[start + 6..];
+        if let Some(end) = rest.find(':') {
+            if let Ok(epoch) = rest[..end].parse::<f64>() {
+                let secs = epoch as i64;
+                // 简单格式化为 YYYY-MM-DD HH:MM:SS
+                let dt = chrono::DateTime::from_timestamp(secs, 0);
+                if let Some(dt) = dt {
+                    return dt.format("%Y-%m-%d %H:%M:%S").to_string();
+                }
+            }
+        }
+    }
+    String::new()
+}
+
+fn detect_level(line: &str) -> String {
+    let lower = line.to_lowercase();
+    if lower.contains("fail") || lower.contains("error") || lower.contains("denied")
+        || lower.contains("invalid user") || lower.contains("authentication failure") {
+        "ERROR".to_string()
+    } else if lower.contains("warn") {
+        "WARN".to_string()
+    } else if lower.contains("debug") {
+        "DEBUG".to_string()
+    } else if lower.contains("accepted") || lower.contains("success") {
+        "INFO".to_string()
+    } else {
+        "INFO".to_string()
+    }
+}
+
+// ==================== 威胁分析 ====================
+
+/// 对已解析的日志条目进行威胁分析
+pub fn analyze_threats(entries: &[LogEntry]) -> ThreatSummary {
+    let mut brute_force = 0usize;
+    let mut success_login = 0usize;
+    let mut priv_esc = 0usize;
+    let mut suspicious = 0usize;
+
+    let mut ip_map: HashMap<String, (usize, String, String)> = HashMap::new(); // ip -> (count, last_seen, action)
+    let mut user_map: HashMap<String, (usize, usize)> = HashMap::new(); // user -> (success, fail)
+    let mut hourly: Vec<usize> = vec![0; 24];
+
+    for entry in entries {
+        let raw = &entry.raw;
+        let lower = raw.to_lowercase();
+
+        // 暴力破解
+        if lower.contains("failed password") || lower.contains("authentication failure") {
+            brute_force += 1;
+            if let Some(ip) = extract_ip(raw) {
+                let e = ip_map.entry(ip).or_insert((0, String::new(), "failed_login".to_string()));
+                e.0 += 1;
+                e.1 = entry.timestamp.clone();
+                e.2 = "failed_login".to_string();
+            }
+            if let Some(user) = extract_target_user(raw) {
+                let e = user_map.entry(user).or_insert((0, 0));
+                e.1 += 1;
+            }
+        }
+
+        // 成功登录
+        if lower.contains("accepted password") || lower.contains("accepted publickey") {
+            success_login += 1;
+            if let Some(ip) = extract_ip(raw) {
+                let e = ip_map.entry(ip).or_insert((0, String::new(), "accepted_login".to_string()));
+                e.0 += 1;
+                e.1 = entry.timestamp.clone();
+            }
+            if let Some(user) = extract_target_user(raw) {
+                let e = user_map.entry(user).or_insert((0, 0));
+                e.0 += 1;
+            }
+        }
+
+        // 提权
+        if lower.contains("sudo") || lower.contains("su:") || lower.contains("command=") {
+            priv_esc += 1;
+        }
+
+        // 可疑活动
+        for kw in SUSPICIOUS_KEYWORDS {
+            if raw.contains(kw) {
+                suspicious += 1;
+                break;
+            }
+        }
+
+        // 小时分布
+        if let Some(hour) = extract_hour(&entry.timestamp) {
+            if hour < 24 {
+                hourly[hour] += 1;
+            }
+        }
+    }
+
+    // Top 10 IP
+    let mut top_ips: Vec<IpCount> = ip_map.into_iter()
+        .map(|(ip, (count, last_seen, action))| IpCount { ip, count, last_seen, action_type: action })
+        .collect();
+    top_ips.sort_by(|a, b| b.count.cmp(&a.count));
+    top_ips.truncate(20);
+
+    // Top 20 用户
+    let mut top_users: Vec<UserCount> = user_map.into_iter()
+        .map(|(username, (success, fail))| UserCount {
+            count: success + fail,
+            username, success_count: success, fail_count: fail
+        })
+        .collect();
+    top_users.sort_by(|a, b| b.count.cmp(&a.count));
+    top_users.truncate(20);
+
+    // 威胁等级
+    let threat_level = if brute_force > 100 || suspicious > 10 {
+        "critical".to_string()
+    } else if brute_force > 50 || suspicious > 5 {
+        "high".to_string()
+    } else if brute_force > 10 || suspicious > 0 {
+        "medium".to_string()
+    } else if brute_force > 0 {
+        "low".to_string()
+    } else {
+        "none".to_string()
+    };
+
+    ThreatSummary {
+        brute_force_count: brute_force,
+        successful_login_count: success_login,
+        privilege_escalation_count: priv_esc,
+        suspicious_activity_count: suspicious,
+        top_source_ips: top_ips,
+        top_target_users: top_users,
+        hourly_distribution: hourly,
+        threat_level,
+    }
+}
+
+/// 从日志行中提取 IP 地址
+fn extract_ip(line: &str) -> Option<String> {
+    // 匹配 "from X.X.X.X" 或 "rhost=X.X.X.X" 或 "SRC=X.X.X.X"
+    let patterns = ["from ", "rhost=", "SRC=", "src=", "addr="];
+    for pat in &patterns {
+        if let Some(pos) = line.find(pat) {
+            let rest = &line[pos + pat.len()..];
+            let token = rest.split(|c: char| !c.is_ascii_digit() && c != '.').next()?;
+            if is_valid_ip(token) {
+                return Some(token.to_string());
+            }
+        }
+    }
+    // 降级：找任意 IP 模式
+    for word in line.split_whitespace() {
+        let clean = word.trim_matches(|c: char| !c.is_ascii_digit() && c != '.');
+        if is_valid_ip(clean) && clean != "127.0.0.1" && clean != "0.0.0.0" {
+            return Some(clean.to_string());
+        }
+    }
+    None
+}
+
+fn is_valid_ip(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('.').collect();
+    if parts.len() != 4 { return false; }
+    parts.iter().all(|p| p.parse::<u8>().is_ok())
+}
+
+/// 从日志行中提取目标用户名
+fn extract_target_user(line: &str) -> Option<String> {
+    // "for <user> from" / "user=<user>" / "Invalid user <user>"
+    let patterns = [
+        ("for ", " from"),
+        ("for invalid user ", " from"),
+        ("Invalid user ", " from"),
+        ("user=", " "),
+        ("user ", " "),
+    ];
+    for (start_pat, end_pat) in &patterns {
+        if let Some(start) = line.find(start_pat) {
+            let rest = &line[start + start_pat.len()..];
+            let user = if let Some(end) = rest.find(end_pat) {
+                &rest[..end]
+            } else {
+                rest.split_whitespace().next().unwrap_or("")
+            };
+            let user = user.trim();
+            if !user.is_empty() && user.len() < 64 && !user.contains('/') {
+                return Some(user.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// 从时间戳中提取小时
+fn extract_hour(timestamp: &str) -> Option<usize> {
+    // "Nov 22 19:43:01" → 19  或  "2024-01-15 19:43:01" → 19
+    for part in timestamp.split_whitespace() {
+        if part.contains(':') {
+            if let Some(hour_str) = part.split(':').next() {
+                if let Ok(h) = hour_str.parse::<usize>() {
+                    return Some(h);
+                }
+            }
+        }
+    }
+    None
+}
+
+// ==================== 命令生成 ====================
+
 pub fn generate_log_read_command(log_path: &str, page: usize, page_size: usize, filter: Option<&str>, date_filter: Option<&str>) -> String {
     let total_lines = page * page_size;
-    
+
     let mut grep_part = String::new();
     if let Some(filter_text) = filter {
         if !filter_text.trim().is_empty() {
             grep_part.push_str(&format!(" | grep -i '{}'", filter_text));
         }
     }
-    
     if let Some(date) = date_filter {
         if !date.trim().is_empty() {
-            // 简单的日期匹配，假设日志行包含该日期字符串
             grep_part.push_str(&format!(" | grep '{}'", date));
         }
     }
 
-    // 逻辑：先过滤（如果需要），然后取最后的 N 行，再取前 page_size 行
-    // 注意：如果使用了 grep，由于不知道匹配的总行数，分页会变得复杂。
-    // 这里采用简化的策略：如果不使用 grep，直接用 tail 分页。
-    // 如果使用了 grep，则对 grep 的结果进行 tail 分页。
-    
     if grep_part.is_empty() {
-        // 无过滤：tail -n (page * size) | head -n size (注意：这里 head 取的是 tail 输出的前面，即最旧的，我们需要反转)
-        // 正确的倒序分页（最新的在最前）：
-        // page 1: tail -n 100
-        // page 2: tail -n 200 | head -n 100
-        // 但是 tail 输出是旧->新。
-        // tail -n 200 输出：[Line N-199 ... Line N]
-        // 我们需要的是 [Line N-199 ... Line N-100]
-        // 所以是 head -n 100。
-        
         if page == 1 {
             format!("tail -n {} {} 2>/dev/null || echo 'Log file not found'", page_size, log_path)
         } else {
             format!("tail -n {} {} 2>/dev/null | head -n {} || echo 'Log file not found'", total_lines, log_path, page_size)
         }
     } else {
-        // 有过滤：cat file | grep ... | tail ...
-        // 这里效率较低，但功能优先
         if page == 1 {
             format!("cat {} 2>/dev/null {} | tail -n {} || echo 'No matching entries'", log_path, grep_part, page_size)
         } else {
@@ -212,68 +487,67 @@ pub fn generate_log_read_command(log_path: &str, page: usize, page_size: usize, 
     }
 }
 
-/// 生成获取journalctl日志的命令
 pub fn generate_journalctl_command(page: usize, page_size: usize, unit: Option<&str>, filter: Option<&str>, since: Option<&str>, until: Option<&str>) -> String {
-    // journalctl 默认是旧->新。使用 -r 可以反向（新->旧）。
-    // 使用 -r 配合分页更方便。
-    // journalctl -r -n (page * size) | tail -n size
-    // 注意：journalctl -n 输出的是最后的 N 行。
-    
     let mut cmd = String::from("journalctl --no-pager");
-    
+
     if let Some(unit_name) = unit {
         if !unit_name.trim().is_empty() {
             cmd.push_str(&format!(" -u {}", unit_name));
         }
     }
-    
     if let Some(s) = since {
         if !s.trim().is_empty() {
             cmd.push_str(&format!(" --since \"{}\"", s));
         }
     }
-    
     if let Some(u) = until {
         if !u.trim().is_empty() {
             cmd.push_str(&format!(" --until \"{}\"", u));
         }
     }
-    
     if let Some(filter_text) = filter {
         if !filter_text.trim().is_empty() {
             cmd.push_str(&format!(" | grep -i '{}'", filter_text));
         }
     }
-    
-    // 分页逻辑
+
     let total_lines = page * page_size;
-    
-    // journalctl 本身没有方便的"跳过N行"的参数（除了cursor）。
-    // 我们可以利用 tail/head 管道。
-    // 假设我们要看最新的日志（倒序）。
-    // 我们可以让 journalctl 输出所有（或足够多），然后用 tail 处理。
-    // 或者使用 -n 参数。
-    // page 1: journalctl -n 100
-    // page 2: journalctl -n 200 | head -n 100 (取旧的部分)
-    
     if page == 1 {
         cmd.push_str(&format!(" -n {}", page_size));
     } else {
         cmd.push_str(&format!(" -n {} | head -n {}", total_lines, page_size));
     }
-    
+
     cmd.push_str(" 2>/dev/null || echo 'journalctl not available'");
     cmd
 }
 
-/// 生成获取日志文件列表的命令
+/// 生成威胁分析命令 — 读取更多行用于统计（最近 2000 行）
+pub fn generate_threat_analysis_command(log_path: &str) -> String {
+    format!("tail -n 2000 {} 2>/dev/null || echo ''", log_path)
+}
+
+/// 生成多日志关联读取命令
+pub fn generate_multi_log_command(log_paths: &[String], line_limit: usize) -> Vec<String> {
+    log_paths.iter().map(|path| {
+        format!("tail -n {} {} 2>/dev/null || echo ''", line_limit, path)
+    }).collect()
+}
+
+/// 生成 IOC 搜索命令（对每个 indicator 在每个日志文件中 grep）
+pub fn generate_ioc_search_command(indicator: &str, log_path: &str) -> String {
+    format!(
+        "grep -c '{}' {} 2>/dev/null || echo '0'; grep -m 3 '{}' {} 2>/dev/null || true",
+        indicator, log_path, indicator, log_path
+    )
+}
+
 pub fn generate_list_log_files_command() -> String {
     format!(
         r#"find /var/log -maxdepth 2 -type f \( -name "*.log" -o -name "messages" -o -name "secure" -o -name "syslog" -o -name "auth.log" \) -readable -exec stat -c "%s|%n|%Y" {{}} \; 2>/dev/null | head -50"#
     )
 }
 
-/// 生成获取日志文件信息的命令
 pub fn generate_log_file_info_command(log_path: &str) -> String {
     format!(
         r#"stat -c "size:%s|modified:%y|readable:yes" {} 2>/dev/null || echo "readable:no""#,

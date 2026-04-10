@@ -29,117 +29,147 @@ import {
 } from '@icon-park/svg';
 
 export class EmergencyRenderer {
-  private state: AppState;
+  constructor(_state: AppState) {}
 
-  constructor(state: AppState) {
-    this.state = state;
-  }
-
-  /**
-   * Update state reference (call when app state changes)
-   */
-  setState(state: AppState): void {
-    this.state = state;
+  setState(_state: AppState): void {
+    // State stored in modernUIRenderer; renderers access it via method params if needed
   }
 
   /**
    * Render the emergency commands page
    */
   renderEmergencyCommandsPage(): string {
-    const renderCategory = (cat: any) => {
-      const items = cat.items.map((item: any) => `
-          <button class="em-cmd-btn" data-em-id="${item.id}" title="${item.desc || ''}">
-            <div class="em-cmd-content">
-              <span class="em-cmd-name">${item.name}</span>
-              <span class="em-cmd-desc">${item.desc || '点击执行此命令'}</span>
-            </div>
-            <div class="em-cmd-icon">
-              <svg width="20" height="20" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M14 12L26 24L14 36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M26 36H42" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-          </button>
-        `).join('');
+    // Build sidebar groups
+    const sidebarGroups = emergencyCategories.map((cat, idx) => {
+      const items = cat.items.map(item =>
+        `<div class="em-list-item" data-em-id="${item.id}" title="${item.desc || ''}">
+          <span class="em-item-name">${item.name}</span>
+        </div>`
+      ).join('');
 
+      const collapsed = idx > 0 ? ' collapsed' : '';
       return `
-      <div class="em-category-section">
-        <div class="em-category-header">
-          <h3 class="em-category-title">${cat.title}</h3>
-          ${cat.hint ? `<div class="em-category-hint">${cat.hint}</div>` : ''}
-        </div>
-        <div class="em-grid">
-          ${items}
-        </div>
-      </div>
-    `;
-    };
+        <div class="em-group${collapsed}" data-group-id="${cat.id}">
+          <div class="em-group-header">
+            <svg class="em-chevron" width="12" height="12" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>${cat.title}</span>
+            <span class="em-group-count">${cat.items.length}</span>
+          </div>
+          <div class="em-group-items">${items}</div>
+        </div>`;
+    }).join('');
 
-    // 获取当前连接的账号列表
+    // Account options
     const sshManager = (window as any).app?.sshManager;
     const sshConnectionManager = (window as any).sshConnectionManager;
     const currentConnectionId = sshConnectionManager?.getCurrentConnectionId?.();
     let accountsOptions = '<option value="">默认账号</option>';
-
     if (currentConnectionId && sshManager) {
       const connection = sshManager.getConnection(currentConnectionId);
-      if (connection && connection.accounts && connection.accounts.length > 0) {
-        connection.accounts.forEach((account: any) => {
-          const label = account.description
-            ? `${account.username} (${account.description})`
-            : account.username;
-          accountsOptions += `<option value="${account.username}">${label}</option>`;
+      if (connection?.accounts?.length) {
+        connection.accounts.forEach((a: any) => {
+          const label = a.description ? `${a.username} (${a.description})` : a.username;
+          accountsOptions += `<option value="${a.username}">${label}</option>`;
         });
       }
     }
 
-    const body = emergencyCategories.map(renderCategory).join('');
-
     return `
-      <div class="emergency-commands-page" style="display:flex; flex-direction:column; gap: var(--spacing-lg);">
-        <div class="em-header-container">
-          <div class="em-system-card">
-            <div class="em-system-icon">
-              <svg width="24" height="24" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="6" y="6" width="36" height="36" rx="3" stroke="currentColor" stroke-width="4"/>
-                <path d="M14 6V42" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-                <path d="M14 16H34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-                <path d="M14 24H34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-                <path d="M14 32H34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <div class="em-system-info">
-              <div class="em-system-label">检测到的系统</div>
-              <div id="detected-system-info" class="em-system-value">检测中...</div>
-            </div>
+      <div class="emergency-commands-page">
+        <!-- Toolbar -->
+        <div class="em-toolbar">
+          <div class="em-system-badge">
+            <span class="em-sys-icon">
+              <svg width="14" height="14" viewBox="0 0 48 48" fill="none"><rect x="6" y="6" width="36" height="36" rx="3" stroke="currentColor" stroke-width="4"/><path d="M14 16H34M14 24H34M14 32H34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
+            </span>
+            <span id="detected-system-info" class="em-sys-name">检测中...</span>
           </div>
 
-          <div class="em-actions-card">
-            <div class="em-search-wrapper">
-               <svg width="16" height="16" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M21 38C30.3888 38 38 30.3888 38 21C38 11.6112 30.3888 4 21 4C11.6112 4 4 11.6112 4 21C4 30.3888 11.6112 38 21 38Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
-                  <path d="M33.2218 33.2218L41.7071 41.7071" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-               </svg>
-               <input type="text" class="em-search-input" placeholder="搜索命令..." oninput="window.emergencyPageManager?.handleSearch(this.value)">
-            </div>
+          <div class="em-search-wrapper">
+            <svg width="14" height="14" viewBox="0 0 48 48" fill="none"><circle cx="21" cy="21" r="17" stroke="currentColor" stroke-width="4"/><path d="M33.2 33.2L41.7 41.7" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
+            <input type="text" class="em-search-input" placeholder="搜索命令..." oninput="window.emergencyPageManager?.handleSearch(this.value)">
+          </div>
 
-            <div class="em-account-select-wrapper">
-              <label style="font-size: 12px; color: var(--text-secondary); margin: 0;">执行账号:</label>
-              <select id="emergency-account-select" class="em-account-select" title="选择执行应急命令的账号">
-                ${accountsOptions}
-              </select>
-            </div>
+          <div class="em-account-select-wrapper">
+            <span>账号:</span>
+            <select id="emergency-account-select" class="em-account-select">${accountsOptions}</select>
+          </div>
 
-            <button id="view-command-history-btn" class="modern-btn primary" style="height: 36px;" onclick="(window).commandHistoryModal?.show()">
-              <svg width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 8px;">
-                <path d="M24 44C35.0457 44 44 35.0457 44 24C44 12.9543 35.0457 4 24 4C12.9543 4 4 12.9543 4 24C4 35.0457 12.9543 44 24 44Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
-                <path d="M24 12V24L32 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span>查看命令历史</span>
+          <button class="em-toolbar-btn" onclick="(window).commandHistoryModal?.show()">
+            ${History({ theme: 'outline', size: '14', fill: 'currentColor' })}
+            <span>命令历史</span>
+          </button>
+
+          <div class="em-busybox-toggle" id="em-busybox-toggle">
+            <button class="em-toolbar-btn" id="em-busybox-btn" onclick="window.__busyboxToggle?.()">
+              <span id="em-busybox-indicator" class="em-busybox-dot off"></span>
+              <span id="em-busybox-label">Busybox</span>
             </button>
           </div>
         </div>
-        ${body}
+
+        <!-- Panels -->
+        <div class="em-panels">
+          <!-- Left Sidebar -->
+          <div class="em-sidebar">
+            <div class="em-sidebar-scroll">
+              ${sidebarGroups}
+            </div>
+          </div>
+
+          <!-- Right Main -->
+          <div class="em-main" id="em-main-panel">
+            <!-- Empty state (default) -->
+            <div class="em-empty-state" id="em-empty-state">
+              <div class="em-empty-icon">
+                <svg width="56" height="56" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="em-s" x1=".1" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#f9a8d4"/><stop offset="1" stop-color="#c4b5fd"/></linearGradient>
+                    <linearGradient id="em-h" x1=".36" y1="0" x2=".5" y2=".5"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+                  </defs>
+                  <g transform="rotate(-15 64 62)">
+                    <path d="M64,16 L75.8,47.8 L109.2,48.8 L83.2,68.8 L93,101.2 L64,83.2 L35,101.2 L44.8,68.8 L18.8,48.8 L52.2,47.8 Z" fill="url(#em-s)" stroke="url(#em-s)" stroke-width="12" stroke-linejoin="round" paint-order="stroke fill"/>
+                    <path d="M64,16 L75.8,47.8 L109.2,48.8 L83.2,68.8 L93,101.2 L64,83.2 L35,101.2 L44.8,68.8 L18.8,48.8 L52.2,47.8 Z" fill="url(#em-h)" stroke="url(#em-h)" stroke-width="12" stroke-linejoin="round" paint-order="stroke fill"/>
+                  </g>
+                </svg>
+              </div>
+              <span>从左侧选择一个命令</span>
+            </div>
+
+            <!-- Detail panel (hidden by default) -->
+            <div class="em-detail-panel" id="em-detail-panel" style="display:none;">
+              <h3 class="em-detail-title" id="em-detail-title"></h3>
+              <p class="em-detail-desc" id="em-detail-desc"></p>
+              <div class="em-detail-command">
+                <code class="em-detail-code" id="em-detail-code" contenteditable="false"></code>
+              </div>
+              <div class="em-detail-actions">
+                <button class="em-action-btn primary" id="em-btn-execute">
+                  <svg width="14" height="14" viewBox="0 0 48 48" fill="none"><path d="M15 8l26 16-26 16V8z" fill="currentColor"/></svg>
+                  执行
+                </button>
+                <button class="em-action-btn" id="em-btn-edit">编辑命令</button>
+                <button class="em-action-btn" id="em-btn-copy">复制命令</button>
+                <button class="em-action-btn" id="em-btn-ai">AI 解释</button>
+              </div>
+            </div>
+
+            <!-- Output panel (hidden by default) -->
+            <div class="em-output-panel" id="em-output-panel" style="display:none;">
+              <div class="em-output-header">
+                <span class="em-output-title">输出</span>
+                <input type="text" class="em-output-search" id="em-output-search" placeholder="搜索输出...">
+              </div>
+              <div class="em-output-scroll" id="em-output-scroll">
+                <pre class="em-output-content" id="em-output-content"></pre>
+              </div>
+              <div class="em-ai-box" id="em-ai-box" style="display:none;">
+                <div class="em-ai-label">AI 分析</div>
+                <div id="em-ai-content"></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -148,9 +178,11 @@ export class EmergencyRenderer {
    * 渲染快速检测页面
    */
   renderQuickDetectionPage(): string {
-    // 安全检测项目 - 使用 IconPark 图标
+    const icon = (fn: any, size = '16', theme = 'outline') =>
+      fn({ theme, size, fill: 'currentColor' });
+
+    // 安全检测项目
     const securityChecks = [
-      // 基础安全检测
       { id: 'port-scan', name: '端口安全扫描', description: '检测开放端口和高危服务', iconFunc: NetworkTree },
       { id: 'user-audit', name: '用户权限审计', description: '检查用户权限和空密码账号', iconFunc: User },
       { id: 'backdoor-scan', name: '后门检测', description: '扫描 Webshell 和计划任务', iconFunc: Code },
@@ -184,7 +216,21 @@ export class EmergencyRenderer {
       { id: 'dns-config', name: 'DNS 配置检查', description: '检查 DNS 解析配置安全', iconFunc: LinkCloud }
     ];
 
-    // 性能检测项目 - 使用 IconPark 图标
+    // 竞赛级检测项目
+    const competitionChecks = [
+      { id: 'webshell-scan', name: 'Webshell 扫描', description: '扫描 Web 目录中的 Webshell 文件', iconFunc: Code },
+      { id: 'rootkit-scan', name: 'Rootkit 检测', description: '检测隐藏进程、内核模块、LD_PRELOAD', iconFunc: Shield },
+      { id: 'persistence-scan', name: '持久化机制扫描', description: '全量扫描 cron/bashrc/systemd/rc.local', iconFunc: Config },
+      { id: 'log-tamper', name: '日志篡改检测', description: '检测日志被清空、删除、篡改的证据', iconFunc: Analysis },
+      { id: 'network-backdoor', name: '网络后门检测', description: '检测反弹 Shell、C2 连接、可疑监听', iconFunc: LinkCloud },
+      { id: 'enhanced-user', name: '增强用户审计', description: 'UID 冲突、全用户历史命令、sudo 组异常', iconFunc: User },
+      { id: 'hidden-cron', name: '隐藏计划任务', description: '深度扫描所有 cron 目录和 at 队列', iconFunc: Time },
+      { id: 'ssh-key-audit', name: 'SSH 密钥审计', description: '审计所有 SSH 密钥和 sshd 配置', iconFunc: Key },
+      { id: 'timestomp-check', name: '时间戳篡改检测', description: '检测 mtime 与 ctime 异常的文件', iconFunc: History },
+      { id: 'enhanced-process', name: '增强进程分析', description: '扩大扫描范围，检测可疑二进制', iconFunc: Config },
+    ];
+
+    // 性能检测项目
     const performanceChecks = [
       { id: 'cpu-test', name: 'CPU 压力测试', description: '测试 CPU 性能和频率', iconFunc: Cpu },
       { id: 'memory-test', name: '内存性能测试', description: '测试内存读写速度', iconFunc: Memory },
@@ -193,274 +239,218 @@ export class EmergencyRenderer {
     ];
 
     const renderCheckItem = (check: any, category: string) => {
-      // 使用 iconFunc 渲染 SVG 图标
-      const iconSVG = check.iconFunc ? check.iconFunc({ theme: 'filled', size: '20', fill: 'currentColor' }) : '';
-
+      const iconSVG = check.iconFunc ? check.iconFunc({ theme: 'filled', size: '18', fill: 'currentColor' }) : '';
       return `
-        <div class="detection-item" data-check-id="${check.id}" data-category="${category}" style="
-          display: flex;
-          align-items: flex-start;
-          gap: 16px;
-          padding: 16px;
-          border: 1px solid var(--border-color);
-          border-radius: var(--border-radius-lg);
-          background: var(--bg-secondary);
-          cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          position: relative;
-        " onclick="
-          const checkbox = this.querySelector('input[type=checkbox]');
-          checkbox.checked = !checkbox.checked;
-          this.classList.toggle('selected', checkbox.checked);
-          if(checkbox.checked) {
-            this.style.borderColor = 'var(--primary-color)';
-            this.style.background = 'var(--bg-primary)';
-            this.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.05)';
-          } else {
-            this.style.borderColor = 'var(--border-color)';
-            this.style.background = 'var(--bg-secondary)';
-            this.style.boxShadow = 'none';
-          }
-        " onmouseover="if(!this.classList.contains('selected')) { this.style.background='var(--bg-primary)'; this.style.borderColor='var(--border-hover)'; }"
-           onmouseout="if(!this.classList.contains('selected')) { this.style.background='var(--bg-secondary)'; this.style.borderColor='var(--border-color)'; }">
-
-          <div style="
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            background: var(--bg-tertiary);
-            color: var(--primary-color);
-            flex-shrink: 0;
-            margin-top: 2px;
-          ">
-            ${iconSVG}
-          </div>
-
-          <div style="flex: 1;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-              <div style="font-weight: 600; color: var(--text-primary); font-size: 14px; margin-bottom: 4px;">${check.name}</div>
-              <input type="checkbox" id="check-${check.id}" checked style="
-                width: 16px;
-                height: 16px;
-                accent-color: var(--primary-color);
-                cursor: pointer;
-                margin-top: 2px;
-              " onclick="event.stopPropagation();">
+        <div class="detection-item qd-detection-item selected" data-check-id="${check.id}" data-category="${category}"
+             onclick="const cb=this.querySelector('input[type=checkbox]');cb.checked=!cb.checked;this.classList.toggle('selected',cb.checked);">
+          <div class="qd-item-icon">${iconSVG}</div>
+          <div class="qd-item-info">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span class="qd-item-name">${check.name}</span>
+              <input type="checkbox" id="check-${check.id}" checked
+                style="width:14px;height:14px;accent-color:var(--primary-color);cursor:pointer;"
+                onclick="event.stopPropagation();">
             </div>
-            <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 8px;">${check.description}</div>
-
-            <div id="status-${check.id}" class="check-status" style="
-              display: inline-flex;
-              align-items: center;
-              font-size: 11px;
-              color: var(--text-secondary);
-              padding: 2px 8px;
-              border-radius: 4px;
-              background: var(--bg-tertiary);
-            ">
-              <span style="width: 6px; height: 6px; background: var(--text-disabled); border-radius: 50%; margin-right: 6px;"></span>
+            <div class="qd-item-desc">${check.description}</div>
+            <div id="status-${check.id}" class="qd-item-status">
+              <span style="width:5px;height:5px;background:var(--text-disabled);border-radius:50%;"></span>
               待检测
             </div>
           </div>
-      </div>
-      `;
+        </div>`;
     };
 
+    const totalItems = securityChecks.length + competitionChecks.length + performanceChecks.length;
+
     return `
-      <div class="quick-detection-page" style="
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: var(--spacing-lg) var(--spacing-md);
-      ">
-        <!-- 顶部 Header -->
-        <div style="
-          background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-          border-radius: var(--border-radius-xl);
-          padding: 32px;
-          margin-bottom: var(--spacing-xl);
-          border: 1px solid var(--border-color);
-          position: relative;
-          overflow: hidden;
-          box-shadow: var(--shadow-sm);
-        ">
-          <div style="position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center;">
+      <div class="qd-page">
+        <!-- Header -->
+        <div class="qd-header">
+          <div class="qd-header-left">
+            <div class="qd-header-icon">${icon(Shield, '22', 'filled')}</div>
             <div>
-              <h2 style="margin: 0 0 8px 0; font-size: 24px; color: var(--text-primary); font-weight: 700;">快速检测中心</h2>
-              <p style="margin: 0; font-size: 14px; color: var(--text-secondary); max-width: 500px;">
-                全方位服务器安全漏洞扫描与性能体检，护航系统稳定运行
-              </p>
-            </div>
-
-            <div style="display: flex; gap: 12px;">
-              <button id="quick-scan-all-btn" class="modern-btn primary large" style="
-                padding: 10px 24px;
-                font-size: 14px;
-                font-weight: 600;
-                box-shadow: var(--shadow-md);
-              " onclick="window.quickDetection?.startFullScan()">
-                ${Rocket({ theme: 'filled', size: '18', fill: 'currentColor' })}
-                <span style="margin-left: 8px;">一键全面扫描</span>
-              </button>
-
-              <button id="quick-view-report-btn" class="modern-btn secondary large" style="
-                padding: 10px 24px;
-                font-size: 14px;
-                background: var(--bg-primary);
-              " onclick="window.quickDetection?.viewReport()">
-                ${Analysis({ theme: 'outline', size: '18', fill: 'currentColor' })}
-                <span style="margin-left: 8px;">查看报告</span>
-              </button>
+              <h2 class="qd-header-title">快速检测中心</h2>
+              <div class="qd-header-subtitle">安全漏洞扫描 · 应急响应 · 竞赛模式</div>
             </div>
           </div>
-
-          <!-- 装饰背景 -->
-          <div style="
-            position: absolute;
-            right: -10px;
-            top: -30px;
-            opacity: 0.03;
-            transform: rotate(10deg);
-            pointer-events: none;
-            color: var(--text-primary);
-          ">
-            ${Shield({ theme: 'filled', size: '180', fill: 'currentColor' })}
+          <div class="qd-header-right">
+            <button class="modern-btn secondary" onclick="window.quickDetection?.startCompetitionScan()" title="竞赛模式: 全量扫描 ${totalItems} 项">
+              <span class="qd-competition-badge">竞赛</span> 全量扫描
+            </button>
+            <button class="modern-btn primary" onclick="window.quickDetection?.startFullScan()">
+              ${icon(Rocket, '16', 'filled')} 一键扫描
+            </button>
+            <button class="modern-btn secondary" onclick="window.quickDetection?.viewReport()">
+              ${icon(Analysis, '16')} 报告
+            </button>
           </div>
         </div>
 
-        <!-- 进度面板 -->
-        <div id="detection-progress-panel" style="
-          display: none;
-          background: var(--bg-primary);
-          border: 1px solid var(--border-color);
-          border-radius: var(--border-radius-lg);
-          padding: 24px;
-          margin-bottom: var(--spacing-xl);
-          box-shadow: var(--shadow-md);
-        ">
-          <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px;">
-            <div>
-              <div style="font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
-                <span class="pulse-dot" style="display: inline-block; width: 8px; height: 8px; background: var(--primary-color); border-radius: 50%; margin-right: 8px;"></span>
-                正在进行检测...
-              </div>
-              <div id="detection-current-task" style="color: var(--text-secondary); font-size: 13px; margin-left: 16px;">正在初始化检测引擎...</div>
-            </div>
-            <div id="detection-score-display" style="font-size: 32px; font-weight: 700; color: var(--primary-color); font-family: monospace;">--</div>
-          </div>
-
-          <div style="width: 100%; height: 8px; background: var(--bg-secondary); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
-            <div id="detection-progress-bar" style="
-              width: 0%;
-              height: 100%;
-              background: linear-gradient(90deg, var(--primary-color), var(--accent-purple));
-              transition: width 0.3s ease;
-              border-radius: 4px;
-            "></div>
-          </div>
-
-          <div style="display: flex; justify-content: space-between; color: var(--text-secondary); font-size: 12px;">
-            <span id="detection-progress-text">0%</span>
-            <span id="detection-items-count">0/0 项</span>
-          </div>
+        <!-- Tabs -->
+        <div class="qd-tabs" id="qd-tabs-area">
+          <button class="qd-tab-btn active" data-qd-tab="detection">
+            ${icon(Shield, '16', 'filled')} 检测中心
+          </button>
+          <button class="qd-tab-btn" data-qd-tab="report">
+            ${icon(Analysis, '16')} 检测报告
+          </button>
+          <button class="qd-tab-btn" data-qd-tab="compliance">
+            ${icon(FileText, '16')} 合规检查
+          </button>
+          <button class="qd-tab-btn" data-qd-tab="history">
+            ${icon(History, '16')} 检测历史
+          </button>
         </div>
 
-        <!-- 结果汇总面板 -->
-        <div id="detection-summary-panel" style="
-          display: none;
-          background: var(--bg-primary);
-          border: 1px solid var(--border-color);
-          border-radius: var(--border-radius-lg);
-          padding: 24px;
-          margin-bottom: var(--spacing-xl);
-          box-shadow: var(--shadow-md);
-        ">
-          <div style="display: flex; gap: 32px; align-items: center;">
-            <div style="text-align: center; padding-right: 32px; border-right: 1px solid var(--border-color);">
-              <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">安全评分</div>
-              <div style="display: flex; align-items: baseline; gap: 4px;">
-                <span id="final-score" style="font-size: 42px; font-weight: 700; color: var(--success-color);">--</span>
-                <span style="font-size: 16px; color: var(--text-secondary);">/100</span>
-              </div>
-            </div>
-
-            <div style="flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
-              <div style="padding: 16px; background: color-mix(in srgb, var(--error-color) 5%, transparent); border-radius: var(--border-radius); border: 1px solid color-mix(in srgb, var(--error-color) 10%, transparent); text-align: center;">
-                <div style="font-size: 24px; font-weight: 700; color: var(--error-color);" id="critical-count">0</div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">严重风险</div>
-              </div>
-              <div style="padding: 16px; background: color-mix(in srgb, var(--warning-color) 5%, transparent); border-radius: var(--border-radius); border: 1px solid color-mix(in srgb, var(--warning-color) 10%, transparent); text-align: center;">
-                <div style="font-size: 24px; font-weight: 700; color: var(--warning-color);" id="high-count">0</div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">高危风险</div>
-              </div>
-              <div style="padding: 16px; background: color-mix(in srgb, var(--accent-orange) 5%, transparent); border-radius: var(--border-radius); border: 1px solid color-mix(in srgb, var(--accent-orange) 10%, transparent); text-align: center;">
-                <div style="font-size: 24px; font-weight: 700; color: var(--accent-orange);" id="medium-count">0</div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">中危风险</div>
-              </div>
-              <div style="padding: 16px; background: color-mix(in srgb, var(--info-color) 5%, transparent); border-radius: var(--border-radius); border: 1px solid color-mix(in srgb, var(--info-color) 10%, transparent); text-align: center;">
-                <div style="font-size: 24px; font-weight: 700; color: var(--info-color);" id="low-count">0</div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">低危建议</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 32px;">
-          <!-- 安全检测 -->
-          <div>
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="padding: 8px; background: rgba(34, 197, 94, 0.1); border-radius: 8px; color: var(--success-color);">
-                  ${Shield({ theme: 'filled', size: '20', fill: 'currentColor' })}
-                </div>
+        <!-- Content -->
+        <div class="qd-content">
+          <!-- Tab: 检测中心 -->
+          <div id="qd-tab-detection" class="qd-tab-panel" style="padding: var(--spacing-md);">
+            <!-- 进度面板 -->
+            <div id="detection-progress-panel" class="qd-progress-panel">
+              <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px;">
                 <div>
-                  <h3 style="margin: 0; font-size: 16px; color: var(--text-primary); font-weight: 600;">安全检测</h3>
-                  <div style="font-size: 12px; color: var(--text-secondary);">${securityChecks.length} 项安全检查</div>
+                  <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">
+                    <span class="pulse-dot" style="display:inline-block;width:8px;height:8px;background:var(--primary-color);border-radius:50%;margin-right:8px;"></span>
+                    正在进行检测...
+                  </div>
+                  <div id="detection-current-task" style="color:var(--text-secondary);font-size:12px;">正在初始化...</div>
+                </div>
+                <div id="detection-score-display" style="font-size:28px;font-weight:700;color:var(--primary-color);font-family:monospace;">--</div>
+              </div>
+              <div class="qd-progress-bar-track">
+                <div id="detection-progress-bar" class="qd-progress-bar-fill" style="width:0%"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;color:var(--text-secondary);font-size:11px;margin-top:4px;">
+                <span id="detection-progress-text">0%</span>
+                <span id="detection-items-count">0/0 项</span>
+              </div>
+            </div>
+
+            <!-- 结果汇总 -->
+            <div id="detection-summary-panel" class="qd-summary-panel">
+              <div style="text-align:center;padding-right:24px;border-right:1px solid var(--border-color);">
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;">安全评分</div>
+                <span id="final-score" style="font-size:42px;font-weight:700;color:var(--success-color);">--</span>
+                <span style="font-size:14px;color:var(--text-secondary);">/100</span>
+              </div>
+              <div class="qd-severity-grid">
+                <div class="qd-severity-card" style="border-left:3px solid var(--error-color);">
+                  <div style="font-size:20px;font-weight:700;color:var(--error-color);" id="critical-count">0</div>
+                  <div style="font-size:11px;color:var(--text-secondary);">严重</div>
+                </div>
+                <div class="qd-severity-card" style="border-left:3px solid var(--warning-color);">
+                  <div style="font-size:20px;font-weight:700;color:var(--warning-color);" id="high-count">0</div>
+                  <div style="font-size:11px;color:var(--text-secondary);">高危</div>
+                </div>
+                <div class="qd-severity-card" style="border-left:3px solid #eab308;">
+                  <div style="font-size:20px;font-weight:700;color:#eab308;" id="medium-count">0</div>
+                  <div style="font-size:11px;color:var(--text-secondary);">中危</div>
+                </div>
+                <div class="qd-severity-card" style="border-left:3px solid var(--info-color);">
+                  <div style="font-size:20px;font-weight:700;color:var(--info-color);" id="low-count">0</div>
+                  <div style="font-size:11px;color:var(--text-secondary);">低危</div>
                 </div>
               </div>
-              <button class="modern-btn text-only" style="font-size: 12px;" onclick="window.quickDetection?.toggleAllChecks('security')">全选</button>
             </div>
-            <div style="display: grid; gap: 12px;">
-              ${securityChecks.map(check => renderCheckItem(check, 'security')).join('')}
+
+            <!-- 统计卡片 -->
+            <div class="qd-stats">
+              <div class="qd-stat-card">
+                <div class="qd-stat-value">${totalItems}</div>
+                <div class="qd-stat-title">检测项总计</div>
+              </div>
+              <div class="qd-stat-card">
+                <div class="qd-stat-value" style="color:var(--success-color)">${securityChecks.length}</div>
+                <div class="qd-stat-title">安全检测</div>
+              </div>
+              <div class="qd-stat-card">
+                <div class="qd-stat-value" style="color:#a855f7">${competitionChecks.length}</div>
+                <div class="qd-stat-title">竞赛检测</div>
+              </div>
+              <div class="qd-stat-card">
+                <div class="qd-stat-value" style="color:var(--primary-color)">${performanceChecks.length}</div>
+                <div class="qd-stat-title">性能检测</div>
+              </div>
+            </div>
+
+            <!-- 安全检测 -->
+            <div class="qd-category-section">
+              <div class="qd-category-header">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div class="qd-category-icon security">${icon(Shield, '16', 'filled')}</div>
+                  <span style="font-size:14px;font-weight:600;">安全检测</span>
+                  <span style="font-size:11px;color:var(--text-secondary);">${securityChecks.length} 项</span>
+                </div>
+                <button class="modern-btn text-only" style="font-size:11px;" onclick="window.quickDetection?.toggleAllChecks('security')">全选/取消</button>
+              </div>
+              <div class="qd-items-grid">
+                ${securityChecks.map(c => renderCheckItem(c, 'security')).join('')}
+              </div>
+            </div>
+
+            <!-- 竞赛检测 -->
+            <div class="qd-category-section">
+              <div class="qd-category-header">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div class="qd-category-icon competition">${icon(Rocket, '16', 'filled')}</div>
+                  <span style="font-size:14px;font-weight:600;">竞赛检测</span>
+                  <span class="qd-competition-badge">NEW</span>
+                  <span style="font-size:11px;color:var(--text-secondary);">${competitionChecks.length} 项</span>
+                </div>
+                <button class="modern-btn text-only" style="font-size:11px;" onclick="window.quickDetection?.toggleAllChecks('competition')">全选/取消</button>
+              </div>
+              <div class="qd-items-grid">
+                ${competitionChecks.map(c => renderCheckItem(c, 'competition')).join('')}
+              </div>
+            </div>
+
+            <!-- 性能检测 -->
+            <div class="qd-category-section">
+              <div class="qd-category-header">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div class="qd-category-icon performance">${icon(Speed, '16', 'filled')}</div>
+                  <span style="font-size:14px;font-weight:600;">性能检测</span>
+                  <span style="font-size:11px;color:var(--text-secondary);">${performanceChecks.length} 项</span>
+                </div>
+                <button class="modern-btn text-only" style="font-size:11px;" onclick="window.quickDetection?.toggleAllChecks('performance')">全选/取消</button>
+              </div>
+              <div class="qd-items-grid">
+                ${performanceChecks.map(c => renderCheckItem(c, 'performance')).join('')}
+              </div>
             </div>
           </div>
 
-          <!-- 性能检测 -->
-          <div>
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="padding: 8px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; color: var(--primary-color);">
-                  ${Speed({ theme: 'filled', size: '20', fill: 'currentColor' })}
-                </div>
-                <div>
-                  <h3 style="margin: 0; font-size: 16px; color: var(--text-primary); font-weight: 600;">性能检测</h3>
-                  <div style="font-size: 12px; color: var(--text-secondary);">${performanceChecks.length} 项性能评估</div>
-                </div>
+          <!-- Tab: 检测报告 -->
+          <div id="qd-tab-report" class="qd-tab-panel" style="display:none;padding:var(--spacing-md);">
+            <div id="qd-report-content">
+              <div style="text-align:center;padding:48px;color:var(--text-secondary);font-size:13px;">
+                运行检测后，报告将在此显示
               </div>
-              <button class="modern-btn text-only" style="font-size: 12px;" onclick="window.quickDetection?.toggleAllChecks('performance')">全选</button>
-            </div>
-            <div style="display: grid; gap: 12px;">
-              ${performanceChecks.map(check => renderCheckItem(check, 'performance')).join('')}
             </div>
           </div>
-        </div>
 
-        <!-- 检测历史 -->
-        <div style="margin-top: 48px; border-top: 1px solid var(--border-color); padding-top: 24px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-            <h3 style="margin: 0; font-size: 16px; color: var(--text-primary); font-weight: 600; display: flex; align-items: center;">
-              <span style="margin-right: 8px; display: inline-flex;">
-                ${History({ theme: 'outline', size: '18', fill: 'currentColor' })}
+          <!-- Tab: 合规检查 -->
+          <div id="qd-tab-compliance" class="qd-tab-panel" style="display:none;padding:var(--spacing-md);">
+            <div id="qd-compliance-content">
+              <div style="text-align:center;padding:48px;color:var(--text-secondary);font-size:13px;">
+                运行检测后，合规检查结果将在此显示
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: 检测历史 -->
+          <div id="qd-tab-history" class="qd-tab-panel" style="display:none;padding:var(--spacing-md);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <span style="font-size:14px;font-weight:600;color:var(--text-primary);">
+                ${icon(History, '16')} 检测历史
               </span>
-              检测历史
-            </h3>
-            <button class="modern-btn secondary small" style="font-size: 12px;" onclick="window.quickDetection?.clearHistory()">清空历史</button>
-          </div>
-          <div id="detection-history-list" style="display: flex; flex-direction: column; gap: 12px;">
-            <div style="text-align: center; padding: 32px; color: var(--text-secondary); background: var(--bg-secondary); border-radius: var(--border-radius); border: 1px dashed var(--border-color); font-size: 13px;">
-              暂无历史记录
+              <button class="modern-btn secondary sm" onclick="window.quickDetection?.clearHistory()">清空</button>
+            </div>
+            <div id="detection-history-list" style="display:flex;flex-direction:column;gap:8px;">
+              <div style="text-align:center;padding:32px;color:var(--text-secondary);font-size:13px;border:1px dashed var(--border-color);border-radius:var(--border-radius);">
+                暂无历史记录
+              </div>
             </div>
           </div>
         </div>

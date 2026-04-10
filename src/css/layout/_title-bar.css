@@ -4,8 +4,8 @@
   align-items: center;
   justify-content: space-between;
   height: 40px;
-  background: transparent;
-  border-bottom: none;
+  background: var(--activitybar-bg);
+  border-bottom: 1px solid var(--activitybar-border);
   padding: 0 var(--spacing-md);
   -webkit-app-region: drag;
   z-index: 50;

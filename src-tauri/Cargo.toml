@@ -1,6 +1,6 @@
 [package]
 name = "lovelyres"
-version = "0.52.0"
+version = "0.7.0"
 description = "LovelyRes - Linux Emergency Response Tool"
 authors = ["LovelyRes Team"]
 edition = "2021"
@@ -37,6 +37,7 @@ russh-sftp = "2.1.1"
 russh-keys = "0.49.2"
 async-trait = "0.1.89"
 futures = "0.3.31"
+reqwest = { version = "0.12", features = ["json", "stream"] }
 aes-gcm = "0.10"
 base64 = "0.21"
 rand = "0.8"

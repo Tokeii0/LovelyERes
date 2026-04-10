@@ -1,7 +1,11 @@
 /**
  * AI 服务
  * 用于生成安全问题的解决方案
+ * 所有 HTTP 请求通过 Tauri 后端代理发送，绕过浏览器 CORS 限制
  */
+
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 // AI 提供商类型
 export type AIProvider = 'openai' | 'deepseek' | 'claude' | 'custom';
@@ -28,6 +32,7 @@ export interface AISolution {
 export class AIService {
   private static instance: AIService;
   private config: AIConfig | null = null;
+  private isStreaming = false;
 
   private constructor() {
     this.loadConfigFromStorage();
@@ -114,6 +119,94 @@ export class AIService {
     localStorage.removeItem('lovelyres-ai-config');
   }
 
+  // ==================== Tauri 代理请求（绕过 CORS） ====================
+
+  /**
+   * 通过 Tauri 后端发送非流式 AI 请求
+   */
+  private async tauriFetch(url: string, headers: Record<string, string>, body: string): Promise<{ ok: boolean; status: number; body: string }> {
+    try {
+      const result = await invoke('ai_proxy_request', { url, headers, body }) as { ok: boolean; status: number; body: string };
+      return result;
+    } catch (e) {
+      throw new Error(`AI 请求失败: ${e}`);
+    }
+  }
+
+  /**
+   * 通过 Tauri 后端发送流式 AI 请求，通过事件接收数据块
+   */
+  private async tauriStreamFetch(
+    url: string,
+    headers: Record<string, string>,
+    body: string,
+    onChunk: (text: string) => void
+  ): Promise<void> {
+    // 防止并发流式请求互相干扰（共享相同事件名）
+    if (this.isStreaming) {
+      throw new Error('已有流式请求进行中，请等待完成后再试');
+    }
+    this.isStreaming = true;
+
+    let unlistenChunk: (() => void) | null = null;
+    let unlistenError: (() => void) | null = null;
+    let unlistenDone: (() => void) | null = null;
+
+    const cleanup = () => {
+      this.isStreaming = false;
+      unlistenChunk?.();
+      unlistenError?.();
+      unlistenDone?.();
+    };
+
+    try {
+      // 先注册所有事件监听，用 try/catch 确保部分失败时清理
+      const streamResult = await new Promise<void>(async (resolve, reject) => {
+        let settled = false;
+        const settle = (fn: () => void) => {
+          if (!settled) { settled = true; fn(); }
+        };
+
+        try {
+          unlistenChunk = await listen('ai_stream_chunk', (event: any) => {
+            onChunk(event.payload as string);
+          });
+          unlistenError = await listen('ai_stream_error', (event: any) => {
+            settle(() => {
+              cleanup();
+              reject(new Error(`AI 流式请求失败: ${JSON.stringify(event.payload)}`));
+            });
+          });
+          unlistenDone = await listen('ai_stream_done', () => {
+            settle(() => {
+              cleanup();
+              resolve();
+            });
+          });
+        } catch (listenErr) {
+          cleanup();
+          reject(new Error(`AI 事件监听注册失败: ${listenErr}`));
+          return;
+        }
+
+        try {
+          await invoke('ai_proxy_stream', { url, headers, body });
+        } catch (e) {
+          settle(() => {
+            cleanup();
+            reject(new Error(`AI 流式请求启动失败: ${e}`));
+          });
+        }
+      });
+
+      return streamResult;
+    } catch (e) {
+      // 确保 cleanup 在所有异常路径执行
+      if (this.isStreaming) cleanup();
+      throw e;
+    }
+  }
+
   /**
    * 获取 API 端点和请求头
    */
@@ -126,9 +219,25 @@ export class AIService {
     let headers: Record<string, string>;
     let model: string;
 
+    // 自动补全 URL 路径（如果用户只填了域名）
+    const ensureCompletionsPath = (base: string): string => {
+      const trimmed = base.replace(/\/+$/, '');
+      if (trimmed.endsWith('/chat/completions') || trimmed.endsWith('/messages')) {
+        return trimmed;
+      }
+      if (trimmed.endsWith('/v1')) {
+        return `${trimmed}/chat/completions`;
+      }
+      // 没有路径的纯域名 → 自动补全 /v1/chat/completions
+      if (!trimmed.includes('/v1/') && !trimmed.includes('/api/')) {
+        return `${trimmed}/v1/chat/completions`;
+      }
+      return trimmed;
+    };
+
     switch (this.config.provider) {
       case 'openai':
-        url = this.config.baseUrl || 'https://api.openai.com/v1/chat/completions';
+        url = ensureCompletionsPath(this.config.baseUrl || 'https://api.openai.com/v1/chat/completions');
         headers = {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.config.apiKey}`,
@@ -137,7 +246,7 @@ export class AIService {
         break;
 
       case 'deepseek':
-        url = this.config.baseUrl || 'https://api.deepseek.com/v1/chat/completions';
+        url = ensureCompletionsPath(this.config.baseUrl || 'https://api.deepseek.com/v1/chat/completions');
         headers = {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.config.apiKey}`,
@@ -157,9 +266,9 @@ export class AIService {
 
       case 'custom':
         if (!this.config.baseUrl) {
-          throw new Error('自定义提供商需要提供 API 端点');
+          throw new Error('自定义提供商需要提供 API 端点（Base URL）');
         }
-        url = this.config.baseUrl;
+        url = ensureCompletionsPath(this.config.baseUrl);
         headers = {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.config.apiKey}`,
@@ -171,6 +280,7 @@ export class AIService {
         throw new Error(`未知的 AI 提供商: ${this.config.provider}`);
     }
 
+    console.log(`🤖 AI 请求: ${this.config.provider} → ${url} (model: ${model})`);
     return { url, headers, model };
   }
 
@@ -216,64 +326,44 @@ ${serverInfo ? `**服务器信息**: ${serverInfo}` : ''}
 请以结构化的格式回答，便于阅读和执行。`;
 
     try {
-      let responseData: any;
+      const isClaude = this.config!.provider === 'claude';
+      const requestBody = isClaude ? JSON.stringify({
+        model, max_tokens: 2048,
+        messages: [{ role: 'user', content: `${systemPrompt}\n\n${userPrompt}` }],
+      }) : JSON.stringify({
+        model, temperature: 0.7, max_tokens: 2048,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      });
 
-      if (this.config!.provider === 'claude') {
-        // Claude API 格式
-        const response = await fetch(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model,
-            max_tokens: 2048,
-            messages: [
-              {
-                role: 'user',
-                content: `${systemPrompt}\n\n${userPrompt}`,
-              },
-            ],
-          }),
-        });
+      const response = await this.tauriFetch(url, headers, requestBody);
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`AI API 请求失败: ${response.status} - ${errorText}`);
-        }
-
-        responseData = await response.json();
-        const content = responseData.content[0].text;
-        return this.parseSolution(content);
-      } else {
-        // OpenAI 兼容格式
-        const response = await fetch(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model,
-            messages: [
-              {
-                role: 'system',
-                content: systemPrompt,
-              },
-              {
-                role: 'user',
-                content: userPrompt,
-              },
-            ],
-            temperature: 0.7,
-            max_tokens: 2048,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`AI API 请求失败: ${response.status} - ${errorText}`);
-        }
-
-        responseData = await response.json();
-        const content = responseData.choices[0].message.content;
-        return this.parseSolution(content);
+      if (!response.ok) {
+        // 截取前 200 字符，避免 HTML 页面堆栈
+        const preview = response.body.substring(0, 200);
+        throw new Error(`AI API 请求失败 (${response.status}): ${preview}`);
       }
+
+      let responseData: any;
+      try {
+        responseData = JSON.parse(response.body);
+      } catch {
+        // API 返回了非 JSON 内容（可能是 HTML 错误页面）
+        const preview = response.body.substring(0, 150);
+        throw new Error(`AI API 返回了非 JSON 响应，请检查 Base URL 是否正确。\n响应内容: ${preview}`);
+      }
+
+      const content = isClaude
+        ? responseData.content?.[0]?.text || ''
+        : responseData.choices?.[0]?.message?.content || '';
+
+      if (!content) {
+        throw new Error('AI 返回了空响应，请检查模型名称是否正确');
+      }
+
+      return this.parseSolution(content);
     } catch (error) {
       console.error('❌ AI 解决方案生成失败:', error);
       throw error;
@@ -332,119 +422,39 @@ ${serverInfo ? `服务器：${serverInfo}` : ''}
 
     try {
       let fullText = '';
+      const isClaude = this.config!.provider === 'claude';
 
-      if (this.config!.provider === 'claude') {
-        // Claude 流式 API
-        const response = await fetch(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model,
-            max_tokens: 500,
-            messages: [
-              {
-                role: 'user',
-                content: `${systemPrompt}\n\n${userPrompt}`,
-              },
-            ],
-            stream: true,
-          }),
-        });
+      const requestBody = isClaude ? JSON.stringify({
+        model, max_tokens: 500, stream: true,
+        messages: [{ role: 'user', content: `${systemPrompt}\n\n${userPrompt}` }],
+      }) : JSON.stringify({
+        model, temperature: 0.7, max_tokens: 500, stream: true,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      });
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`AI API 请求失败: ${response.status} - ${errorText}`);
-        }
-
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-
-        if (!reader) {
-          throw new Error('无法获取响应流');
-        }
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n').filter(line => line.trim().startsWith('data:'));
-
-          for (const line of lines) {
-            const data = line.replace(/^data: /, '');
-            if (data === '[DONE]') continue;
-
-            try {
-              const parsed = JSON.parse(data);
-              const text = parsed.delta?.text || '';
-              if (text) {
-                fullText += text;
-                onChunk?.(text);
-              }
-            } catch (e) {
-              // 忽略解析错误
+      await this.tauriStreamFetch(url, headers, requestBody, (rawChunk: string) => {
+        // 解析 SSE 数据块
+        const lines = rawChunk.split('\n').filter(line => line.trim().startsWith('data:'));
+        for (const line of lines) {
+          const data = line.replace(/^data:\s*/, '').trim();
+          if (data === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(data);
+            const text = parsed.choices?.[0]?.delta?.content  // OpenAI
+              || parsed.delta?.text                            // Claude
+              || '';
+            if (text) {
+              fullText += text;
+              onChunk?.(text);
             }
+          } catch {
+            // 忽略解析错误
           }
         }
-      } else {
-        // OpenAI 兼容流式 API
-        const response = await fetch(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model,
-            messages: [
-              {
-                role: 'system',
-                content: systemPrompt,
-              },
-              {
-                role: 'user',
-                content: userPrompt,
-              },
-            ],
-            temperature: 0.7,
-            max_tokens: 500,
-            stream: true,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`AI API 请求失败: ${response.status} - ${errorText}`);
-        }
-
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-
-        if (!reader) {
-          throw new Error('无法获取响应流');
-        }
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n').filter(line => line.trim().startsWith('data:'));
-
-          for (const line of lines) {
-            const data = line.replace(/^data: /, '');
-            if (data === '[DONE]') continue;
-
-            try {
-              const parsed = JSON.parse(data);
-              const text = parsed.choices?.[0]?.delta?.content || '';
-              if (text) {
-                fullText += text;
-                onChunk?.(text);
-              }
-            } catch (e) {
-              // 忽略解析错误
-            }
-          }
-        }
-      }
+      });
 
       onComplete?.(fullText);
     } catch (error) {
@@ -480,45 +490,24 @@ ${context ? `\n上下文信息：${context}` : ''}`;
 
     try {
       let fullText = '';
+      const isClaude = this.config!.provider === 'claude';
 
-      const requestBody = {
-        model,
+      const requestBody = isClaude ? JSON.stringify({
+        model, max_tokens: 1000, stream: true,
+        messages: [{ role: 'user', content: `${systemPrompt}\n\n${userPrompt}` }],
+      }) : JSON.stringify({
+        model, temperature: 0.7, max_tokens: 1000, stream: true,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        temperature: 0.7,
-        max_tokens: 1000,
-        stream: true,
-      };
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`AI API 请求失败: ${response.status} - ${errorText}`);
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (!reader) throw new Error('无法获取响应流');
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n').filter(line => line.trim().startsWith('data:'));
-
+      await this.tauriStreamFetch(url, headers, requestBody, (rawChunk: string) => {
+        const lines = rawChunk.split('\n').filter(line => line.trim().startsWith('data:'));
         for (const line of lines) {
-          const data = line.replace(/^data: /, '');
+          const data = line.replace(/^data:\s*/, '').trim();
           if (data === '[DONE]') continue;
-
           try {
             const parsed = JSON.parse(data);
             const text = parsed.choices?.[0]?.delta?.content || parsed.delta?.text || '';
@@ -526,11 +515,11 @@ ${context ? `\n上下文信息：${context}` : ''}`;
               fullText += text;
               onChunk?.(text);
             }
-          } catch (e) {
+          } catch {
             // 忽略解析错误
           }
         }
-      }
+      });
 
       onComplete?.(fullText);
     } catch (error) {

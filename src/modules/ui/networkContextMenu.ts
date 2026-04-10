@@ -331,7 +331,7 @@ export class NetworkContextMenu extends BaseContextMenu {
   protected resolveAction(action: string): MenuAction | null {
     if (!this.currentConnection) return null
 
-    const { protocol, localAddress, foreignAddress, state, pid, process } = this.currentConnection
+    const { protocol, localAddress, foreignAddress, state, pid: _pid, process } = this.currentConnection
     const foreignIP = this.extractIP(foreignAddress)
     const foreignPort = this.extractPort(foreignAddress)
     const localPort = this.extractPort(localAddress)

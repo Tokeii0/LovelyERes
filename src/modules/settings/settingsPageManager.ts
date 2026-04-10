@@ -5,10 +5,12 @@
 
 import { SettingsManager } from './settingsManager';
 import { aiService, AIProvider } from '../ai/aiService';
+import { showConfirm } from '../ui/confirmDialog';
 
 export class SettingsPageManager {
   private settingsManager: SettingsManager;
   private systemFonts: string[] = [];
+  private eventsBound = false;
 
   // 预设提供商（不可删除）
   private readonly presetProviders = ['openai', 'deepseek', 'claude', 'custom'];
@@ -35,6 +37,9 @@ export class SettingsPageManager {
 
       // 加载设置到表单
       this.loadSettingsToForm();
+
+      // 初始化 busybox 工具面板
+      this.initBusyboxPanel();
 
       console.log('✅ 设置页面初始化完成');
     } catch (error) {
@@ -114,9 +119,19 @@ export class SettingsPageManager {
   }
 
   /**
-   * 绑定事件监听器
+   * 重置事件绑定标志（设置覆盖层关闭时调用）
+   */
+  public resetEventBindings(): void {
+    this.eventsBound = false;
+  }
+
+  /**
+   * 绑定事件监听器（同一个 DOM 生命周期内仅绑定一次）
    */
   private bindEventListeners(): void {
+    if (this.eventsBound) return;
+    this.eventsBound = true;
+
     // 标签页切换
     document.querySelectorAll('.settings-tab').forEach(tab => {
       tab.addEventListener('click', (e) => {
@@ -458,7 +473,7 @@ export class SettingsPageManager {
    */
   private async resetSettings(): Promise<void> {
     try {
-      if (confirm('确定要重置所有设置到默认值吗？此操作不可撤销。')) {
+      if (await showConfirm({ title: '重置设置', message: '确定要重置所有设置到默认值吗？此操作不可撤销。', dangerous: true })) {
         console.log('🔄 正在重置设置...');
 
         // 重置到默认值
@@ -939,7 +954,7 @@ export class SettingsPageManager {
       const providerName = settings.ai.providers[currentProvider]?.name || currentProvider;
 
       // 确认删除
-      if (!confirm(`确定要删除提供商 "${providerName}" 吗？此操作不可撤销。`)) {
+      if (!(await showConfirm({ title: '删除提供商', message: `确定要删除提供商 "${providerName}" 吗？此操作不可撤销。`, dangerous: true }))) {
         return;
       }
 
@@ -965,5 +980,77 @@ export class SettingsPageManager {
       console.error('❌ 删除提供商失败:', error);
       this.showMessage('删除失败: ' + error, 'error');
     }
+  }
+
+  // ──── Busybox 工具面板 ────
+
+  private initBusyboxPanel(): void {
+    const statusEl = document.getElementById('settings-bb-status');
+    const pathEl = document.getElementById('settings-bb-path');
+    const logEl = document.getElementById('settings-bb-log');
+
+    const showLog = (text: string) => {
+      if (logEl) { logEl.style.display = 'block'; logEl.textContent = text; }
+    };
+
+    // 检测状态
+    import('../core/busyboxManager').then(({ busyboxManager }) => {
+      busyboxManager.detect().then(({ status, path }) => {
+        if (statusEl) {
+          const labels: Record<string, string> = {
+            'enabled': '已启用',
+            'installed': '已安装 (未启用)',
+            'not-installed': '未安装',
+            'unknown': '未知',
+          };
+          statusEl.textContent = '状态: ' + (labels[status] || status);
+          statusEl.style.color = status === 'enabled' ? '#22c55e' : status === 'installed' ? '#3b82f6' : 'var(--text-secondary)';
+        }
+        if (pathEl && path) pathEl.textContent = path;
+      });
+
+      // 上传按钮
+      (window as any).__settingsBusyboxUpload = async () => {
+        if (statusEl) statusEl.textContent = '状态: 上传中...';
+        try {
+          const log = await busyboxManager.uploadFromLocal();
+          showLog(log);
+          if (statusEl) { statusEl.textContent = '状态: 已安装'; statusEl.style.color = '#3b82f6'; }
+          if (pathEl) pathEl.textContent = busyboxManager.getPath();
+          window.showNotification?.('busybox 上传成功', 'success');
+        } catch (e: any) {
+          showLog(String(e));
+          if (statusEl) { statusEl.textContent = '状态: 上传失败'; statusEl.style.color = '#ef4444'; }
+          if (e?.message?.includes('未选择文件')) {
+            // 用户取消了文件选择，静默处理
+            if (statusEl) statusEl.textContent = '状态: 未安装';
+          } else {
+            window.showNotification?.(`上传失败: ${e}`, 'error');
+          }
+        }
+      };
+
+      // 启用按钮
+      (window as any).__settingsBusyboxEnable = async () => {
+        try {
+          await busyboxManager.enable();
+          if (statusEl) { statusEl.textContent = '状态: 已启用'; statusEl.style.color = '#22c55e'; }
+          window.showNotification?.('busybox 可信模式已启用', 'success');
+        } catch (e) {
+          window.showNotification?.(`启用失败: ${e}`, 'error');
+        }
+      };
+
+      // 禁用按钮
+      (window as any).__settingsBusyboxDisable = async () => {
+        try {
+          await busyboxManager.disable();
+          if (statusEl) { statusEl.textContent = '状态: 已安装 (未启用)'; statusEl.style.color = '#3b82f6'; }
+          window.showNotification?.('busybox 模式已禁用', 'info');
+        } catch (e) {
+          window.showNotification?.(`禁用失败: ${e}`, 'error');
+        }
+      };
+    });
   }
 }

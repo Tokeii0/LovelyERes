@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LovelyRes - Linux Emergency Response Tool</title>
   <!-- Highlight.js for syntax highlighting -->
@@ -58,22 +58,38 @@
       animation: lsFadeIn 0.6s ease-out;
     }
 
-    /* Spinner ring */
+    /* Logo star */
     .logo-container {
       position: relative;
-      width: 48px;
-      height: 48px;
+      width: 72px;
+      height: 72px;
+      animation: lsPulse 2s ease-in-out infinite;
     }
-    .logo-ring {
+    .logo-container::after {
+      content: '';
       position: absolute;
-      inset: 0;
+      inset: -16px;
       border-radius: 50%;
-      border-width: 2.5px;
-      border-style: solid;
-      border-color: var(--border-color, rgba(255,255,255,0.1)) var(--border-color, rgba(255,255,255,0.1)) var(--border-color, rgba(255,255,255,0.1)) var(--primary-color, #4299e1);
-      animation: lsSpin 0.9s linear infinite;
+      background: radial-gradient(circle, rgba(249,168,212,0.18) 0%, transparent 70%);
+      animation: lsGlow 2s ease-in-out infinite;
     }
+    .logo-ring { display: none; }
     .logo-circle { display: none; }
+    .logo-star {
+      width: 72px;
+      height: 72px;
+      position: relative;
+      z-index: 1;
+      filter: drop-shadow(0 4px 16px rgba(196,181,253,0.3));
+    }
+    @keyframes lsPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    @keyframes lsGlow {
+      0%, 100% { opacity: 0.6; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.15); }
+    }
 
     .app-title {
       font-size: 18px;
@@ -96,7 +112,7 @@
     .loading-bar {
       width: 100%;
       height: 100%;
-      background: var(--primary-color, #4299e1);
+      background: linear-gradient(90deg, #f9a8d4, #c4b5fd);
       transform-origin: left;
       animation: lsProgress 2s ease-in-out infinite;
     }
@@ -130,8 +146,16 @@
   <div id="loading-screen" class="loading-screen">
     <div class="loading-content">
       <div class="logo-container">
-        <div class="logo-ring"></div>
-        <div class="logo-circle"></div>
+        <svg class="logo-star" width="72" height="72" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="ls-s" x1=".1" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#f9a8d4"/><stop offset="1" stop-color="#c4b5fd"/></linearGradient>
+            <linearGradient id="ls-h" x1=".36" y1="0" x2=".5" y2=".5"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+          </defs>
+          <g transform="rotate(-15 64 62)">
+            <path d="M64,16 L75.8,47.8 L109.2,48.8 L83.2,68.8 L93,101.2 L64,83.2 L35,101.2 L44.8,68.8 L18.8,48.8 L52.2,47.8 Z" fill="url(#ls-s)" stroke="url(#ls-s)" stroke-width="12" stroke-linejoin="round" paint-order="stroke fill"/>
+            <path d="M64,16 L75.8,47.8 L109.2,48.8 L83.2,68.8 L93,101.2 L64,83.2 L35,101.2 L44.8,68.8 L18.8,48.8 L52.2,47.8 Z" fill="url(#ls-h)" stroke="url(#ls-h)" stroke-width="12" stroke-linejoin="round" paint-order="stroke fill"/>
+          </g>
+        </svg>
       </div>
       <div class="app-title">LovelyRes</div>
       <div class="loading-bar-container">

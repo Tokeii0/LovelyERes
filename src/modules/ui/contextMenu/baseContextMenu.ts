@@ -17,6 +17,8 @@ export abstract class BaseContextMenu {
   protected modal: HTMLElement | null = null
   protected selectedUsername: string | null = null
   protected accounts: any[] = []
+  /** 右键时捕获的行文本内容，用于 AI 解释 */
+  protected lastRowText: string = ''
 
   /** 唯一前缀，用于生成不冲突的 DOM ID */
   protected readonly prefix: string
@@ -50,6 +52,8 @@ export abstract class BaseContextMenu {
     if (!this.contextMenu) return
 
     this.onShowContextMenu(...entityArgs)
+    // 捕获条目信息用于 AI 解释
+    this.lastRowText = entityArgs.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' | ')
     await this.loadAccountList()
 
     this.contextMenu.style.left = `${x}px`
@@ -120,6 +124,10 @@ export abstract class BaseContextMenu {
         </div>
       </div>
       ${this.getMenuItemsHTML()}
+      <div class="menu-divider" style="height:1px;background:var(--border-color);margin:4px 8px;"></div>
+      <div class="menu-item" data-action="__ai_explain_row__">
+        <span>AI 解释该条目</span>
+      </div>
     `
 
     // 添加样式
@@ -458,6 +466,12 @@ export abstract class BaseContextMenu {
   // ===== 命令执行 =====
 
   protected async executeAction(action: string) {
+    // AI 解释该条目 — 通用处理
+    if (action === '__ai_explain_row__') {
+      await this.aiExplainRow()
+      return
+    }
+
     // 先检查子类是否有特殊处理
     const handled = await this.handleSpecialAction(action)
     if (handled) return
@@ -503,129 +517,68 @@ export abstract class BaseContextMenu {
     explanationContentEl.textContent = '🤔 AI正在分析...'
 
     try {
-      const settingsContent = await invoke('read_settings_file') as string
-      let settings: any = {}
+      // 使用统一的 aiService
+      const { aiService } = await import('../../ai/aiService')
 
-      if (settingsContent) {
-        settings = JSON.parse(settingsContent)
+      if (!aiService.isConfigured()) {
+        throw new Error('请先在设置中配置 AI 服务')
       }
-
-      if (!settings.ai) {
-        settings.ai = {
-          currentProvider: 'openai',
-          providers: {
-            openai: {
-              name: 'OpenAI',
-              apiKey: '',
-              model: 'gpt-3.5-turbo',
-              baseUrl: 'https://api.openai.com/v1'
-            }
-          }
-        }
-      }
-
-      if (!settings.ai || !settings.ai.currentProvider) {
-        throw new Error('AI配置异常，请在设置中配置AI')
-      }
-
-      const currentProvider = settings.ai.currentProvider
-      const providerConfig = settings.ai.providers[currentProvider]
-
-      if (!providerConfig) {
-        throw new Error('AI提供商配置不存在')
-      }
-
-      if (!providerConfig.apiKey && currentProvider !== 'ollama') {
-        throw new Error('请在设置中配置AI API Key')
-      }
-
-      const systemPrompt = `你是一个Linux系统安全专家，擅长分析进程信息、网络连接、系统日志等。请用简洁专业的语言解释用户提供的信息，重点关注安全风险和异常情况。
-
-请分析并解释以下信息：
-
-标题：${title}
-
-内容：
-${content}
-
-请提供：
-1. 信息概要
-2. 关键发现
-3. 安全评估（如果适用）
-4. 建议操作（如果适用）`
 
       explanationContentEl.textContent = ''
 
-      await this.callAIAPI(systemPrompt, providerConfig, (chunk: string) => {
-        explanationContentEl.textContent += chunk
-      })
+      const prompt = `标题：${title}\n\n内容：\n${content}\n\n请提供：\n1. 信息概要\n2. 关键发现\n3. 安全评估\n4. 建议操作`
+
+      await aiService.explainLogStream(
+        prompt,
+        '右键菜单 AI 分析',
+        (chunk: string) => {
+          explanationContentEl.textContent += chunk
+        }
+      )
     } catch (error) {
-      explanationContentEl.textContent = `❌ AI解释失败: ${error}\n\n提示：请在设置中配置AI，或者检查AI服务是否可用。`
+      explanationContentEl.textContent = `❌ AI分析失败: ${error}\n\n提示：请在设置中配置AI服务。`
     }
   }
 
-  private async callAIAPI(prompt: string, config: any, onChunk?: (chunk: string) => void): Promise<string> {
+  // ===== AI 解释该条目（右键直接调用） =====
+
+  protected async aiExplainRow() {
+    const rowData = this.lastRowText || '(无条目数据)'
+    const menuTitle = this.prefix.replace(/-/g, ' ')
+
+    this.showModal('AI 分析', '正在分析...')
+
     try {
-      const requestBody = {
-        model: config.model,
-        messages: [{ role: 'system', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 1000,
-        stream: true
+      const { aiService } = await import('../../ai/aiService')
+      if (!aiService.isConfigured()) {
+        this.showModal('AI 分析', '请先在设置中配置 AI 服务')
+        return
       }
 
-      const response = await fetch(config.baseUrl + '/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`
+      const contentEl = document.getElementById(`${this.prefix}-modal-content`)
+      if (contentEl) contentEl.textContent = ''
+
+      const prompt = `你是 Linux 安全应急响应专家。请分析以下系统条目信息:\n\n类型: ${menuTitle}\n条目数据: ${rowData}\n\n请简要说明:\n1. 该条目的含义\n2. 是否存在安全风险\n3. 如果有风险，给出处置建议`
+
+      await aiService.explainLogStream(
+        prompt,
+        'AI 解释条目',
+        (chunk: string) => {
+          if (contentEl) contentEl.textContent += chunk
         },
-        body: JSON.stringify(requestBody)
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`AI API请求失败: ${response.status} ${response.statusText}`)
-      }
-
-      const reader = response.body?.getReader()
-      if (!reader) {
-        throw new Error('无法获取响应流')
-      }
-
-      const decoder = new TextDecoder()
-      let fullContent = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n').filter(line => line.trim() !== '')
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') continue
-
-            try {
-              const parsed = JSON.parse(data)
-              const content = parsed.choices?.[0]?.delta?.content || ''
-              if (content) {
-                fullContent += content
-                if (onChunk) onChunk(content)
-              }
-            } catch (e) {
-              // ignore parse errors in stream
-            }
-          }
+        (fullText: string) => {
+          // 记录到 AI 历史
+          import('../../ai/aiHistoryManager').then(({ aiHistoryManager }) => {
+            aiHistoryManager.addRecord({
+              question: `[${menuTitle}] ${rowData}`,
+              answer: fullText,
+              source: 'context-menu',
+            })
+          }).catch(() => {})
         }
-      }
-
-      return fullContent.trim()
+      )
     } catch (error) {
-      console.error('❌ AI API调用失败:', error)
-      throw error
+      this.showModal('AI 分析', `分析失败: ${error}`)
     }
   }
 }

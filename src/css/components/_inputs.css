@@ -29,18 +29,12 @@
 }
 .system-input:focus { border-color: var(--primary-color); }
 
-/* System Select */
+/* System Select — 基础样式由 dropdowns.css 提供，此处仅做尺寸覆盖 */
 .system-select {
-  padding: 6px 10px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.2s;
+  padding: 5px 28px 5px 8px;
+  font-size: 12px;
+  min-height: 28px;
 }
-.system-select:focus { border-color: var(--primary-color); }
 
 /* Search Input */
 .modern-search-input-wrapper { position: relative; width: 280px; }

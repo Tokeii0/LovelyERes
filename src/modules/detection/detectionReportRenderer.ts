@@ -12,7 +12,8 @@ import {
   Code
 } from '@icon-park/svg';
 
-import type { DetectionItem, DetectionResult, DetectionReport, Finding } from './quickDetectionManager';
+import type { DetectionItem, DetectionResult, DetectionReport } from './quickDetectionManager';
+import { showAlert } from '../ui/confirmDialog';
 
 /**
  * 检测报告渲染器类
@@ -218,7 +219,7 @@ export class DetectionReportRenderer {
    */
   viewReport(): void {
     if (!this.currentReport) {
-      alert('暂无检测报告');
+      showAlert({ title: '提示', message: '暂无检测报告' });
       return;
     }
 

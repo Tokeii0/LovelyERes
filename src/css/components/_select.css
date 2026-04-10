@@ -1,39 +1,6 @@
-/* Select Elements - Theme-aware */
-.app-layout select {
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 12px;
-  padding-right: 28px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  outline: none;
-}
-
-.app-layout select:hover {
-  border-color: var(--primary-color);
-}
+/* Select Elements — 由 dropdowns.css 提供全局基础样式
+   此文件仅保留 .app-layout 内的焦点环变量覆盖 */
 
 .app-layout select:focus {
-  border-color: var(--primary-color);
-  box-shadow: var(--focus-ring-shadow);
-}
-
-.app-layout select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.app-layout select option {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  padding: 8px;
+  box-shadow: var(--focus-ring-shadow, 0 0 0 2px color-mix(in srgb, var(--primary-color) 12%, transparent));
 }

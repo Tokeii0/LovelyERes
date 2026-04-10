@@ -183,7 +183,7 @@ export class SystemInfoRenderer {
   /**
    * 渲染系统信息标签页内容
    */
-  public renderSystemInfoTab(state: AppState, tab: string): string {
+  public renderSystemInfoTab(_state: AppState, tab: string): string {
     switch (tab) {
       case 'processes':
         return this.renderProcessesTable();

@@ -16,9 +16,9 @@ use crate::window_manager;
 pub async fn docker_list_containers(
     state: State<'_, AppState>,
 ) -> Result<Vec<types::DockerContainerSummary>, String> {
-    let mut ssh = state.ssh_manager.lock().unwrap();
+    let ssh = &state.ssh_manager;
     let manager = docker_manager::DockerManager::new();
-    manager.list_containers(&mut *ssh).map_err(Into::into)
+    manager.list_containers(ssh).map_err(Into::into)
 }
 
 /// 容器操作（start/stop/restart/remove 等）
@@ -28,10 +28,10 @@ pub async fn docker_container_action(
     action: String,
     state: State<'_, AppState>,
 ) -> Result<types::DockerActionResult, String> {
-    let mut ssh = state.ssh_manager.lock().unwrap();
+    let ssh = &state.ssh_manager;
     let manager = docker_manager::DockerManager::new();
     manager
-        .perform_action(&mut *ssh, &container_id, &action)
+        .perform_action(ssh, &container_id, &action)
         .map_err(Into::into)
 }
 
@@ -42,10 +42,10 @@ pub async fn docker_container_logs(
     options: Option<types::DockerLogsOptions>,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let mut ssh = state.ssh_manager.lock().unwrap();
+    let ssh = &state.ssh_manager;
     let manager = docker_manager::DockerManager::new();
     manager
-        .get_logs(&mut *ssh, &container_id, options)
+        .get_logs(ssh, &container_id, options)
         .map_err(Into::into)
 }
 
@@ -55,10 +55,10 @@ pub async fn docker_inspect_container(
     container_id: String,
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
-    let mut ssh = state.ssh_manager.lock().unwrap();
+    let ssh = &state.ssh_manager;
     let manager = docker_manager::DockerManager::new();
     manager
-        .inspect(&mut *ssh, &container_id)
+        .inspect(ssh, &container_id)
         .map_err(Into::into)
 }
 
@@ -69,10 +69,10 @@ pub async fn docker_read_container_file(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let mut ssh = state.ssh_manager.lock().unwrap();
+    let ssh = &state.ssh_manager;
     let manager = docker_manager::DockerManager::new();
     manager
-        .read_file(&mut *ssh, &container_id, &path)
+        .read_file(ssh, &container_id, &path)
         .map_err(Into::into)
 }
 
@@ -84,10 +84,10 @@ pub async fn docker_write_container_file(
     content: String,
     state: State<'_, AppState>,
 ) -> Result<types::DockerActionResult, String> {
-    let mut ssh = state.ssh_manager.lock().unwrap();
+    let ssh = &state.ssh_manager;
     let manager = docker_manager::DockerManager::new();
     manager
-        .write_file(&mut *ssh, &container_id, &path, &content)
+        .write_file(ssh, &container_id, &path, &content)
         .map_err(Into::into)
 }
 
@@ -98,10 +98,10 @@ pub async fn docker_copy(
     request: types::DockerCopyRequest,
     state: State<'_, AppState>,
 ) -> Result<types::DockerActionResult, String> {
-    let mut ssh = state.ssh_manager.lock().unwrap();
+    let ssh = &state.ssh_manager;
     let manager = docker_manager::DockerManager::new();
     manager
-        .copy(&mut *ssh, &container_id, &request)
+        .copy(ssh, &container_id, &request)
         .map_err(Into::into)
 }
 
@@ -113,11 +113,11 @@ pub async fn docker_exec_command(
     shell: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<ssh_manager_russh::TerminalOutput, String> {
-    let mut ssh = state.ssh_manager.lock().unwrap();
+    let ssh = &state.ssh_manager;
     let manager = docker_manager::DockerManager::new();
     let shell = shell.unwrap_or_else(|| "sh".to_string());
     manager
-        .exec_command(&mut *ssh, &container_id, &command, &shell)
+        .exec_command(ssh, &container_id, &command, &shell)
         .map_err(Into::into)
 }
 

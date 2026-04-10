@@ -60,7 +60,7 @@
   --activitybar-bg: #fdf0f3;
   --activitybar-border: rgba(255, 155, 179, 0.15);
   --activitybar-icon-active: #744c4c;
-  --activitybar-icon-inactive: rgba(160, 97, 109, 0.4);
+  --activitybar-icon-inactive: rgba(160, 97, 109, 0.7);
   --activitybar-indicator: var(--primary-color);
 
   /* Status Bar */

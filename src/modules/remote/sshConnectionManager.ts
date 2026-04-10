@@ -56,33 +56,33 @@ export class SSHSessionManager {
   /**
    * 建立SSH连接
    */
-  async connect(host: string, port: number, username: string, password: string): Promise<void> {
+  async connect(
+    host: string,
+    port: number,
+    username: string,
+    password: string,
+    authType: string = 'password',
+    keyPath?: string,
+    keyPassphrase?: string
+  ): Promise<void> {
     try {
       console.log('📞 [sshConnectionManager] connect 方法被调用');
-      console.log('  参数详情:', {
-        host,
-        port,
-        portType: typeof port,
-        portValue: port,
-        username,
-        passwordLength: password?.length || 0
-      });
+      console.log('  参数详情:', { host, port, username, authType, hasPassword: !!password, hasKeyPath: !!keyPath });
 
-      // 确保端口是数字类型
       const portNumber = typeof port === 'string' ? parseInt(port, 10) : port;
       if (isNaN(portNumber) || portNumber <= 0 || portNumber > 65535) {
         throw new Error(`无效的端口号: ${port} (类型: ${typeof port})`);
       }
 
-      console.log('  转换后的端口:', portNumber, typeof portNumber);
-
-      // 调用Tauri命令连接SSH
-      console.log('⚡ 调用 Tauri invoke: ssh_connect_direct');
+      console.log('⚡ 调用 Tauri invoke: ssh_connect_direct, authType:', authType);
       await (window as any).__TAURI__.core.invoke('ssh_connect_direct', {
         host,
         port: portNumber,
         username,
-        password
+        password: authType === 'password' ? password : undefined,
+        authType,
+        keyPath: authType === 'key' ? keyPath : undefined,
+        keyPassphrase: authType === 'key' ? keyPassphrase : undefined,
       });
       
       console.log('✅ [sshConnectionManager] Tauri invoke 返回成功');

@@ -4,6 +4,7 @@
  */
 
 import { sftpManager } from '../remote/sftpManager';
+import { showConfirm, showPrompt } from './confirmDialog';
 
 const CTX_MENU_ID = 'sftp-context-menu';
 let sftpCtxIndex: number | null = null;
@@ -273,7 +274,7 @@ export function initSftpContextMenuHandler(): void {
   });
 
   (window as any).sftpRenameSelected = () => withFileAction(async (file) => {
-    const newName = prompt('请输入新名称:', file.name);
+    const newName = await showPrompt({ title: '重命名', message: '请输入新名称:', defaultValue: file.name });
     if (!newName || newName === file.name) return;
     const currentPath = sftpManager.getCurrentPath();
     const oldPath = `${currentPath}/${file.name}`.replace(/\/+/g, '/');
@@ -295,7 +296,7 @@ export function initSftpContextMenuHandler(): void {
     const confirmMsg = isDir
       ? `确定要删除目录 "${file.name}" 吗？\n\n注意：仅能删除空目录，非空目录请先清理内容或使用终端 rm -rf`
       : `确定要删除文件 "${file.name}" 吗？`;
-    if (!confirm(confirmMsg)) return;
+    if (!(await showConfirm({ title: '删除确认', message: confirmMsg, dangerous: true }))) return;
 
     const filePath = file.path.replace(/\\/g, '/');
     try {

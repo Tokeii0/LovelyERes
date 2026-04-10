@@ -1,0 +1,33 @@
+/* ═══ AI History Page — prefix: aih- ═══ */
+.aih-page { display:flex;flex-direction:column;height:100%;overflow:hidden; }
+.aih-header { display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border-color);background:var(--bg-primary);flex-shrink:0; }
+.aih-header h2 { font-size:16px;font-weight:600;color:var(--text-primary);margin:0; }
+.aih-content { flex:1;overflow-y:auto;padding:0; }
+
+.aih-toolbar { display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border-color);background:var(--bg-secondary); }
+.aih-search { flex:1;padding:6px 10px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-primary);color:var(--text-primary);font-size:12px; }
+.aih-search:focus { outline:none;border-color:var(--accent-color); }
+.aih-count { font-size:11px;color:var(--text-secondary);white-space:nowrap; }
+.aih-btn { padding:5px 12px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-primary);color:var(--text-primary);font-size:11px;cursor:pointer;white-space:nowrap; }
+.aih-btn:hover { background:var(--hover-bg); }
+.aih-btn.danger { color:#ef4444; }
+.aih-btn.danger:hover { background:rgba(239,68,68,.1); }
+
+.aih-list { padding:8px 16px; }
+.aih-card { border:1px solid var(--border-color);border-radius:8px;margin-bottom:6px;overflow:hidden;transition:border-color .2s; }
+.aih-card:hover { border-color:var(--accent-color); }
+.aih-card-header { display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;gap:8px; }
+.aih-card-header:hover { background:var(--hover-bg); }
+.aih-card-left { display:flex;align-items:center;gap:8px;flex:1;min-width:0; }
+.aih-card-right { display:flex;align-items:center;gap:6px;flex-shrink:0; }
+.aih-source { padding:2px 8px;border-radius:4px;font-size:10px;background:var(--bg-tertiary);color:var(--accent-color);white-space:nowrap; }
+.aih-question { font-size:12px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.aih-time { font-size:10px;color:var(--text-secondary);white-space:nowrap; }
+.aih-icon-btn { background:none;border:none;cursor:pointer;font-size:11px;color:var(--text-secondary);padding:2px 4px;border-radius:3px; }
+.aih-icon-btn:hover { background:var(--hover-bg);color:var(--text-primary); }
+.aih-icon-btn.danger:hover { color:#ef4444;background:rgba(239,68,68,.1); }
+
+.aih-detail { padding:0 14px 12px;border-top:1px solid var(--border-subtle); }
+.aih-detail-q { font-size:12px;color:var(--text-secondary);margin:8px 0 6px;line-height:1.5;white-space:pre-wrap;word-break:break-all; }
+.aih-detail-a { font-size:12px;color:var(--text-primary);line-height:1.6;white-space:pre-wrap;word-break:break-all;background:var(--bg-tertiary);padding:8px;border-radius:6px; }
+.aih-empty { text-align:center;padding:60px 20px;color:var(--text-secondary);font-size:13px; }

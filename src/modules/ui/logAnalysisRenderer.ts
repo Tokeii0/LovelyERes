@@ -1,27 +1,18 @@
 /**
- * 日志审计页面渲染器
- * 负责渲染日志审计界面和处理日志数据展示
+ * 日志审计页面渲染器 — 重新设计
+ * 采用 Header + Tabs + Content 布局，对齐 Docker 页面风格
  */
 
 import {
-  Log,
-  FileText,
-  Refresh,
-  Search,
-  Down,
-  Calendar,
-  Left,
-  Right
+  Log, FileText, Refresh, Search,
+  Calendar, Left, Right, Shield, LinkCloud, Export,
+  SettingConfig,
 } from '@icon-park/svg';
 
-interface LogEntry {
-  timestamp: string;
-  level: string;
-  service: string;
-  message: string;
-  raw: string;
-  highlighted: boolean;
-}
+const icon = (fn: any, size = '16', theme = 'outline') =>
+  fn({ theme, size, fill: 'currentColor' });
+
+type LogTab = 'viewer' | 'threat' | 'ioc' | 'rules';
 
 export class LogAnalysisRenderer {
   private currentLogPath: string = '/var/log/auth.log';
@@ -29,333 +20,280 @@ export class LogAnalysisRenderer {
   private currentFilter: string = '';
   private useJournalctl: boolean = false;
   private journalUnit: string = '';
-  
-  // 新增状态
   private currentPage: number = 1;
   private currentDate: string = '';
+  private currentTab: LogTab = 'viewer';
 
-  /**
-   * 渲染日志审计页面
-   */
   render(): string {
     return `
-      <div class="log-analysis-page">
-        <div class="log-analysis-container">
-          ${this.renderToolbar()}
-          ${this.renderLogContent()}
-          ${this.renderPagination()}
+      <div class="la-page">
+        ${this.renderHeader()}
+        <div class="la-tabs" id="la-tabs-area">${this.renderTabs()}</div>
+        <div class="la-content" id="la-content-area">
+          ${this.renderCurrentTab()}
         </div>
       </div>
     `;
   }
 
-  /**
-   * 渲染工具栏
-   */
-  private renderToolbar(): string {
+  // ==================== Header ====================
+
+  private renderHeader(): string {
     const today = new Date().toISOString().split('T')[0];
-    
+
     return `
-      <div class="log-toolbar">
-        <div class="toolbar-left">
-          <div class="toolbar-title">
-            ${Log({ theme: 'outline', size: '20', fill: 'currentColor' })}
-            <span class="text">日志审计</span>
+      <div class="la-header">
+        <div class="la-header-left">
+          <div class="la-header-icon">${icon(Log, '22', 'filled')}</div>
+          <div>
+            <h2 class="la-header-title">日志审计</h2>
+            <div class="la-header-subtitle">应急响应 · 威胁分析 · 取证溯源</div>
           </div>
-          <div class="toolbar-divider"></div>
-          
-          <div class="log-source-group">
-            <button class="source-btn ${!this.useJournalctl ? 'active' : ''}" 
-                    onclick="window.switchLogSource('file')"
-                    title="查看文件日志">
-              ${FileText({ theme: 'outline', size: '16', fill: 'currentColor' })}
-              文件
+        </div>
+        <div class="la-header-right">
+          ${!this.useJournalctl ? this.renderFileSelector() : this.renderJournalInput()}
+
+          <div class="la-source-toggle">
+            <button class="la-toggle-btn ${!this.useJournalctl ? 'active' : ''}"
+                    onclick="window.switchLogSource('file')">
+              ${icon(FileText, '14')} 文件
             </button>
-            <button class="source-btn ${this.useJournalctl ? 'active' : ''}" 
-                    onclick="window.switchLogSource('journalctl')"
-                    title="查看 Journalctl 日志">
-              <svg width="16" height="16" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M14 41V7H34V41H14Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M14 15H34" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M14 23H34" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
+            <button class="la-toggle-btn ${this.useJournalctl ? 'active' : ''}"
+                    onclick="window.switchLogSource('journalctl')">
               Journal
             </button>
           </div>
 
-          ${!this.useJournalctl ? this.renderFileSelector() : this.renderJournalInput()}
-        </div>
-
-        <div class="toolbar-right">
-          <div class="date-picker-wrapper">
-            ${Calendar({ theme: 'outline', size: '16', fill: 'currentColor' })}
-            <input 
-              type="date" 
-              class="toolbar-input date-input" 
-              id="log-date-input"
-              value="${this.currentDate}"
-              max="${today}"
-              onchange="window.updateLogDate(this.value)"
-              title="筛选日期"
-            />
+          <div class="la-search-box">
+            ${icon(Search, '14')}
+            <input type="text" class="la-search-input" id="log-filter-input"
+              placeholder="搜索关键词..." value="${this.currentFilter}"
+              onchange="window.updateLogFilter(this.value)" />
           </div>
 
-          <div class="search-box">
-            ${Search({ theme: 'outline', size: '16', fill: 'currentColor' })}
-            <input 
-              type="text" 
-              class="transparent-input" 
-              id="log-filter-input"
-              placeholder="搜索关键词..."
-              value="${this.currentFilter}"
-              onchange="window.updateLogFilter(this.value)"
-            />
-            ${this.currentFilter ? `
-              <button class="clear-btn" onclick="window.clearLogFilter()">
-                ${Down({ theme: 'outline', size: '14', fill: 'currentColor', strokeWidth: 4 })}
-              </button>
-            ` : ''}
+          <div class="la-date-box">
+            ${icon(Calendar, '14')}
+            <input type="date" class="la-date-input" id="log-date-input"
+              value="${this.currentDate}" max="${today}"
+              onchange="window.updateLogDate(this.value)" />
           </div>
 
-          <button class="modern-btn primary icon-only" onclick="window.refreshLogAnalysis()" title="刷新日志">
-            ${Refresh({ theme: 'outline', size: '16', fill: 'currentColor' })}
+          <button class="modern-btn primary icon-only" onclick="window.refreshLogAnalysis()" title="刷新">
+            ${icon(Refresh)}
           </button>
         </div>
       </div>
     `;
   }
 
-  /**
-   * 渲染分页控件
-   */
-  private renderPagination(): string {
+  // ==================== Tabs ====================
+
+  private renderTabs(): string {
+    const tabs: { id: LogTab; label: string; iconFn: any }[] = [
+      { id: 'viewer', label: '日志查看', iconFn: Log },
+      { id: 'threat', label: '威胁分析', iconFn: Shield },
+      { id: 'ioc', label: 'IOC 搜索', iconFn: Search },
+      { id: 'rules', label: '规则 & 导出', iconFn: SettingConfig },
+    ];
+
+    return tabs.map(tab => `
+      <button class="la-tab-btn ${this.currentTab === tab.id ? 'active' : ''}"
+              data-la-action="switch-tab" data-tab="${tab.id}">
+        ${icon(tab.iconFn, '16', this.currentTab === tab.id ? 'filled' : 'outline')}
+        ${tab.label}
+      </button>
+    `).join('');
+  }
+
+  renderCurrentTab(): string {
+    switch (this.currentTab) {
+      case 'viewer': return this.renderViewerTab();
+      case 'threat': return this.renderThreatTab();
+      case 'ioc': return this.renderIocTab();
+      case 'rules': return this.renderRulesTab();
+      default: return this.renderViewerTab();
+    }
+  }
+
+  // ==================== Tab: 日志查看 ====================
+
+  private renderViewerTab(): string {
     return `
-      <div class="log-pagination">
-        <div class="pagination-info">
-          <span class="text-secondary">每页显示:</span>
-          <select 
-            class="mini-select" 
-            id="log-lines-select"
-            value="${this.currentLines}"
-            onchange="window.updateLogLines(this.value)"
-          >
-            <option value="50">50条</option>
-            <option value="100" ${this.currentLines === 100 ? 'selected' : ''}>100条</option>
-            <option value="200">200条</option>
-            <option value="500">500条</option>
-            <option value="1000">1000条</option>
-          </select>
+      <div class="la-viewer">
+        <div class="la-stats-bar">
+          <div class="la-stat">
+            <span class="la-stat-label">来源</span>
+            <span class="la-stat-value mono" id="current-source">-</span>
+          </div>
+          <div class="la-stat-divider"></div>
+          <div class="la-stat">
+            <span class="la-stat-label">总计</span>
+            <span class="la-stat-value" id="total-logs">0</span>
+          </div>
+          <div class="la-stat-divider"></div>
+          <div class="la-stat">
+            <span class="la-stat-label">告警</span>
+            <span class="la-stat-value" id="highlighted-logs" style="color:var(--warning-color)">0</span>
+          </div>
+          <div style="flex:1"></div>
+          ${this.renderPaginationInline()}
+        </div>
+        <div class="la-log-viewer" id="log-container">
+          <div class="la-loading"><div class="spinner"></div><p>正在获取日志数据...</p></div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderPaginationInline(): string {
+    return `
+      <div class="la-pagination">
+        <select class="la-mini-select" id="log-lines-select"
+          onchange="window.updateLogLines(this.value)">
+          <option value="50">50</option>
+          <option value="100" ${this.currentLines === 100 ? 'selected' : ''}>100</option>
+          <option value="200">200</option>
+          <option value="500">500</option>
+          <option value="1000">1000</option>
+        </select>
+        <button class="la-page-btn" onclick="window.changeLogPage(-1)"
+          ${this.currentPage <= 1 ? 'disabled' : ''} title="上一页">
+          ${icon(Left, '14')}
+        </button>
+        <span class="la-page-num page-display">第 ${this.currentPage} 页</span>
+        <button class="la-page-btn" onclick="window.changeLogPage(1)" title="下一页">
+          ${icon(Right, '14')}
+        </button>
+      </div>
+    `;
+  }
+
+  // ==================== Tab: 威胁分析 ====================
+
+  private renderThreatTab(): string {
+    return `
+      <div class="la-threat-tab">
+        <div class="la-action-bar">
+          <p class="la-action-hint">分析最近 2000 条日志记录，提取攻击指标</p>
+          <div class="la-action-buttons">
+            <button class="modern-btn primary" onclick="window.runThreatAnalysis()">
+              ${icon(Shield)} 开始分析
+            </button>
+            <button class="modern-btn secondary" onclick="window.runMultiLogAnalysis()">
+              ${icon(LinkCloud)} 多源关联分析
+            </button>
+          </div>
+        </div>
+        <div id="threat-panel-container"></div>
+        <div id="la-multi-log-container"></div>
+      </div>
+    `;
+  }
+
+  // ==================== Tab: IOC 搜索 ====================
+
+  private renderIocTab(): string {
+    return `
+      <div class="la-ioc-tab">
+        <div class="la-ioc-input-area">
+          <div class="la-ioc-left">
+            <h3 class="la-section-title">IOC 批量搜索</h3>
+            <p class="la-section-desc">输入 IP / 域名 / 哈希值，每行一个或逗号分隔，将在 auth.log / syslog / secure / messages / audit.log 中搜索</p>
+            <textarea id="ioc-input" class="la-ioc-textarea" rows="8"
+              placeholder="192.168.1.100&#10;10.0.0.5&#10;evil.example.com&#10;e99a18c428cb38d5f260853678922e03"></textarea>
+            <button class="modern-btn primary" onclick="window.executeIocSearch()" style="margin-top:8px">
+              ${icon(Search)} 搜索
+            </button>
+          </div>
+          <div class="la-ioc-right" id="ioc-results-container">
+            <div class="la-empty-hint">搜索结果将显示在这里</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ==================== Tab: 规则 & 导出 ====================
+
+  private renderRulesTab(): string {
+    return `
+      <div class="la-rules-tab">
+        <div class="la-rules-section">
+          <h3 class="la-section-title">自定义匹配规则</h3>
+          <p class="la-section-desc">定义正则规则，匹配的日志行将在查看器中标记 [R] 徽章</p>
+          <div id="custom-rules-list" class="la-rules-list"></div>
+          <div class="la-rule-add">
+            <input id="rule-name" placeholder="规则名称" class="la-rule-input" />
+            <input id="rule-regex" placeholder="正则表达式（如 eval\\(|base64_decode）" class="la-rule-input" style="flex:2" />
+            <select id="rule-severity" class="la-mini-select">
+              <option value="critical">严重</option>
+              <option value="high">高危</option>
+              <option value="medium" selected>中危</option>
+              <option value="low">低危</option>
+            </select>
+            <button class="modern-btn primary sm" onclick="window.addCustomRule()">添加</button>
+          </div>
         </div>
 
-        <div class="pagination-controls">
-          <button class="pagination-btn" 
-                  onclick="window.changeLogPage(-1)" 
-                  ${this.currentPage <= 1 ? 'disabled' : ''}
-                  title="上一页">
-            ${Left({ theme: 'outline', size: '16', fill: 'currentColor' })}
-          </button>
-          
-          <span class="page-display">第 ${this.currentPage} 页</span>
-          
-          <button class="pagination-btn" 
-                  onclick="window.changeLogPage(1)"
-                  title="下一页">
-            ${Right({ theme: 'outline', size: '16', fill: 'currentColor' })}
+        <div class="la-export-section">
+          <h3 class="la-section-title">导出报告</h3>
+          <p class="la-section-desc">导出当前日志和威胁分析结果为 HTML 报告</p>
+          <button class="modern-btn secondary" onclick="window.exportLogReport()">
+            ${icon(Export)} 导出 HTML 报告
           </button>
         </div>
       </div>
     `;
   }
 
-  /**
-   * 渲染文件选择器
-   */
+  // ==================== 日志源选择器 ====================
+
   private renderFileSelector(): string {
     return `
-      <div class="selector-wrapper">
-        <select 
-          class="toolbar-select" 
-          id="log-file-select"
-          value="${this.currentLogPath}"
-          onchange="window.updateLogPath(this.value)"
-        >
-          <optgroup label="Docker 容器">
-            <option value="docker:all">所有容器 (docker:all)</option>
-          </optgroup>
-          <optgroup label="系统日志">
-            <option value="/var/log/auth.log">认证日志 (auth.log)</option>
-            <option value="/var/log/secure">安全日志 (secure)</option>
-            <option value="/var/log/syslog">系统日志 (syslog)</option>
-            <option value="/var/log/messages">系统消息 (messages)</option>
-            <option value="/var/log/kern.log">内核日志 (kern.log)</option>
-            <option value="/var/log/cron">计划任务日志 (cron)</option>
-            <option value="/var/log/audit/audit.log">审计日志 (audit.log)</option>
-            <option value="/var/log/boot.log">启动日志 (boot.log)</option>
-            <option value="/var/log/dmesg">设备消息 (dmesg)</option>
-            <option value="/var/log/faillog">失败登录 (faillog)</option>
-          </optgroup>
-        </select>
-      </div>
+      <select class="la-source-select" id="log-file-select"
+        onchange="window.updateLogPath(this.value)">
+        <optgroup label="系统日志">
+          <option value="/var/log/auth.log" ${this.currentLogPath === '/var/log/auth.log' ? 'selected' : ''}>auth.log</option>
+          <option value="/var/log/secure">secure</option>
+          <option value="/var/log/syslog">syslog</option>
+          <option value="/var/log/messages">messages</option>
+          <option value="/var/log/kern.log">kern.log</option>
+          <option value="/var/log/cron">cron</option>
+          <option value="/var/log/audit/audit.log">audit.log</option>
+          <option value="/var/log/boot.log">boot.log</option>
+        </optgroup>
+        <optgroup label="Docker 容器">
+          <option value="docker:all">所有容器</option>
+        </optgroup>
+      </select>
     `;
   }
 
-  /**
-   * 渲染 Journal 输入框
-   */
   private renderJournalInput(): string {
     return `
-      <div class="input-wrapper">
-        <input 
-          type="text" 
-          class="toolbar-input" 
-          id="journal-unit-input"
-          list="journal-units"
-          placeholder="服务单元 (如 sshd)"
-          value="${this.journalUnit}"
-          onchange="window.updateJournalUnit(this.value)"
-        />
-        <datalist id="journal-units">
-          <option value="sshd">SSH 服务</option>
-          <option value="nginx">Nginx Web 服务器</option>
-          <option value="docker">Docker 容器服务</option>
-          <option value="cron">定时任务服务</option>
-          <option value="rsyslog">系统日志服务</option>
-          <option value="NetworkManager">网络管理器</option>
-          <option value="systemd-journald">Journal 日志服务</option>
-          <option value="firewalld">防火墙服务</option>
-          <option value="mariadb">MariaDB 数据库</option>
-          <option value="mysqld">MySQL 数据库</option>
-          <option value="redis">Redis 服务</option>
-        </datalist>
-      </div>
+      <input type="text" class="la-source-select" id="journal-unit-input"
+        list="journal-units" placeholder="服务单元 (sshd)"
+        value="${this.journalUnit}" onchange="window.updateJournalUnit(this.value)" />
+      <datalist id="journal-units">
+        <option value="sshd"><option value="nginx"><option value="docker">
+        <option value="cron"><option value="firewalld"><option value="mysqld">
+      </datalist>
     `;
   }
 
-  /**
-   * 渲染日志内容区域
-   */
-  private renderLogContent(): string {
-    return `
-      <div class="log-content-wrapper">
-        <div class="log-stats-bar">
-          <div class="stat-group">
-            <span class="stat-label">来源:</span>
-            <span class="stat-value mono" id="current-source">-</span>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="stat-group">
-            <span class="stat-label">总计:</span>
-            <span class="stat-value" id="total-logs">0</span>
-          </div>
-        </div>
-        
-        <div class="log-viewer" id="log-container">
-          <div class="loading-placeholder">
-            <div class="spinner"></div>
-            <p>正在获取日志数据...</p>
-          </div>
-        </div>
-      </div>
-    `;
-  }
+  // ==================== Setters ====================
 
-  /**
-   * 渲染日志条目列表
-   */
-  renderLogEntries(entries: LogEntry[]): string {
-    if (entries.length === 0) {
-      return `
-        <div class="empty-state">
-          ${Log({ theme: 'outline', size: '48', fill: 'currentColor' })}
-          <p>没有找到日志记录</p>
-          <small>请检查日志文件路径或调整过滤条件</small>
-        </div>
-      `;
-    }
-
-    return `
-      <div class="log-entries">
-        ${entries.map(entry => this.renderLogEntry(entry)).join('')}
-      </div>
-    `;
-  }
-
-  /**
-   * 渲染单条日志
-   */
-  private renderLogEntry(entry: LogEntry): string {
-    const levelClass = this.getLevelClass(entry.level);
-    const highlightClass = entry.highlighted ? 'highlighted' : '';
-
-    return `
-      <div class="log-entry ${levelClass} ${highlightClass}">
-        <div class="log-header">
-          <span class="log-timestamp">
-            ${Calendar({ theme: 'outline', size: '14', fill: 'currentColor' })}
-            ${entry.timestamp || 'Unknown'}
-          </span>
-          <span class="log-level ${levelClass}">${entry.level}</span>
-          <span class="log-service">${entry.service}</span>
-        </div>
-        <div class="log-message">${this.escapeHtml(entry.message)}</div>
-        ${entry.highlighted ? '<div class="log-highlight-badge">⚠️ 包含关键词</div>' : ''}
-      </div>
-    `;
-  }
-
-  /**
-   * 获取日志级别对应的 CSS 类
-   */
-  private getLevelClass(level: string): string {
-    const levelUpper = level.toUpperCase();
-    if (levelUpper.includes('ERROR') || levelUpper.includes('FAIL')) return 'level-error';
-    if (levelUpper.includes('WARN')) return 'level-warn';
-    if (levelUpper.includes('INFO')) return 'level-info';
-    if (levelUpper.includes('DEBUG')) return 'level-debug';
-    return 'level-info';
-  }
-
-  /**
-   * HTML 转义
-   */
-  private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  /**
-   * 设置当前日志路径
-   */
-  setLogPath(path: string): void {
-    this.currentLogPath = path;
-  }
-
-  /**
-   * 设置显示行数
-   */
-  setLines(lines: number): void {
-    this.currentLines = lines;
-  }
-
-  /**
-   * 设置过滤器
-   */
-  setFilter(filter: string): void {
-    this.currentFilter = filter;
-  }
-
-  /**
-   * 设置是否使用 journalctl
-   */
-  setUseJournalctl(use: boolean): void {
-    this.useJournalctl = use;
-  }
-
-  /**
-   * 设置 journal 单元
-   */
-  setJournalUnit(unit: string): void {
-    this.journalUnit = unit;
+  setLogPath(path: string): void { this.currentLogPath = path; }
+  setLines(lines: number): void { this.currentLines = lines; }
+  setFilter(filter: string): void { this.currentFilter = filter; }
+  setUseJournalctl(use: boolean): void { this.useJournalctl = use; }
+  setJournalUnit(unit: string): void { this.journalUnit = unit; }
+  setTab(tab: string): void {
+    this.currentTab = tab as LogTab;
+    // Re-render tabs + content
+    const tabsArea = document.getElementById('la-tabs-area');
+    if (tabsArea) tabsArea.innerHTML = this.renderTabs();
+    const contentArea = document.getElementById('la-content-area');
+    if (contentArea) contentArea.innerHTML = this.renderCurrentTab();
   }
 }

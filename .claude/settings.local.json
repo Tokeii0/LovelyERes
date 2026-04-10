@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\(''''message'''',{}\\).get\\(''''content'''',[{}]\\)[-1].get\\(''''text'''',''''running...''''\\)[:200]\\)\")",
+      "Bash(npx vue-tsc:*)"
+    ]
+  }
+}

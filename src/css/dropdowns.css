@@ -1,67 +1,91 @@
-/* Premium Dropdown Styles - LovelyRes */
+/* ═══════════════════════════════════════════════════════
+   Global Select / Dropdown Styles — LovelyRes
+   统一所有 <select> 元素的外观
+   ═══════════════════════════════════════════════════════ */
 
-/* Global Select Style - Using !important to override inline styles */
+/* Base select — 紧凑优雅，适配工具栏和表单 */
 select {
-    appearance: none !important;
-    -webkit-appearance: none !important;
-    -moz-appearance: none !important;
-    background-color: var(--bg-secondary) !important;
-    color: var(--text-primary) !important;
-    border: 1px solid var(--border-color) !important;
-    border-radius: var(--border-radius) !important;
-    padding: 8px 32px 8px 12px !important;
-    font-size: 13px !important;
-    font-family: var(--font-family) !important;
-    cursor: pointer !important;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
-    background-repeat: no-repeat !important;
-    background-position: right 8px center !important;
-    background-size: 16px !important;
-    outline: none !important;
-    box-shadow: var(--shadow-sm) !important;
-    line-height: 1.5 !important;
-    min-height: 36px !important;
-    /* Don't force width, let layout control it, but ensure box-sizing */
-    box-sizing: border-box !important;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 4px 28px 4px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  line-height: 1.5;
+  cursor: pointer;
+  outline: none;
+  box-sizing: border-box;
+  min-height: 28px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+
+  /* 下拉箭头 */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 12px;
 }
 
-/* Hover State */
+/* Hover — 仅边框变色，无位移 */
 select:hover {
-    border-color: var(--primary-color) !important;
-    background-color: var(--bg-hover, rgba(255, 255, 255, 0.03)) !important;
-    transform: translateY(-1px) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+  border-color: var(--primary-color);
 }
 
-/* Focus State */
+/* Focus — 蓝色聚焦环 */
 select:focus {
-    border-color: var(--primary-color) !important;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
-    background-color: var(--bg-primary) !important;
-    transform: translateY(-1px) !important;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 12%, transparent);
 }
 
-/* Disabled State */
+/* Disabled */
 select:disabled {
-    opacity: 0.6 !important;
-    cursor: not-allowed !important;
-    background-color: var(--bg-tertiary) !important;
-    transform: none !important;
-    box-shadow: none !important;
-    border-color: var(--border-color) !important;
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--bg-tertiary);
 }
 
-/* Option Styling */
+/* Option 下拉菜单项 */
 select option {
-    background-color: var(--bg-secondary);
-    color: var(--text-primary);
-    padding: 8px;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 6px 8px;
 }
 
-/* Dark Mode Specific Adjustments */
-@media (prefers-color-scheme: dark) {
-    select {
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
-    }
+select optgroup {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* ─── 尺寸变体 ─── */
+
+/* 迷你（分页、筛选器等工具栏内使用） */
+select.select-sm,
+select.la-mini-select,
+select.mini-select {
+  padding: 2px 22px 2px 6px;
+  font-size: 11px;
+  min-height: 22px;
+  border-radius: 4px;
+  background-position: right 4px center;
+  background-size: 10px;
+}
+
+/* 标准（表单控件） */
+select.select-md {
+  padding: 6px 32px 6px 10px;
+  font-size: 13px;
+  min-height: 32px;
+}
+
+/* 大号（独立表单） */
+select.select-lg,
+select.bl-select {
+  padding: 8px 36px 8px 12px;
+  font-size: 13px;
+  min-height: 36px;
+  background-position: right 10px center;
+  background-size: 14px;
 }

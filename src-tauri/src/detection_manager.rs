@@ -125,8 +125,74 @@ pub struct NetworkTestResult {
     pub bandwidth: f64,
 }
 
+// ==================== 竞赛级检测结构体 ====================
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WebshellFinding {
+    pub path: String,
+    pub matched_pattern: String,
+    pub file_size: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WebshellScanResult {
+    pub suspicious_files: Vec<WebshellFinding>,
+    pub scanned_dirs: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RootkitScanResult {
+    pub hidden_processes: Vec<String>,
+    pub suspicious_modules: Vec<String>,
+    pub ld_preload_hooks: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PersistenceScanResult {
+    pub suspicious_cron: Vec<String>,
+    pub bashrc_trojans: Vec<String>,
+    pub systemd_trojans: Vec<String>,
+    pub rc_local_entries: Vec<String>,
+    pub at_jobs: Vec<String>,
+    pub ld_preload_files: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LogTamperResult {
+    pub truncated_logs: Vec<String>,
+    pub deleted_open_logs: Vec<String>,
+    pub timestamp_gaps: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NetworkBackdoorResult {
+    pub suspicious_listeners: Vec<String>,
+    pub c2_connections: Vec<String>,
+    pub reverse_shell_indicators: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EnhancedUserResult {
+    pub uid_conflicts: Vec<String>,
+    pub shell_without_home: Vec<String>,
+    pub sudo_anomalies: Vec<String>,
+    pub suspicious_history: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SSHKeyAuditResult {
+    pub unauthorized_keys: Vec<String>,
+    pub weak_keys: Vec<String>,
+    pub config_issues: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TimestompResult {
+    pub suspicious_files: Vec<String>,
+}
+
 /// 端口安全扫描
-pub fn detect_port_scan(manager: &mut SSHManagerRussh) -> Result<PortScanResult, String> {
+pub fn detect_port_scan(manager: &SSHManagerRussh) -> Result<PortScanResult, String> {
     // 执行端口扫描命令
     let cmd = r#"
         # 扫描常见端口
@@ -167,7 +233,7 @@ pub fn detect_port_scan(manager: &mut SSHManagerRussh) -> Result<PortScanResult,
 }
 
 /// 用户权限审计
-pub fn detect_user_audit(manager: &mut SSHManagerRussh) -> Result<UserAuditResult, String> {
+pub fn detect_user_audit(manager: &SSHManagerRussh) -> Result<UserAuditResult, String> {
     // 获取用户列表
     let cmd = "cat /etc/passwd";
     let passwd_result = manager.execute_command(cmd)
@@ -226,7 +292,7 @@ pub fn detect_user_audit(manager: &mut SSHManagerRussh) -> Result<UserAuditResul
 }
 
 /// 后门检测
-pub fn detect_backdoor(manager: &mut SSHManagerRussh) -> Result<BackdoorScanResult, String> {
+pub fn detect_backdoor(manager: &SSHManagerRussh) -> Result<BackdoorScanResult, String> {
     // 检查可疑的计划任务
     let cron_cmd = r#"
         (crontab -l 2>/dev/null; sudo crontab -l 2>/dev/null; cat /etc/crontab 2>/dev/null) | \
@@ -245,7 +311,7 @@ pub fn detect_backdoor(manager: &mut SSHManagerRussh) -> Result<BackdoorScanResu
     // 检查可疑的启动项
     let autostart_cmd = r#"
         find /etc/init.d /etc/systemd/system /etc/rc*.d -type f 2>/dev/null | \
-        head -20
+        head -50
     "#;
     let autostart_output = manager.execute_command(autostart_cmd)
         .map(|r| r.output)
@@ -293,15 +359,15 @@ pub fn detect_backdoor(manager: &mut SSHManagerRussh) -> Result<BackdoorScanResu
 }
 
 /// 进程分析
-pub fn detect_process_analysis(manager: &mut SSHManagerRussh) -> Result<ProcessAnalysisResult, String> {
+pub fn detect_process_analysis(manager: &SSHManagerRussh) -> Result<ProcessAnalysisResult, String> {
     // 获取进程列表
-    let cmd = "ps aux | head -50";
+    let cmd = "ps aux | head -200";
     let output_result = manager.execute_command(cmd)
         .map_err(|e| format!("获取进程列表失败: {}", e))?;
 
     let output = output_result.output;
     let mut high_resource_processes = Vec::new();
-    let suspicious_processes = Vec::new();
+    let mut suspicious_processes = Vec::new();
 
     for (i, line) in output.lines().skip(1).enumerate() {
         if i >= 20 { break; }
@@ -321,12 +387,23 @@ pub fn detect_process_analysis(manager: &mut SSHManagerRussh) -> Result<ProcessA
                 user,
                 cpu,
                 mem,
-                command: command.chars().take(100).collect(),
+                command: command.chars().take(500).collect(),
             };
 
             // 高资源占用进程
             if cpu > 50.0 || mem > 50.0 {
-                high_resource_processes.push(process);
+                high_resource_processes.push(process.clone());
+            }
+
+            // 可疑进程检测
+            if command.contains("(deleted)")
+                || command.starts_with("/tmp/")
+                || command.starts_with("/dev/shm/")
+                || command.starts_with("/var/tmp/")
+                || command.contains("bash -i")
+                || command.contains("/dev/tcp")
+                || command.contains("/dev/udp") {
+                suspicious_processes.push(process.clone());
             }
         }
     }
@@ -338,9 +415,9 @@ pub fn detect_process_analysis(manager: &mut SSHManagerRussh) -> Result<ProcessA
 }
 
 /// 文件权限检测
-pub fn detect_file_permission(manager: &mut SSHManagerRussh) -> Result<FilePermissionResult, String> {
+pub fn detect_file_permission(manager: &SSHManagerRussh) -> Result<FilePermissionResult, String> {
     // 查找 SUID 文件
-    let suid_cmd = "find / -perm -4000 -type f 2>/dev/null | head -20";
+    let suid_cmd = "find / -perm -4000 -type f 2>/dev/null | head -50";
     let suid_output = manager.execute_command(suid_cmd)
         .map(|r| r.output)
         .unwrap_or_default();
@@ -377,7 +454,7 @@ pub fn detect_file_permission(manager: &mut SSHManagerRussh) -> Result<FilePermi
 }
 
 /// SSH 安全审计
-pub fn detect_ssh_audit(manager: &mut SSHManagerRussh) -> Result<SSHAuditResult, String> {
+pub fn detect_ssh_audit(manager: &SSHManagerRussh) -> Result<SSHAuditResult, String> {
     // 读取 SSH 配置
     let cmd = "cat /etc/ssh/sshd_config 2>/dev/null | grep -v '^#' | grep -v '^$'";
     let output = manager.execute_command(cmd)
@@ -409,7 +486,7 @@ pub fn detect_ssh_audit(manager: &mut SSHManagerRussh) -> Result<SSHAuditResult,
 }
 
 /// 日志分析
-pub fn detect_log_analysis(manager: &mut SSHManagerRussh) -> Result<LogAnalysisResult, String> {
+pub fn detect_log_analysis(manager: &SSHManagerRussh) -> Result<LogAnalysisResult, String> {
     // 检查暴力破解尝试
     let brute_force_cmd = r#"
         grep -i 'failed password' /var/log/auth.log /var/log/secure 2>/dev/null | wc -l
@@ -462,7 +539,7 @@ pub fn detect_log_analysis(manager: &mut SSHManagerRussh) -> Result<LogAnalysisR
 }
 
 /// 防火墙检查
-pub fn detect_firewall_check(manager: &mut SSHManagerRussh) -> Result<FirewallCheckResult, String> {
+pub fn detect_firewall_check(manager: &SSHManagerRussh) -> Result<FirewallCheckResult, String> {
     // 检查防火墙状态
     let status_cmd = r#"
         systemctl is-active iptables firewalld ufw 2>/dev/null | grep -q 'active' && echo 'active' || echo 'inactive'
@@ -496,7 +573,7 @@ pub fn detect_firewall_check(manager: &mut SSHManagerRussh) -> Result<FirewallCh
 }
 
 /// CPU 测试
-pub fn detect_cpu_test(manager: &mut SSHManagerRussh) -> Result<CpuTestResult, String> {
+pub fn detect_cpu_test(manager: &SSHManagerRussh) -> Result<CpuTestResult, String> {
     // 获取 CPU 信息
     let cmd = r#"
         echo "cores:$(nproc)"
@@ -534,7 +611,7 @@ pub fn detect_cpu_test(manager: &mut SSHManagerRussh) -> Result<CpuTestResult, S
 }
 
 /// 内存测试
-pub fn detect_memory_test(manager: &mut SSHManagerRussh) -> Result<MemoryTestResult, String> {
+pub fn detect_memory_test(manager: &SSHManagerRussh) -> Result<MemoryTestResult, String> {
     // 获取内存信息
     let cmd = "free -m | grep Mem";
     let output_result = manager.execute_command(cmd)
@@ -565,7 +642,7 @@ pub fn detect_memory_test(manager: &mut SSHManagerRussh) -> Result<MemoryTestRes
 }
 
 /// 磁盘测试
-pub fn detect_disk_test(manager: &mut SSHManagerRussh) -> Result<DiskTestResult, String> {
+pub fn detect_disk_test(manager: &SSHManagerRussh) -> Result<DiskTestResult, String> {
     // 简化版磁盘测试 - 使用 dd 命令
     let cmd = r#"
         dd if=/dev/zero of=/tmp/test_disk_speed bs=1M count=100 2>&1 | grep copied | awk '{print $(NF-1)}'
@@ -584,7 +661,7 @@ pub fn detect_disk_test(manager: &mut SSHManagerRussh) -> Result<DiskTestResult,
 }
 
 /// 网络测试
-pub fn detect_network_test(manager: &mut SSHManagerRussh) -> Result<NetworkTestResult, String> {
+pub fn detect_network_test(manager: &SSHManagerRussh) -> Result<NetworkTestResult, String> {
     // 测试延迟
     let ping_cmd = "ping -c 3 8.8.8.8 2>/dev/null | grep 'avg' | awk -F'/' '{print $5}'";
     let ping_output = manager.execute_command(ping_cmd)
@@ -653,7 +730,7 @@ pub struct GenericDetectionResult {
 // ========== 新增基线检测函数 ==========
 
 /// 密码策略检查
-pub fn detect_password_policy(manager: &mut SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+pub fn detect_password_policy(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
     let mut issues = Vec::new();
 
     // 检查 /etc/login.defs 中的密码策略
@@ -686,7 +763,7 @@ pub fn detect_password_policy(manager: &mut SSHManagerRussh) -> Result<GenericDe
 }
 
 /// Sudo 配置审计
-pub fn detect_sudo_config(manager: &mut SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+pub fn detect_sudo_config(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
     let mut issues = Vec::new();
 
     // 检查 sudoers 文件中的 NOPASSWD 配置
@@ -708,7 +785,7 @@ pub fn detect_sudo_config(manager: &mut SSHManagerRussh) -> Result<GenericDetect
 }
 
 /// PAM 配置检查
-pub fn detect_pam_config(manager: &mut SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+pub fn detect_pam_config(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
     let mut issues = Vec::new();
 
     // 检查 PAM 密码复杂度模块
@@ -730,7 +807,7 @@ pub fn detect_pam_config(manager: &mut SSHManagerRussh) -> Result<GenericDetecti
 }
 
 /// 账号锁定策略检查
-pub fn detect_account_lockout(manager: &mut SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+pub fn detect_account_lockout(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
     let mut issues = Vec::new();
 
     // 检查 PAM 账号锁定模块
@@ -752,7 +829,7 @@ pub fn detect_account_lockout(manager: &mut SSHManagerRussh) -> Result<GenericDe
 }
 
 /// SELinux/AppArmor 状态检查
-pub fn detect_selinux_status(manager: &mut SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+pub fn detect_selinux_status(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
     let mut issues = Vec::new();
 
     // 检查 SELinux 状态
@@ -787,7 +864,7 @@ pub fn detect_selinux_status(manager: &mut SSHManagerRussh) -> Result<GenericDet
 }
 
 /// 内核参数检查
-pub fn detect_kernel_params(manager: &mut SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+pub fn detect_kernel_params(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
     let mut issues = Vec::new();
 
     // 检查关键的安全内核参数
@@ -818,7 +895,7 @@ pub fn detect_kernel_params(manager: &mut SSHManagerRussh) -> Result<GenericDete
 }
 
 /// 系统补丁状态检查
-pub fn detect_system_updates(manager: &mut SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+pub fn detect_system_updates(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
     let mut issues = Vec::new();
 
     // 检查可用更新（根据不同发行版）
@@ -850,7 +927,7 @@ pub fn detect_system_updates(manager: &mut SSHManagerRussh) -> Result<GenericDet
 }
 
 /// 不必要服务检查
-pub fn detect_unnecessary_services(manager: &mut SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+pub fn detect_unnecessary_services(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
     let mut issues = Vec::new();
 
     // 定义常见的不必要服务
@@ -876,7 +953,7 @@ pub fn detect_unnecessary_services(manager: &mut SSHManagerRussh) -> Result<Gene
 }
 
 /// 自启动服务审计
-pub fn detect_auto_start_services(manager: &mut SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+pub fn detect_auto_start_services(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
     let mut issues = Vec::new();
 
     // 获取所有启用的服务
@@ -898,7 +975,7 @@ pub fn detect_auto_start_services(manager: &mut SSHManagerRussh) -> Result<Gener
 }
 
 /// 审计配置检查
-pub fn detect_audit_config(manager: &mut SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+pub fn detect_audit_config(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
     let mut issues = Vec::new();
 
     // 检查 auditd 服务状态
@@ -920,7 +997,7 @@ pub fn detect_audit_config(manager: &mut SSHManagerRussh) -> Result<GenericDetec
 }
 
 /// 历史命令审计
-pub fn detect_history_audit(manager: &mut SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+pub fn detect_history_audit(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
     let mut issues = Vec::new();
 
     // 检查可疑的历史命令
@@ -946,7 +1023,7 @@ pub fn detect_history_audit(manager: &mut SSHManagerRussh) -> Result<GenericDete
 }
 
 /// NTP 配置检查
-pub fn detect_ntp_config(manager: &mut SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+pub fn detect_ntp_config(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
     let mut issues = Vec::new();
 
     // 检查时间同步服务
@@ -970,7 +1047,7 @@ pub fn detect_ntp_config(manager: &mut SSHManagerRussh) -> Result<GenericDetecti
 }
 
 /// DNS 配置检查
-pub fn detect_dns_config(manager: &mut SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+pub fn detect_dns_config(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
     let mut issues = Vec::new();
 
     // 检查 DNS 配置
@@ -1000,4 +1077,372 @@ pub fn detect_dns_config(manager: &mut SSHManagerRussh) -> Result<GenericDetecti
     }
 
     Ok(GenericDetectionResult { issues })
+}
+
+// ==================== 竞赛级检测函数 ====================
+
+/// Webshell 扫描
+pub fn detect_webshell(manager: &SSHManagerRussh) -> Result<WebshellScanResult, String> {
+    let dirs = ["/var/www", "/usr/share/nginx/html", "/opt/lampp/htdocs", "/srv/www"];
+    let scan_dirs: Vec<String> = dirs.iter().map(|d| d.to_string()).collect();
+
+    let cmd = r#"find /var/www /usr/share/nginx/html /opt/lampp/htdocs /srv/www -type f \( -name "*.php" -o -name "*.jsp" -o -name "*.asp" -o -name "*.aspx" -o -name "*.cgi" \) -exec grep -l -E '(eval\s*\(|base64_decode|system\s*\(|passthru|shell_exec|assert\s*\(|\$_POST\[|gzinflate|str_rot13)' {} \; 2>/dev/null | head -50"#;
+
+    let output = match manager.execute_command(cmd) {
+        Ok(r) => r.output,
+        Err(_) => String::new(),
+    };
+
+    let suspicious_files: Vec<WebshellFinding> = output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|path| WebshellFinding {
+            path: path.trim().to_string(),
+            matched_pattern: "eval/system/passthru/base64_decode".to_string(),
+            file_size: 0,
+        })
+        .collect();
+
+    Ok(WebshellScanResult { suspicious_files, scanned_dirs: scan_dirs })
+}
+
+/// Rootkit 检测
+pub fn detect_rootkit(manager: &SSHManagerRussh) -> Result<RootkitScanResult, String> {
+    // 1. 隐藏进程检测: ps 列出的 PID vs /proc 下的 PID
+    let cmd_hidden = r#"diff <(ps -eo pid --no-headers | sort -n) <(ls -1 /proc | grep -E '^[0-9]+$' | sort -n) 2>/dev/null | grep '>' | awk '{print $2}'"#;
+    let hidden_output = manager.execute_command(&format!("bash -c '{}'", cmd_hidden.replace('\'', "'\\''")))
+        .map(|r| r.output).unwrap_or_default();
+    let hidden_processes: Vec<String> = hidden_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| format!("隐藏进程 PID: {}", l.trim()))
+        .collect();
+
+    // 2. 可疑内核模块
+    let cmd_modules = "lsmod 2>/dev/null | awk 'NR>1 && $3==0 {print $1}' | head -50";
+    let mod_output = manager.execute_command(cmd_modules).map(|r| r.output).unwrap_or_default();
+    let suspicious_modules: Vec<String> = mod_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| format!("未被引用的内核模块: {}", l.trim()))
+        .collect();
+
+    // 3. LD_PRELOAD 检测
+    let cmd_preload = "cat /etc/ld.so.preload 2>/dev/null; echo '---'; env | grep LD_PRELOAD 2>/dev/null";
+    let preload_output = manager.execute_command(cmd_preload).map(|r| r.output).unwrap_or_default();
+    let ld_preload_hooks: Vec<String> = preload_output.lines()
+        .filter(|l| !l.trim().is_empty() && l.trim() != "---")
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    Ok(RootkitScanResult { hidden_processes, suspicious_modules, ld_preload_hooks })
+}
+
+/// 持久化机制全面扫描
+pub fn detect_persistence(manager: &SSHManagerRussh) -> Result<PersistenceScanResult, String> {
+    // 1. 全量 cron 检查
+    let cmd_cron = r#"{ for user in $(cut -f1 -d: /etc/passwd); do crontab -u "$user" -l 2>/dev/null | grep -v '^#' | grep -v '^$' | sed "s/^/[$user] /"; done; cat /etc/crontab 2>/dev/null | grep -v '^#' | grep -v '^$' | grep -v '^[A-Z]'; find /etc/cron.d /etc/cron.daily /etc/cron.hourly /etc/cron.weekly /etc/cron.monthly -type f -exec grep -l -E '(curl|wget|nc|python|perl|bash|sh -c)' {} \; 2>/dev/null; cat /var/spool/cron/crontabs/* /var/spool/cron/* 2>/dev/null | grep -v '^#' | grep -v '^$'; } 2>/dev/null | head -100"#;
+    let cron_output = manager.execute_command(cmd_cron).map(|r| r.output).unwrap_or_default();
+    let suspicious_cron: Vec<String> = cron_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter(|l| {
+            let low = l.to_lowercase();
+            low.contains("curl") || low.contains("wget") || low.contains("nc ") || low.contains("python") || low.contains("perl") || low.contains("bash -") || low.contains("/dev/tcp")
+        })
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    // 2. .bashrc/.profile 木马
+    let cmd_bashrc = r#"grep -rn -E '(curl|wget|nc |socat|python.*-c|perl.*-e|bash -i|/dev/tcp|/dev/udp|eval|base64)' /root/.bashrc /root/.bash_profile /root/.profile /home/*/.bashrc /home/*/.bash_profile /home/*/.profile 2>/dev/null | head -50"#;
+    let bashrc_output = manager.execute_command(cmd_bashrc).map(|r| r.output).unwrap_or_default();
+    let bashrc_trojans: Vec<String> = bashrc_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    // 3. systemd 单元后门
+    let cmd_systemd = r#"grep -rn -E 'ExecStart.*(curl|wget|nc|bash|python|perl|/tmp/|/dev/shm/)' /etc/systemd/system/ /usr/lib/systemd/system/ 2>/dev/null | head -50"#;
+    let systemd_output = manager.execute_command(cmd_systemd).map(|r| r.output).unwrap_or_default();
+    let systemd_trojans: Vec<String> = systemd_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    // 4. rc.local
+    let cmd_rclocal = "cat /etc/rc.local /etc/rc.d/rc.local 2>/dev/null | grep -v '^#' | grep -v '^$' | grep -v 'exit 0'";
+    let rclocal_output = manager.execute_command(cmd_rclocal).map(|r| r.output).unwrap_or_default();
+    let rc_local_entries: Vec<String> = rclocal_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    // 5. at 任务
+    let cmd_at = "atq 2>/dev/null | head -20";
+    let at_output = manager.execute_command(cmd_at).map(|r| r.output).unwrap_or_default();
+    let at_jobs: Vec<String> = at_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    // 6. LD_PRELOAD 文件
+    let cmd_ldpreload = "cat /etc/ld.so.preload 2>/dev/null; find /etc/ld.so.conf.d -type f -exec grep -l '/tmp\\|/dev/shm' {} \\; 2>/dev/null";
+    let ld_output = manager.execute_command(cmd_ldpreload).map(|r| r.output).unwrap_or_default();
+    let ld_preload_files: Vec<String> = ld_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    Ok(PersistenceScanResult {
+        suspicious_cron, bashrc_trojans, systemd_trojans,
+        rc_local_entries, at_jobs, ld_preload_files,
+    })
+}
+
+/// 日志篡改检测
+pub fn detect_log_tamper(manager: &SSHManagerRussh) -> Result<LogTamperResult, String> {
+    // 1. 零字节/异常小日志
+    let cmd_truncated = r#"find /var/log -maxdepth 2 -type f \( -name "*.log" -o -name "auth.log" -o -name "secure" -o -name "syslog" -o -name "messages" \) -size 0 2>/dev/null; find /var/log -maxdepth 2 -name "auth.log" -o -name "secure" 2>/dev/null | xargs ls -la 2>/dev/null | awk '$5<100 {print "异常小文件: "$NF" ("$5" bytes)"}'"#;
+    let trunc_output = manager.execute_command(cmd_truncated).map(|r| r.output).unwrap_or_default();
+    let truncated_logs: Vec<String> = trunc_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    // 2. 已删除但仍打开的日志文件
+    let cmd_deleted = "lsof +L1 2>/dev/null | grep -E '/var/log|syslog|auth' | head -20";
+    let deleted_output = manager.execute_command(cmd_deleted).map(|r| r.output).unwrap_or_default();
+    let deleted_open_logs: Vec<String> = deleted_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    // 3. wtmp/lastlog 异常
+    let cmd_gaps = r#"last -F 2>/dev/null | head -50 | awk '{print $1}' | sort | uniq -c | sort -rn | head -10"#;
+    let gaps_output = manager.execute_command(cmd_gaps).map(|r| r.output).unwrap_or_default();
+    let timestamp_gaps: Vec<String> = gaps_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| format!("登录频率: {}", l.trim()))
+        .collect();
+
+    Ok(LogTamperResult { truncated_logs, deleted_open_logs, timestamp_gaps })
+}
+
+/// 网络后门检测
+pub fn detect_network_backdoor(manager: &SSHManagerRussh) -> Result<NetworkBackdoorResult, String> {
+    // 1. 可疑监听端口（高端口 + 非标准程序）
+    let cmd_listeners = r#"ss -tlnp 2>/dev/null | awk 'NR>1 {split($4,a,":"); port=a[length(a)]; if(port>30000 || port==4444 || port==5555 || port==6666 || port==8888 || port==1234 || port==31337) print $0}' | head -50"#;
+    let listener_output = manager.execute_command(cmd_listeners).map(|r| r.output).unwrap_or_default();
+    let suspicious_listeners: Vec<String> = listener_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    // 2. C2 连接（已建立的可疑外连）
+    let cmd_c2 = r#"ss -tnp state established 2>/dev/null | awk '{split($5,a,":"); port=a[length(a)]; if(port==4444 || port==5555 || port==6666 || port==8888 || port==1234 || port==31337 || port==9999 || port==443) print $0}' | head -50"#;
+    let c2_output = manager.execute_command(cmd_c2).map(|r| r.output).unwrap_or_default();
+    let c2_connections: Vec<String> = c2_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    // 3. 反弹 shell 指示器（/tmp 或已删除二进制的网络进程）
+    let cmd_reverse = r#"ls -la /proc/*/exe 2>/dev/null | grep -E '(deleted)|/tmp/|/dev/shm/' | head -50"#;
+    let reverse_output = manager.execute_command(cmd_reverse).map(|r| r.output).unwrap_or_default();
+    let reverse_shell_indicators: Vec<String> = reverse_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    Ok(NetworkBackdoorResult { suspicious_listeners, c2_connections, reverse_shell_indicators })
+}
+
+/// 增强用户审计
+pub fn detect_enhanced_user(manager: &SSHManagerRussh) -> Result<EnhancedUserResult, String> {
+    // 1. UID 冲突
+    let cmd_uid = "awk -F: '{print $3}' /etc/passwd | sort -n | uniq -d";
+    let uid_output = manager.execute_command(cmd_uid).map(|r| r.output).unwrap_or_default();
+    let uid_conflicts: Vec<String> = uid_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| format!("UID 冲突: {}", l.trim()))
+        .collect();
+
+    // 2. 有 Shell 但无 Home 目录
+    let cmd_shell = r#"awk -F: '$NF ~ /bash|sh|zsh/ {print $1":"$6}' /etc/passwd | while IFS=: read user home; do [ ! -d "$home" ] && echo "$user (home=$home 不存在)"; done 2>/dev/null"#;
+    let shell_output = manager.execute_command(cmd_shell).map(|r| r.output).unwrap_or_default();
+    let shell_without_home: Vec<String> = shell_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    // 3. sudo 组异常
+    let cmd_sudo = "getent group sudo wheel 2>/dev/null | cut -d: -f4";
+    let sudo_output = manager.execute_command(cmd_sudo).map(|r| r.output).unwrap_or_default();
+    let sudo_anomalies: Vec<String> = sudo_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| format!("sudo/wheel 组成员: {}", l.trim()))
+        .collect();
+
+    // 4. 全用户可疑历史命令
+    let cmd_history = r#"for f in /root/.bash_history /home/*/.bash_history; do [ -f "$f" ] && grep -n -E '(wget http|curl http|nc -|bash -i|/dev/tcp|base64 -d|python.*-c|perl.*-e|chmod 777|chmod \+s)' "$f" 2>/dev/null | head -20 | sed "s|^|[$f] |"; done"#;
+    let history_output = manager.execute_command(cmd_history).map(|r| r.output).unwrap_or_default();
+    let suspicious_history: Vec<String> = history_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    Ok(EnhancedUserResult { uid_conflicts, shell_without_home, sudo_anomalies, suspicious_history })
+}
+
+/// 隐藏计划任务检测
+pub fn detect_hidden_cron(manager: &SSHManagerRussh) -> Result<GenericDetectionResult, String> {
+    let mut issues = Vec::new();
+
+    let cmd = r#"{ find /etc/cron.d /var/spool/cron /var/spool/cron/crontabs -type f 2>/dev/null | while read f; do echo "=== $f ==="; cat "$f" 2>/dev/null | grep -v '^#' | grep -v '^$'; done; echo "=== at queue ==="; atq 2>/dev/null; } | head -100"#;
+    let output = manager.execute_command(cmd).map(|r| r.output).unwrap_or_default();
+
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with("===") { continue; }
+        let low = trimmed.to_lowercase();
+        if low.contains("curl") || low.contains("wget") || low.contains("nc ") || low.contains("python") || low.contains("bash -") || low.contains("/dev/tcp") {
+            issues.push(SecurityIssue {
+                title: "可疑计划任务".to_string(),
+                description: trimmed.to_string(),
+                severity: "high".to_string(),
+                recommendation: "检查该计划任务是否为合法任务，如不是请立即删除".to_string(),
+                details: Some(trimmed.to_string()),
+            });
+        }
+    }
+
+    if issues.is_empty() {
+        issues.push(SecurityIssue {
+            title: "计划任务检查通过".to_string(),
+            description: "未发现可疑的隐藏计划任务".to_string(),
+            severity: "info".to_string(),
+            recommendation: "定期检查计划任务变更".to_string(),
+            details: None,
+        });
+    }
+
+    Ok(GenericDetectionResult { issues })
+}
+
+/// SSH 密钥审计
+pub fn detect_ssh_key_audit(manager: &SSHManagerRussh) -> Result<SSHKeyAuditResult, String> {
+    // 1. 所有 authorized_keys
+    let cmd_keys = r#"find /root /home -name authorized_keys -type f 2>/dev/null | while read f; do user=$(echo "$f" | awk -F/ '{if($2=="root") print "root"; else print $3}'); wc -l < "$f" | xargs -I{} echo "$user: {} keys in $f"; done"#;
+    let keys_output = manager.execute_command(cmd_keys).map(|r| r.output).unwrap_or_default();
+    let unauthorized_keys: Vec<String> = keys_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    // 2. 弱密钥检测 (DSA 或 RSA < 2048)
+    let cmd_weak = r#"find /root /home -name authorized_keys -type f 2>/dev/null | xargs grep -h 'ssh-dss\|ssh-rsa' 2>/dev/null | awk '{print $1" "$3}' | head -50"#;
+    let weak_output = manager.execute_command(cmd_weak).map(|r| r.output).unwrap_or_default();
+    let weak_keys: Vec<String> = weak_output.lines()
+        .filter(|l| l.contains("ssh-dss"))
+        .map(|l| format!("弱密钥 (DSA): {}", l.trim()))
+        .collect();
+
+    // 3. SSH 配置异常
+    let cmd_config = "grep -n -E '(AuthorizedKeysCommand|ForceCommand|PermitUserEnvironment\\s+yes)' /etc/ssh/sshd_config 2>/dev/null";
+    let config_output = manager.execute_command(cmd_config).map(|r| r.output).unwrap_or_default();
+    let config_issues: Vec<String> = config_output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    Ok(SSHKeyAuditResult { unauthorized_keys, weak_keys, config_issues })
+}
+
+/// 时间戳篡改检测
+pub fn detect_timestomp(manager: &SSHManagerRussh) -> Result<TimestompResult, String> {
+    // 查找 mtime 远早于 ctime 的文件（timestomping 特征）
+    let cmd = r#"find /tmp /var/tmp /dev/shm /var/www 2>/dev/null -type f -printf '%p|mtime=%T@|ctime=%C@\n' 2>/dev/null | awk -F'|' '{split($2,m,"="); split($3,c,"="); if(c[2]-m[2]>86400) print $1" mtime与ctime差异>"int((c[2]-m[2])/3600)"小时"}' | head -30"#;
+    let output = manager.execute_command(cmd).map(|r| r.output).unwrap_or_default();
+    let suspicious_files: Vec<String> = output.lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .collect();
+
+    Ok(TimestompResult { suspicious_files })
+}
+
+/// 增强进程分析（复用修复后的 detect_process_analysis）
+pub fn detect_enhanced_process(manager: &SSHManagerRussh) -> Result<ProcessAnalysisResult, String> {
+    // 扩展扫描范围到 100 个进程
+    let cmd = "ps aux --sort=-%cpu | head -200";
+    let output_result = manager.execute_command(cmd)
+        .map_err(|e| format!("获取进程列表失败: {}", e))?;
+
+    let output = output_result.output;
+    let mut high_resource_processes = Vec::new();
+    let mut suspicious_processes = Vec::new();
+
+    for (i, line) in output.lines().skip(1).enumerate() {
+        if i >= 80 { break; }
+
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 11 {
+            let user = parts[0].to_string();
+            let pid = parts[1].parse::<u32>().unwrap_or(0);
+            let cpu = parts[2].parse::<f32>().unwrap_or(0.0);
+            let mem = parts[3].parse::<f32>().unwrap_or(0.0);
+            let command = parts[10..].join(" ");
+            let name = parts[10].to_string();
+
+            let process = ProcessInfo {
+                pid, name, user, cpu, mem,
+                command: command.chars().take(500).collect(),
+            };
+
+            if cpu > 50.0 || mem > 50.0 {
+                high_resource_processes.push(process.clone());
+            }
+
+            // 可疑进程检测
+            if command.contains("(deleted)")
+                || command.starts_with("/tmp/")
+                || command.starts_with("/dev/shm/")
+                || command.starts_with("/var/tmp/")
+                || command.contains("bash -i")
+                || command.contains("/dev/tcp")
+                || command.contains("/dev/udp")
+                || command.contains("xmrig")
+                || command.contains("cryptonight") {
+                suspicious_processes.push(process.clone());
+            }
+        }
+    }
+
+    Ok(ProcessAnalysisResult { suspicious_processes, high_resource_processes })
+}
+
+// ═══════════════════════════════════════════════════
+// bin/sbin 篡改检测 + 文件不可变属性检测
+// ═══════════════════════════════════════════════════
+
+/// 检测 /usr/bin /usr/sbin /bin /sbin 中被替换为脚本的命令（命令劫持/篡改）
+pub fn detect_bin_tamper(manager: &SSHManagerRussh) -> Result<Vec<String>, String> {
+    let cmd = r#"for d in /usr/bin /usr/sbin /bin /sbin; do [ -d "$d" ] && file "$d"/* 2>/dev/null; done | grep -E 'script|text|ASCII' | grep -v '\.sh:' | grep -v '\.py:' | grep -v '\.pl:' | grep -v '\.rb:' | head -50"#;
+    let output = manager.execute_command(cmd)
+        .map_err(|e| format!("bin篡改检测失败: {}", e))?;
+    let findings: Vec<String> = output.output
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| l.chars().take(200).collect())
+        .collect();
+    Ok(findings)
+}
+
+/// 检测具有不可变属性(immutable/append-only)的可疑文件
+pub fn detect_immutable_files(manager: &SSHManagerRussh) -> Result<Vec<String>, String> {
+    let cmd = r#"lsattr -R /etc /var/www /usr/bin /usr/sbin /tmp /root 2>/dev/null | grep -E '^....i|^....a' | head -50"#;
+    let output = manager.execute_command(cmd)
+        .map_err(|e| format!("不可变文件检测失败: {}", e))?;
+    let findings: Vec<String> = output.output
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| l.chars().take(200).collect())
+        .collect();
+    Ok(findings)
 }

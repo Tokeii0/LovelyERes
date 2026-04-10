@@ -9,7 +9,7 @@ pub async fn sftp_list_files(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<ssh_manager_russh::SftpFileInfo>, String> {
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager.list_sftp_files(&path).map_err(|e| e.to_string())
 }
 
@@ -19,7 +19,7 @@ pub async fn sftp_read_file(
     max_bytes: Option<usize>,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     let content = manager
         .read_sftp_file(&path)
         .map_err(|e| e.to_string())?;
@@ -41,7 +41,7 @@ pub async fn sftp_read_file(
 
 #[tauri::command]
 pub async fn sftp_chmod(path: String, mode: u32, state: State<'_, AppState>) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager.chmod_sftp(&path, mode).map_err(|e| e.to_string())
 }
 
@@ -50,7 +50,7 @@ pub async fn sftp_get_file_details(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<ssh_manager_russh::SftpFileDetails, String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager.get_file_details(&path).map_err(|e| e.to_string())
 }
 
@@ -60,7 +60,7 @@ pub async fn sftp_write_file(
     content: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager
         .write_sftp_file(&path, content.as_bytes())
         .map_err(|e| e.to_string())
@@ -73,7 +73,7 @@ pub async fn sftp_compress(
     format: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager
         .compress_file(&source_path, &target_path, &format)
         .map_err(|e| e.to_string())
@@ -86,7 +86,7 @@ pub async fn sftp_extract(
     _overwrite: bool,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager
         .extract_file(&archive_path, &target_dir)
         .map_err(|e| e.to_string())
@@ -98,7 +98,7 @@ pub async fn sftp_upload(
     remote_path: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager
         .upload_file(&local_path, &remote_path)
         .map_err(|e| e.to_string())
@@ -110,7 +110,7 @@ pub async fn sftp_download(
     local_path: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager
         .download_file(&remote_path, &local_path)
         .map_err(|e| e.to_string())
@@ -121,7 +121,7 @@ pub async fn sftp_create_directory(
     remote_path: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager
         .create_directory(&remote_path)
         .map_err(|e| e.to_string())
@@ -133,7 +133,7 @@ pub async fn sftp_rename(
     new_path: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager
         .rename_sftp_file(&old_path, &new_path)
         .map_err(|e| e.to_string())
@@ -144,7 +144,7 @@ pub async fn sftp_delete(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager
         .delete_sftp_file(&path)
         .map_err(|e| e.to_string())

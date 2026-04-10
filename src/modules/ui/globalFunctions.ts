@@ -8,6 +8,7 @@
  */
 
 import type { LovelyResApp } from '../core/app';
+import { showConfirm, showPrompt } from './confirmDialog';
 import { sftpManager } from '../remote/sftpManager';
 import { sshConnectionManager } from '../remote/sshConnectionManager';
 import { sshConnectionDialog } from '../ui/sshConnectionDialog';
@@ -25,11 +26,40 @@ interface GlobalFunctionsDeps {
   openSSHTerminalWindow: () => Promise<void>;
 }
 
+let globalEventsBound = false;
+let sftpListenerBound = false;
+
 /**
  * 注册所有全局函数到 window 对象
  */
 export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
   const { app, settingsPageManager, openSSHTerminalWindow } = deps;
+
+  // ──── Activity Bar 展开/收缩 ────
+  (window as any).toggleActivityBar = () => {
+    const bar = document.querySelector('.activity-bar');
+    if (!bar) return;
+    bar.classList.toggle('expanded');
+    const isExpanded = bar.classList.contains('expanded');
+    localStorage.setItem('activitybar-expanded', isExpanded ? '1' : '0');
+    // 更新 toggle 按钮 tooltip
+    const toggle = bar.querySelector('.activity-bar-toggle');
+    if (toggle) {
+      toggle.setAttribute('data-tooltip', isExpanded ? '收起菜单' : '展开菜单');
+    }
+  };
+
+  // 恢复上次展开状态
+  if (localStorage.getItem('activitybar-expanded') === '1') {
+    requestAnimationFrame(() => {
+      const bar = document.querySelector('.activity-bar');
+      if (bar) {
+        bar.classList.add('expanded');
+        const toggle = bar.querySelector('.activity-bar-toggle');
+        if (toggle) toggle.setAttribute('data-tooltip', '收起菜单');
+      }
+    });
+  }
 
   // ──── SFTP 面板全局函数 ────
   (window as any).sftpRefresh = () => {
@@ -79,10 +109,10 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
   };
 
   // ──── SFTP 新建文件 ────
-  (window as any).sftpCreateFile = () => {
+  (window as any).sftpCreateFile = async () => {
     try {
       const currentPath = sftpManager.getCurrentPath();
-      const fileName = prompt('请输入文件名:', 'new_file.txt');
+      const fileName = await showPrompt({ title: '新建文件', message: '请输入文件名:', defaultValue: 'new_file.txt' });
       if (!fileName || !fileName.trim()) return;
 
       const fullPath = currentPath === '/'
@@ -105,10 +135,10 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
   };
 
   // ──── SFTP 完整性快照 ────
-  (window as any).sftpIntegritySnapshot = () => {
+  (window as any).sftpIntegritySnapshot = async () => {
     try {
       const currentPath = sftpManager.getCurrentPath();
-      if (!confirm(`将为 ${currentPath} 目录生成文件哈希清单（md5sum），是否继续？`)) return;
+      if (!(await showConfirm({ title: '完整性快照', message: `将为 ${currentPath} 目录生成文件哈希清单（md5sum），是否继续？` }))) return;
 
       (window as any).showNotification && (window as any).showNotification('正在生成完整性快照...', 'info');
 
@@ -155,6 +185,21 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
   (window as any).quickDetection = quickDetectionManager;
   (window as any).sshConnectionDialog = sshConnectionDialog;
 
+  // Quick Detection tab switching (event delegation) — bind only once
+  if (!globalEventsBound) {
+    document.addEventListener('click', (e) => {
+      const tabBtn = (e.target as HTMLElement).closest('[data-qd-tab]') as HTMLElement;
+      if (!tabBtn) return;
+      const tabId = tabBtn.getAttribute('data-qd-tab');
+      if (!tabId) return;
+      document.querySelectorAll('.qd-tab-btn').forEach(btn => btn.classList.remove('active'));
+      tabBtn.classList.add('active');
+      document.querySelectorAll('.qd-tab-panel').forEach(panel => {
+        (panel as HTMLElement).style.display = panel.id === `qd-tab-${tabId}` ? '' : 'none';
+      });
+    });
+  } // end QD tab delegation guard
+
   // ──── 工作区/侧边栏刷新 ────
   (window as any).refreshDashboard = () => {
     try {
@@ -200,6 +245,12 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
   let remoteOperationsPageInitialized = false;
   (window as any).switchPage = (pageId: string) => {
     console.log('🔄 切换页面:', pageId);
+
+    // 取消前一个页面的异步操作
+    const quickDetection = (window as any).quickDetectionManager;
+    if (pageId !== 'quick-detection' && quickDetection?.cancelScan) {
+      quickDetection.cancelScan();
+    }
 
     // SFTP: 切走时标记需要重新绑定DOM事件，但不丢弃数据
     if (pageId !== 'remote-operations') {
@@ -258,10 +309,69 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
           kpm.initialize();
           kpm.refresh(true);
         }
-      } else {
-        dockerPageManager.deactivate();
+      } else if (pageId === 'baseline-quick-edit') {
+        // Lazy init baseline quick edit manager
+        if (!(window as any).baselineQuickEditManager) {
+          import('../baseline/baselineQuickEditManager').then(({ BaselineQuickEditManager }) => {
+            (window as any).baselineQuickEditManager = new BaselineQuickEditManager();
+            (window as any).baselineQuickEditManager.initialize();
+          }).catch((e) => {
+            console.error('加载基线模块失败:', e);
+            window.showNotification?.('加载基线模块失败', 'error');
+          });
+        } else {
+          (window as any).baselineQuickEditManager.initialize();
+        }
+      } else if (pageId === 'database') {
+        // Lazy init database manager
+        import('./databaseManager').then(({ databaseManager }) => {
+          databaseManager.initialize();
+        }).catch((e) => {
+          console.error('加载数据库模块失败:', e);
+          window.showNotification?.('加载数据库模块失败', 'error');
+        });
+      } else if (pageId === 'java-hot-update') {
+        import('../javaHotUpdate/javaHotUpdateManager').then(({ javaHotUpdateManager }) => {
+          javaHotUpdateManager.initialize();
+        }).catch((e) => {
+          console.error('加载Java热更新模块失败:', e);
+          window.showNotification?.('加载Java热更新模块失败', 'error');
+        });
+      } else if (pageId === 'notes') {
+        import('../notes/notesManager').then(({ notesManager }) => {
+          notesManager.initialize();
+        }).catch((e) => {
+          console.error('加载笔记模块失败:', e);
+          window.showNotification?.('加载笔记模块失败', 'error');
+        });
+      } else if (pageId === 'secfix') {
+        import('../secfix/secfixManager').then(({ secfixManager }) => {
+          secfixManager.initialize();
+        }).catch((e) => {
+          console.error('加载安全速查模块失败:', e);
+          window.showNotification?.('加载安全速查模块失败', 'error');
+        });
+      } else if (pageId === 'check-audit') {
+        import('../checkAudit/checkAuditManager').then(({ checkAuditManager }) => {
+          checkAuditManager.initialize();
+        }).catch((e) => {
+          console.error('加载Check审计模块失败:', e);
+          window.showNotification?.('加载Check审计模块失败', 'error');
+        });
+      }
+
+      // 离开 Docker/K8s/PacketCapture 页面时停止后台操作
+      if (pageId !== 'docker') dockerPageManager.deactivate();
+      if (pageId !== 'kubernetes') {
         const kpm = (window as any).kubernetesPageManager;
         if (kpm) kpm.deactivate();
+      }
+      if (pageId !== 'packet-capture') {
+        const renderer = (window as any).app?.modernUIRenderer?.packetCaptureRenderer;
+        if (renderer) renderer.destroy();
+      }
+      if (pageId !== 'java-hot-update') {
+        (window as any).__jhuManager?.deactivate?.();
       }
 
       // 系统概览：仅在无缓存时才重新加载
@@ -292,6 +402,7 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
   (window as any).hideSettingsOverlay = () => {
     const el = document.getElementById('settings-overlay-container');
     if (el) el.remove();
+    settingsPageManager.resetEventBindings();
   };
 
   // ──── 用户头像下拉菜单 ────
@@ -311,17 +422,20 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
     }
   };
 
-  document.addEventListener('click', (event) => {
-    const dropdown = document.getElementById('user-dropdown-menu');
-    const userAvatarContainer = document.querySelector('.user-avatar-container');
-    if (dropdown && userAvatarContainer) {
-      const clickedInsideDropdown = dropdown.contains(event.target as Node);
-      const clickedOnAvatar = userAvatarContainer.contains(event.target as Node);
-      if (!clickedInsideDropdown && !clickedOnAvatar && dropdown.style.display === 'block') {
-        dropdown.style.display = 'none';
+  if (!globalEventsBound) {
+    document.addEventListener('click', (event) => {
+      const dropdown = document.getElementById('user-dropdown-menu');
+      const userAvatarContainer = document.querySelector('.user-avatar-container');
+      if (dropdown && userAvatarContainer) {
+        const clickedInsideDropdown = dropdown.contains(event.target as Node);
+        const clickedOnAvatar = userAvatarContainer.contains(event.target as Node);
+        if (!clickedInsideDropdown && !clickedOnAvatar && dropdown.style.display === 'block') {
+          dropdown.style.display = 'none';
+        }
       }
-    }
-  });
+    });
+    globalEventsBound = true;
+  }
 
   (window as any).handleUserMenuAction = async (action: string) => {
     const dropdown = document.getElementById('user-dropdown-menu');
@@ -380,6 +494,8 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
       } catch { }
     }, 0);
 
+    if (!sftpListenerBound) {
+    sftpListenerBound = true;
     sftpManager.addListener((_files, path) => {
       const pathInput = document.getElementById('sftp-path-input') as HTMLInputElement;
       if (pathInput) pathInput.value = path;
@@ -398,23 +514,11 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
       const sortModeSelect = document.getElementById('sftp-sort-mode') as HTMLSelectElement;
       if (sortModeSelect) sortModeSelect.value = sftpManager.getSortMode();
     });
+    } // end of !sftpListenerBound
   };
 
-  // ──── 数据库管理（占位） ────
-  (window as any).switchDatabaseView = (viewType: string) => {
-    const items = document.querySelectorAll('.database-sidebar .db-list-item');
-    items.forEach(item => {
-      item.classList.remove('active');
-      if (item.getAttribute('onclick')?.includes(`'${viewType}'`)) {
-        item.classList.add('active');
-      }
-    });
-    (window as any).showNotification && (window as any).showNotification(`切换到视图: ${viewType}`, 'info');
-  };
-
-  (window as any).showAddDatabaseModal = () => {
-    (window as any).showNotification && (window as any).showNotification('添加数据库连接功能即将上线', 'info');
-  };
+  // ──── 数据库管理 ────
+  // databaseManager 通过事件委托 (data-db-action) 处理所有交互，无需额外全局函数
 
   // ──── 连接下拉菜单 ────
   (window as any).showConnectionDropdown = () => {

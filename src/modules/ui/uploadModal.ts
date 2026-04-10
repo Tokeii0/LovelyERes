@@ -10,7 +10,7 @@ export class UploadModal {
 
   constructor() {
     this.createModal();
-    this.setupEventListeners();
+    // setupEventListeners is called at the end of createModal after DOM insertion
   }
 
   private createModal(): void {
@@ -207,6 +207,9 @@ export class UploadModal {
 
     this.modal.style.display = 'none';
     document.body.appendChild(this.modal);
+
+    // 绑定事件监听器（必须在 appendChild 之后，确保元素在 DOM 中）
+    this.setupEventListeners();
   }
 
   private setupEventListeners(): void {
@@ -368,7 +371,7 @@ export class UploadModal {
       ">
         <div style="flex: 1; min-width: 0;">
           <div style="font-size: 12px; color: var(--text-primary); word-break: break-all;">
-            ${file.name}
+            ${this.escapeHtml(file.name)}
           </div>
           <div style="font-size: 11px; color: var(--text-secondary);">
             ${this.formatFileSize(file.size)}
@@ -397,11 +400,15 @@ export class UploadModal {
     confirmBtn.style.opacity = hasFiles ? '1' : '0.5';
   }
 
+  private escapeHtml(str: string): string {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
   private formatFileSize(bytes: number): string {
     if (bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 

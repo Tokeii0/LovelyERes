@@ -1,0 +1,322 @@
+/* ============================================================
+   Database Management Page
+   ============================================================ */
+
+/* Page Layout */
+.db-page { display: flex; flex-direction: column; gap: var(--spacing-md); height: 100%; padding: var(--spacing-md); background: var(--bg-primary); }
+
+/* Header */
+.db-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius-lg);
+    border: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+.db-header-left { display: flex; align-items: center; gap: var(--spacing-md); }
+.db-header-right { display: flex; align-items: center; gap: var(--spacing-sm); }
+.db-header-icon {
+    width: 40px; height: 40px;
+    border-radius: var(--border-radius);
+    background: rgba(139, 92, 246, 0.1);
+    color: #8b5cf6;
+    display: flex; align-items: center; justify-content: center;
+}
+.db-header-title { margin: 0; font-size: 18px; font-weight: 600; color: var(--text-primary); }
+.db-header-subtitle { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+/* Tabs */
+.db-tabs {
+    display: flex; gap: 2px;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 var(--spacing-sm);
+    flex-shrink: 0; overflow-x: auto;
+}
+.db-tab-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border: none; background: transparent;
+    color: var(--text-secondary); border-bottom: 2px solid transparent;
+    cursor: pointer; font-size: 13px; font-weight: 500;
+    transition: all 0.2s; white-space: nowrap;
+}
+.db-tab-btn:hover { color: var(--text-primary); background: var(--bg-secondary); }
+.db-tab-btn.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+
+/* Content */
+.db-content {
+    flex: 1; overflow: auto;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+}
+
+/* ============================================================
+   Connection Cards
+   ============================================================ */
+.db-connections-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px; padding: 12px;
+}
+.db-conn-card {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    padding: 14px; cursor: pointer;
+    transition: all 0.2s;
+}
+.db-conn-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.db-conn-card.active { border-color: var(--primary-color); }
+.db-conn-status {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.db-conn-status.running { background: var(--success-color); }
+.db-conn-status.stopped { background: var(--error-color); }
+.db-conn-type-icon {
+    width: 28px; height: 28px;
+    border-radius: var(--border-radius);
+    background: var(--bg-primary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+}
+.db-conn-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.db-conn-meta { font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); }
+
+/* ============================================================
+   SQL Console
+   ============================================================ */
+.db-sql-area { display: flex; flex-direction: column; height: 100%; }
+.db-sql-editor {
+    font-family: var(--font-mono); font-size: 13px;
+    padding: 12px; background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    color: var(--text-primary);
+    resize: vertical; min-height: 120px; max-height: 300px;
+    flex-shrink: 0; outline: none;
+}
+.db-sql-editor:focus { border-color: var(--primary-color); }
+.db-sql-toolbar {
+    display: flex; gap: 8px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+}
+.db-sql-results { flex: 1; overflow: auto; }
+
+/* Results Table */
+.db-results-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 12px; }
+.db-results-table th {
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 600; position: sticky; top: 0;
+    font-size: 11px; text-align: left;
+    color: var(--text-primary);
+}
+.db-results-table td {
+    padding: 4px 10px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 12px;
+    color: var(--text-primary);
+}
+.db-results-table tr:hover { background: var(--bg-tertiary); }
+.db-results-info {
+    padding: 6px 12px;
+    font-size: 11px; color: var(--text-secondary);
+    border-top: 1px solid var(--border-color);
+}
+
+/* ============================================================
+   Data Browser
+   ============================================================ */
+.db-browser { display: flex; height: 100%; }
+.db-tree-panel {
+    width: 220px;
+    border-right: 1px solid var(--border-color);
+    overflow: auto; flex-shrink: 0;
+    background: var(--bg-tertiary);
+}
+.db-tree-item {
+    padding: 4px 8px 4px 16px;
+    font-size: 12px; cursor: pointer;
+    color: var(--text-primary);
+    transition: background 0.15s;
+}
+.db-tree-item:hover { background: var(--bg-secondary); }
+.db-tree-item.active { background: var(--bg-secondary); color: var(--primary-color); }
+.db-tree-group {
+    font-size: 11px; font-weight: 600;
+    color: var(--text-secondary);
+    padding: 8px 8px 4px;
+    text-transform: uppercase;
+}
+.db-data-panel { flex: 1; overflow: auto; }
+
+/* ============================================================
+   User Management
+   ============================================================ */
+.db-users-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 12px; }
+.db-users-table th {
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 600; position: sticky; top: 0;
+    font-size: 11px; text-align: left;
+    color: var(--text-primary);
+}
+.db-users-table td {
+    padding: 4px 10px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 12px;
+    color: var(--text-primary);
+}
+.db-users-table tr:hover { background: var(--bg-tertiary); }
+.db-user-actions { display: flex; gap: 4px; }
+.db-privilege-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+/* ============================================================
+   Operations
+   ============================================================ */
+.db-ops-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 12px; padding: 12px;
+}
+.db-ops-card {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    padding: 14px;
+}
+.db-ops-card-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary); }
+.db-ops-card-desc { font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; }
+
+/* ============================================================
+   Add Connection Modal
+   ============================================================ */
+/* Overlay (full-screen backdrop) */
+.db-modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10001;
+}
+
+/* Modal box */
+.db-modal {
+    background: var(--bg-primary);
+    border-radius: var(--border-radius-lg);
+    max-width: 520px; width: 90%;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.db-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.db-modal-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.db-modal-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: var(--border-radius);
+    transition: background 0.15s;
+}
+.db-modal-close:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.db-modal-body {
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.db-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Form elements inside modal */
+.db-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.db-form-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.db-form-input {
+    padding: 7px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.db-form-input:focus {
+    border-color: var(--primary-color);
+}
+
+.db-form-row {
+    display: flex;
+    gap: 10px;
+}
+
+.db-required {
+    color: var(--error-color);
+}
+
+/* ============================================================
+   SQL History
+   ============================================================ */
+.db-history-item {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    transition: background 0.15s;
+}
+.db-history-item:hover { background: var(--bg-tertiary); }

@@ -4,7 +4,6 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { eventBus } from '../core/eventBus';
 
 // ========== 文件搜索 ==========
 

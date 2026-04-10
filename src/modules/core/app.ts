@@ -32,7 +32,7 @@ export interface AppState {
   serverInfo?: ServerInfo; // 新增详细服务器信息
   loading: boolean;
   loadingStep?: string; // 当前连接步骤描述
-  currentPage: 'system-info' | 'ssh-terminal' | 'remote-operations' | 'docker' | 'emergency-commands' | 'log-analysis' | 'settings' | 'quick-detection' | 'kubernetes' | 'database' | 'packet-capture';
+  currentPage: 'system-info' | 'ssh-terminal' | 'remote-operations' | 'docker' | 'emergency-commands' | 'log-analysis' | 'settings' | 'quick-detection' | 'kubernetes' | 'database' | 'packet-capture' | 'baseline-quick-edit' | 'java-hot-update' | 'notes' | 'secfix' | 'check-audit' | 'ai-history';
 }
 
 export class LovelyResApp {
@@ -262,6 +262,9 @@ export class LovelyResApp {
         const theme = themeBtn.getAttribute('data-theme-value');
         if (theme && ['light', 'dark', 'sakura', 'midnight', 'ocean'].includes(theme)) {
           this.setTheme(theme as 'light' | 'dark' | 'sakura' | 'midnight' | 'ocean');
+          // 主题切换后重新渲染设置菜单以更新激活状态
+          this.rerenderSettingsMenu();
+          return; // 不要触发下方的"点击外部关闭"逻辑
         }
       }
 
@@ -269,10 +272,8 @@ export class LovelyResApp {
       const navItem = target.closest('.activity-bar-item[data-nav-id], .nav-item[data-nav-id]');
       if (navItem && navItem.getAttribute('data-nav-id')) {
         const navId = navItem.getAttribute('data-nav-id');
-        if (navId) {
-            this.stateManager.setCurrentPage(navId as any);
-            this.modernUIRenderer.updateState(this.stateManager.getState());
-            this.render(); // 重新渲染以更新视图
+        if (navId && (window as any).switchPage) {
+            (window as any).switchPage(navId);
         }
       }
 
@@ -311,6 +312,38 @@ export class LovelyResApp {
       const menu = document.getElementById('settings-dropdown-menu');
       if (menu) {
         menu.classList.remove('show');
+      }
+    };
+
+    // 断开服务器（带二级确认）
+    (window as any).confirmDisconnect = async () => {
+      (window as any).hideSettingsDropdown?.();
+      const serverName = this.stateManager.getState().serverInfo?.name || this.stateManager.getState().currentServer || '当前服务器';
+      const { showConfirm } = await import('../ui/confirmDialog');
+      const confirmed = await showConfirm({
+        title: '断开服务器连接',
+        message: `确定要断开与 "${serverName}" 的连接吗？所有正在进行的操作将被中止。`,
+        confirmText: '断开连接',
+        cancelText: '取消',
+        dangerous: true,
+      });
+      if (confirmed) {
+        try {
+          // 关闭终端会话
+          await invoke('ssh_close_all_terminal_sessions').catch((e: any) => console.warn('清理操作忽略:', e));
+          // 断开 SSH
+          const sshMgr = (window as any).sshConnectionManager;
+          if (sshMgr?.disconnect) {
+            await sshMgr.disconnect();
+          } else {
+            await invoke('ssh_disconnect_direct').catch((e: any) => console.warn('清理操作忽略:', e));
+          }
+          this.stateManager.setConnected(false);
+          (window as any).showNotification?.('已断开服务器连接', 'success');
+        } catch (e) {
+          console.error('断开连接失败:', e);
+          (window as any).showNotification?.(`断开失败: ${e}`, 'error');
+        }
       }
     };
 
@@ -354,15 +387,49 @@ export class LovelyResApp {
   private bindWindowControls(): void {
     document.addEventListener('click', async (e) => {
       const target = e.target as HTMLElement;
-      
+
       if (target.classList.contains('minimize-btn')) {
         await invoke('minimize_window');
       } else if (target.classList.contains('maximize-btn')) {
         await invoke('toggle_maximize');
       } else if (target.classList.contains('close-btn')) {
-        await invoke('close_window');
+        await this.gracefulClose();
       }
     });
+  }
+
+  /**
+   * 优雅关闭：先清理 SSH 连接和终端会话，再关闭窗口
+   * 设置 3 秒超时保底，防止挂死
+   */
+  private async gracefulClose(): Promise<void> {
+    try {
+      // 带超时的清理，最多等 3 秒
+      await Promise.race([
+        this.cleanupBeforeClose(),
+        new Promise(resolve => setTimeout(resolve, 3000)),
+      ]);
+    } catch (e) {
+      console.error('关闭前清理失败:', e);
+    }
+    // 无论清理是否成功，都强制关闭窗口
+    try {
+      await invoke('close_window');
+    } catch {
+      // 如果 Tauri invoke 也失败，用 window.close() 兜底
+      window.close();
+    }
+  }
+
+  private async cleanupBeforeClose(): Promise<void> {
+    try {
+      // 1. 关闭所有终端会话
+      await invoke('ssh_close_all_terminal_sessions').catch((e: any) => console.warn('清理操作忽略:', e));
+      // 2. 断开 SSH 连接
+      await invoke('ssh_disconnect_direct').catch((e: any) => console.warn('清理操作忽略:', e));
+    } catch {
+      // 忽略错误，不阻塞关闭
+    }
   }
 
   /**
@@ -470,6 +537,24 @@ export class LovelyResApp {
   private updateTitleBar(): void {
     // 只更新主题切换按钮，避免重新渲染整个标题栏
     this.updateThemeToggleButton();
+  }
+
+  /**
+   * 重新渲染设置下拉菜单（主题切换后更新激活状态）
+   */
+  private rerenderSettingsMenu(): void {
+    const menu = document.getElementById('settings-dropdown-menu');
+    if (menu) {
+      const wasVisible = menu.classList.contains('show');
+      // 用最新状态重新生成菜单 HTML
+      const newHtml = this.modernUIRenderer.renderSettingsMenuPublic();
+      menu.outerHTML = newHtml;
+      // 保持菜单打开状态
+      if (wasVisible) {
+        const newMenu = document.getElementById('settings-dropdown-menu');
+        if (newMenu) newMenu.classList.add('show');
+      }
+    }
   }
 
   /**

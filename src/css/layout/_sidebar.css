@@ -18,6 +18,13 @@
   margin: 0;
   border-radius: 0;
   box-shadow: none;
+  transition: width 0.2s ease;
+}
+
+/* ─── Expanded state ─── */
+.activity-bar.expanded {
+  width: 180px;
+  align-items: stretch;
 }
 
 /* Top navigation section */
@@ -37,7 +44,7 @@
 
 /* Navigation icon button — compact 40px */
 .activity-bar-item {
-  width: 44px;
+  width: 100%;
   height: 40px;
   display: flex;
   align-items: center;
@@ -45,7 +52,7 @@
   position: relative;
   cursor: pointer;
   color: var(--activitybar-icon-inactive);
-  transition: color 0.15s ease;
+  transition: color 0.15s ease, background 0.15s ease;
   border: none;
   background: transparent;
   outline: none;
@@ -58,6 +65,37 @@
 
 .activity-bar-item.active {
   color: var(--activitybar-icon-active);
+}
+
+/* Expanded item layout */
+.activity-bar.expanded .activity-bar-item {
+  justify-content: flex-start;
+  padding-left: 12px;
+  gap: 10px;
+  border-radius: 6px;
+  margin: 0 6px;
+  width: calc(100% - 12px);
+}
+
+.activity-bar.expanded .activity-bar-item:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.06));
+}
+
+/* Nav item label — hidden by default, shown when expanded */
+.nav-item-label {
+  display: none;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 0.15s ease 0.05s;
+}
+
+.activity-bar.expanded .nav-item-label {
+  display: inline;
+  opacity: 1;
 }
 
 /* Active indicator — 2px left border */
@@ -161,7 +199,7 @@
   border: 1.5px solid var(--activitybar-bg);
 }
 
-/* Tooltip */
+/* Tooltip — only in collapsed state */
 .activity-bar-item[data-tooltip]:hover::after,
 .activity-bar-connection[data-tooltip]:hover::after {
   content: attr(data-tooltip);
@@ -179,6 +217,68 @@
   white-space: nowrap;
   z-index: 1000;
   pointer-events: none;
+}
+
+/* Hide tooltip when expanded (label is visible) */
+.activity-bar.expanded .activity-bar-item[data-tooltip]:hover::after,
+.activity-bar.expanded .activity-bar-connection[data-tooltip]:hover::after {
+  display: none;
+}
+
+/* ─── Toggle Button ─── */
+.activity-bar-toggle {
+  width: 100%;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--activitybar-icon-inactive);
+  transition: color 0.15s ease, background 0.15s ease;
+  border: none;
+  background: transparent;
+  outline: none;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+
+.activity-bar-toggle:hover {
+  color: var(--activitybar-icon-active);
+}
+
+.activity-bar.expanded .activity-bar-toggle {
+  justify-content: flex-end;
+  padding-right: 14px;
+}
+
+.activity-bar-toggle .toggle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.activity-bar.expanded .activity-bar-toggle .toggle-icon {
+  transform: rotate(180deg);
+}
+
+/* Expanded active indicator offset for margin */
+.activity-bar.expanded .activity-bar-item.active::before {
+  left: -6px;
+}
+
+/* Expanded connection item */
+.activity-bar.expanded .activity-bar-connection {
+  justify-content: flex-start;
+  padding-left: 12px;
+  gap: 10px;
+  border-radius: 6px;
+  margin: 0 6px;
+  width: calc(100% - 12px);
+}
+
+.activity-bar.expanded .activity-bar-connection:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.06));
 }
 
 /* ─── Settings Dropdown ─── */
@@ -250,6 +350,15 @@
   padding: 6px;
   animation: slideInLeft 0.15s ease-out;
   backdrop-filter: blur(12px);
+}
+
+/* Expanded dropdown position override */
+.activity-bar.expanded .settings-dropdown-menu {
+  left: 180px;
+}
+
+.activity-bar.expanded .connection-dropdown-menu {
+  left: 180px;
 }
 
 /* ─── Legacy classes hidden ─── */

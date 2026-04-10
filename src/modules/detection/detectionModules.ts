@@ -133,11 +133,11 @@ export class DetectionModules {
 
       // 检查可疑的计划任务
       if (scanResult.suspicious_cron && scanResult.suspicious_cron.length > 0) {
-        const cronList = scanResult.suspicious_cron.slice(0, 2).map((c: any) => {
+        const cronList = scanResult.suspicious_cron.slice(0, 5).map((c: any) => {
           const cronStr = typeof c === 'string' ? c : JSON.stringify(c);
-          return cronStr.substring(0, 60);
-        }).join('; ');
-        const more = scanResult.suspicious_cron.length > 2 ? ` 等 ${scanResult.suspicious_cron.length} 个` : '';
+          return cronStr.substring(0, 200);
+        }).join('\n');
+        const more = scanResult.suspicious_cron.length > 5 ? `\n... 共 ${scanResult.suspicious_cron.length} 个` : '';
         findings.push({
           title: '发现可疑的计划任务',
           description: `可疑计划任务: ${cronList}${more}`,
@@ -167,11 +167,11 @@ export class DetectionModules {
 
       // 检查 SSH authorized_keys
       if (scanResult.suspicious_ssh_keys && scanResult.suspicious_ssh_keys.length > 0) {
-        const keyList = scanResult.suspicious_ssh_keys.slice(0, 2).map((k: any) => {
+        const keyList = scanResult.suspicious_ssh_keys.slice(0, 5).map((k: any) => {
           const keyStr = typeof k === 'string' ? k : JSON.stringify(k);
-          return keyStr.substring(0, 40) + '...';
-        }).join('; ');
-        const more = scanResult.suspicious_ssh_keys.length > 2 ? ` 等 ${scanResult.suspicious_ssh_keys.length} 个` : '';
+          return keyStr.substring(0, 120);
+        }).join('\n');
+        const more = scanResult.suspicious_ssh_keys.length > 5 ? `\n... 共 ${scanResult.suspicious_ssh_keys.length} 个` : '';
         findings.push({
           title: '发现可疑的 SSH 公钥',
           description: `可疑 SSH 公钥: ${keyList}${more}`,
@@ -820,28 +820,25 @@ export class DetectionModules {
   public calculateScore(findings: Finding[]): number {
     if (findings.length === 0) return 100;
 
-    let deduction = 0;
-    findings.forEach(finding => {
-      switch (finding.severity) {
-        case 'critical':
-          deduction += SCORING_RULES.CRITICAL_DEDUCTION;
-          break;
-        case 'high':
-          deduction += SCORING_RULES.HIGH_DEDUCTION;
-          break;
-        case 'medium':
-          deduction += SCORING_RULES.MEDIUM_DEDUCTION;
-          break;
-        case 'low':
-          deduction += SCORING_RULES.LOW_DEDUCTION;
-          break;
-        case 'info':
-          deduction += 0;
-          break;
-      }
+    // 按严重程度统计数量，使用递减扣分避免 3 个 critical 和 10 个得分相同
+    const counts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
+    findings.forEach(f => {
+      if (f.severity in counts) counts[f.severity]++;
     });
 
-    return Math.max(0, 100 - deduction);
+    let deduction = 0;
+    for (const [severity, count] of Object.entries(counts)) {
+      const base = severity === 'critical' ? SCORING_RULES.CRITICAL_DEDUCTION
+        : severity === 'high' ? SCORING_RULES.HIGH_DEDUCTION
+        : severity === 'medium' ? SCORING_RULES.MEDIUM_DEDUCTION
+        : SCORING_RULES.LOW_DEDUCTION;
+      // 每个额外同类发现的扣分递减（第1个扣满分，第2个扣60%，第3个扣36%...）
+      for (let i = 0; i < count; i++) {
+        deduction += base * Math.pow(0.6, i);
+      }
+    }
+
+    return Math.max(0, Math.round(100 - deduction));
   }
 
   /**
@@ -860,5 +857,314 @@ export class DetectionModules {
       duration: 0,
       timestamp: new Date()
     };
+  }
+
+  // ==================== 竞赛级检测方法 ====================
+
+  public async runWebshellScan(): Promise<DetectionResult> {
+    try {
+      const result = await invoke('detect_webshell') as any;
+      const findings: Finding[] = (result.suspicious_files || []).map((f: any) => ({
+        title: `发现可疑 Webshell: ${f.path}`,
+        description: `匹配模式: ${f.matched_pattern}`,
+        severity: 'critical' as const,
+        recommendation: '立即检查该文件内容，确认是否为 Webshell，若是则删除并排查入侵路径',
+        details: f,
+      }));
+      return {
+        passed: findings.length === 0,
+        score: this.calculateScore(findings),
+        severity: findings.length > 0 ? 'critical' : 'info',
+        findings,
+        duration: 0,
+        timestamp: new Date(),
+        rawOutput: result,
+      };
+    } catch (error) {
+      return this.createErrorResult('Webshell 扫描失败');
+    }
+  }
+
+  public async runRootkitScan(): Promise<DetectionResult> {
+    try {
+      const result = await invoke('detect_rootkit') as any;
+      const findings: Finding[] = [];
+      (result.hidden_processes || []).forEach((p: string) => findings.push({
+        title: '发现隐藏进程', description: p, severity: 'critical',
+        recommendation: '隐藏进程极为危险，可能是 Rootkit，立即排查',
+      }));
+      (result.suspicious_modules || []).forEach((m: string) => findings.push({
+        title: '可疑内核模块', description: m, severity: 'high',
+        recommendation: '检查该模块是否为合法驱动，使用 modinfo 查看详情',
+      }));
+      (result.ld_preload_hooks || []).forEach((h: string) => findings.push({
+        title: 'LD_PRELOAD Hook', description: h, severity: 'critical',
+        recommendation: '清除 /etc/ld.so.preload 中的可疑条目',
+      }));
+      return {
+        passed: findings.length === 0,
+        score: this.calculateScore(findings),
+        severity: findings.some(f => f.severity === 'critical') ? 'critical' : findings.length > 0 ? 'high' : 'info',
+        findings, duration: 0, timestamp: new Date(), rawOutput: result,
+      };
+    } catch (error) {
+      return this.createErrorResult('Rootkit 检测失败');
+    }
+  }
+
+  public async runPersistenceScan(): Promise<DetectionResult> {
+    try {
+      const result = await invoke('detect_persistence') as any;
+      const findings: Finding[] = [];
+      (result.suspicious_cron || []).forEach((c: string) => findings.push({
+        title: '可疑计划任务', description: c, severity: 'high',
+        recommendation: '删除可疑 cron 条目',
+      }));
+      (result.bashrc_trojans || []).forEach((b: string) => findings.push({
+        title: '.bashrc/.profile 木马', description: b, severity: 'critical',
+        recommendation: '清除 Shell 配置文件中的恶意代码',
+      }));
+      (result.systemd_trojans || []).forEach((s: string) => findings.push({
+        title: 'Systemd 后门', description: s, severity: 'critical',
+        recommendation: '检查并移除可疑的 systemd unit 文件',
+      }));
+      (result.rc_local_entries || []).forEach((r: string) => findings.push({
+        title: 'rc.local 持久化', description: r, severity: 'high',
+        recommendation: '清理 rc.local 中的可疑命令',
+      }));
+      (result.at_jobs || []).forEach((a: string) => findings.push({
+        title: 'at 计划任务', description: a, severity: 'medium',
+        recommendation: '检查 at 队列中的任务',
+      }));
+      (result.ld_preload_files || []).forEach((l: string) => findings.push({
+        title: 'LD_PRELOAD 持久化', description: l, severity: 'critical',
+        recommendation: '清除 ld.so.preload 中的恶意条目',
+      }));
+      return {
+        passed: findings.length === 0,
+        score: this.calculateScore(findings),
+        severity: findings.some(f => f.severity === 'critical') ? 'critical' : findings.length > 0 ? 'high' : 'info',
+        findings, duration: 0, timestamp: new Date(), rawOutput: result,
+      };
+    } catch (error) {
+      return this.createErrorResult('持久化扫描失败');
+    }
+  }
+
+  public async runLogTamperCheck(): Promise<DetectionResult> {
+    try {
+      const result = await invoke('detect_log_tamper') as any;
+      const findings: Finding[] = [];
+      (result.truncated_logs || []).forEach((l: string) => findings.push({
+        title: '日志被截断/清空', description: l, severity: 'high',
+        recommendation: '日志被清空是入侵痕迹清除的典型特征，需要从备份或远程日志服务器恢复',
+      }));
+      (result.deleted_open_logs || []).forEach((l: string) => findings.push({
+        title: '已删除但仍打开的日志', description: l, severity: 'high',
+        recommendation: '使用 lsof 恢复已删除日志的内容',
+      }));
+      (result.timestamp_gaps || []).forEach((g: string) => findings.push({
+        title: '日志时间戳异常', description: g, severity: 'medium',
+        recommendation: '检查是否存在日志时间断裂或异常集中的登录',
+      }));
+      return {
+        passed: findings.length === 0,
+        score: this.calculateScore(findings),
+        severity: findings.length > 0 ? 'high' : 'info',
+        findings, duration: 0, timestamp: new Date(), rawOutput: result,
+      };
+    } catch (error) {
+      return this.createErrorResult('日志篡改检测失败');
+    }
+  }
+
+  public async runNetworkBackdoorScan(): Promise<DetectionResult> {
+    try {
+      const result = await invoke('detect_network_backdoor') as any;
+      const findings: Finding[] = [];
+      (result.suspicious_listeners || []).forEach((l: string) => findings.push({
+        title: '可疑网络监听', description: l, severity: 'high',
+        recommendation: '检查该监听端口对应的进程，确认是否合法',
+      }));
+      (result.c2_connections || []).forEach((c: string) => findings.push({
+        title: '疑似 C2 连接', description: c, severity: 'critical',
+        recommendation: '立即断开可疑连接并排查进程',
+      }));
+      (result.reverse_shell_indicators || []).forEach((r: string) => findings.push({
+        title: '反弹 Shell 指示器', description: r, severity: 'critical',
+        recommendation: '发现进程二进制已被删除或位于临时目录，高度怀疑为反弹 Shell',
+      }));
+      return {
+        passed: findings.length === 0,
+        score: this.calculateScore(findings),
+        severity: findings.some(f => f.severity === 'critical') ? 'critical' : findings.length > 0 ? 'high' : 'info',
+        findings, duration: 0, timestamp: new Date(), rawOutput: result,
+      };
+    } catch (error) {
+      return this.createErrorResult('网络后门检测失败');
+    }
+  }
+
+  public async runEnhancedUserAudit(): Promise<DetectionResult> {
+    try {
+      const result = await invoke('detect_enhanced_user') as any;
+      const findings: Finding[] = [];
+      (result.uid_conflicts || []).forEach((u: string) => findings.push({
+        title: 'UID 冲突', description: u, severity: 'critical',
+        recommendation: 'UID 冲突可能被用于权限提升，检查冲突账号',
+      }));
+      (result.shell_without_home || []).forEach((u: string) => findings.push({
+        title: '有 Shell 权限但无 Home 目录', description: u, severity: 'medium',
+        recommendation: '可能是后门账号，检查该用户的用途',
+      }));
+      (result.suspicious_history || []).forEach((h: string) => findings.push({
+        title: '可疑历史命令', description: h, severity: 'high',
+        recommendation: '分析该命令是否为攻击者操作',
+      }));
+      return {
+        passed: findings.length === 0,
+        score: this.calculateScore(findings),
+        severity: findings.some(f => f.severity === 'critical') ? 'critical' : findings.length > 0 ? 'high' : 'info',
+        findings, duration: 0, timestamp: new Date(), rawOutput: result,
+      };
+    } catch (error) {
+      return this.createErrorResult('增强用户审计失败');
+    }
+  }
+
+  public async runHiddenCronCheck(): Promise<DetectionResult> {
+    try {
+      const result = await invoke('detect_hidden_cron') as any;
+      return this.processBasicDetectionResult(result, '隐藏计划任务');
+    } catch (error) {
+      return this.createErrorResult('隐藏计划任务检测失败');
+    }
+  }
+
+  public async runSSHKeyAudit(): Promise<DetectionResult> {
+    try {
+      const result = await invoke('detect_ssh_key_audit') as any;
+      const findings: Finding[] = [];
+      (result.unauthorized_keys || []).forEach((k: string) => findings.push({
+        title: 'SSH 授权密钥', description: k, severity: 'medium',
+        recommendation: '核实每个 SSH 密钥的所有者和用途',
+      }));
+      (result.weak_keys || []).forEach((k: string) => findings.push({
+        title: '弱 SSH 密钥', description: k, severity: 'high',
+        recommendation: '替换 DSA 密钥为 Ed25519 或 RSA >= 4096',
+      }));
+      (result.config_issues || []).forEach((c: string) => findings.push({
+        title: 'SSH 配置异常', description: c, severity: 'high',
+        recommendation: '检查 sshd_config 中的异常配置',
+      }));
+      return {
+        passed: findings.length === 0,
+        score: this.calculateScore(findings),
+        severity: findings.length > 0 ? 'high' : 'info',
+        findings, duration: 0, timestamp: new Date(), rawOutput: result,
+      };
+    } catch (error) {
+      return this.createErrorResult('SSH 密钥审计失败');
+    }
+  }
+
+  public async runTimestompCheck(): Promise<DetectionResult> {
+    try {
+      const result = await invoke('detect_timestomp') as any;
+      const findings: Finding[] = (result.suspicious_files || []).map((f: string) => ({
+        title: '时间戳篡改嫌疑', description: f, severity: 'high' as const,
+        recommendation: '文件的 mtime 和 ctime 差异过大，可能被 timestomp 篡改',
+      }));
+      return {
+        passed: findings.length === 0,
+        score: this.calculateScore(findings),
+        severity: findings.length > 0 ? 'high' : 'info',
+        findings, duration: 0, timestamp: new Date(), rawOutput: result,
+      };
+    } catch (error) {
+      return this.createErrorResult('时间戳篡改检测失败');
+    }
+  }
+
+  public async runEnhancedProcessAnalysis(): Promise<DetectionResult> {
+    try {
+      const result = await invoke('detect_enhanced_process') as any;
+      const findings: Finding[] = [];
+      (result.suspicious_processes || []).forEach((p: any) => findings.push({
+        title: `可疑进程: ${p.name} (PID: ${p.pid})`,
+        description: `用户: ${p.user}, CPU: ${p.cpu}%, 命令: ${p.command}`,
+        severity: 'high',
+        recommendation: '检查该进程是否合法，如不是则立即 kill',
+        details: p,
+      }));
+      (result.high_resource_processes || []).forEach((p: any) => findings.push({
+        title: `高资源占用: ${p.name} (PID: ${p.pid})`,
+        description: `CPU: ${p.cpu}%, MEM: ${p.mem}%`,
+        severity: 'medium',
+        recommendation: '检查高资源占用是否正常，可能是挖矿程序',
+        details: p,
+      }));
+      return {
+        passed: findings.length === 0,
+        score: this.calculateScore(findings),
+        severity: findings.some(f => f.severity === 'high') ? 'high' : findings.length > 0 ? 'medium' : 'info',
+        findings, duration: 0, timestamp: new Date(), rawOutput: result,
+      };
+    } catch (error) {
+      return this.createErrorResult('增强进程分析失败');
+    }
+  }
+
+  // ══════ bin/sbin 篡改检测 ══════
+
+  public async runBinTamperScan(): Promise<DetectionResult> {
+    try {
+      const result = await invoke('detect_bin_tamper') as string[];
+      const findings: Finding[] = (result || []).map((line: string) => {
+        const [path] = line.split(':');
+        return {
+          title: `命令被篡改: ${path?.trim() || line}`,
+          description: `该文件原应为 ELF 二进制，但当前为脚本/文本文件，可能被替换为恶意 wrapper`,
+          severity: 'critical' as const,
+          recommendation: `检查文件内容: cat ${path?.trim()}，对比原始 md5，用包管理器验证: rpm -Vf ${path?.trim()} 或 dpkg -V`,
+        };
+      });
+      return {
+        passed: findings.length === 0,
+        score: this.calculateScore(findings),
+        severity: findings.length > 0 ? 'critical' : 'info',
+        findings, duration: 0, timestamp: new Date(), rawOutput: result,
+      };
+    } catch (error) {
+      return this.createErrorResult('bin/sbin篡改检测失败');
+    }
+  }
+
+  // ══════ 不可变文件属性检测 ══════
+
+  public async runImmutableFilesScan(): Promise<DetectionResult> {
+    try {
+      const result = await invoke('detect_immutable_files') as string[];
+      const findings: Finding[] = (result || []).map((line: string) => {
+        const parts = line.trim().split(/\s+/);
+        const attrs = parts[0] || '';
+        const filePath = parts.slice(1).join(' ');
+        const isImmutable = attrs.includes('i');
+        return {
+          title: `${isImmutable ? '不可变' : '仅追加'}文件: ${filePath}`,
+          description: `属性: ${attrs} — ${isImmutable ? 'immutable(无法修改/删除/重命名)' : 'append-only(只能追加)'}`,
+          severity: (filePath.includes('/tmp') || filePath.includes('/var/www') || filePath.includes('/usr/bin')) ? 'high' as const : 'medium' as const,
+          recommendation: `移除不可变标志: chattr -i "${filePath}"  移除仅追加: chattr -a "${filePath}"`,
+        };
+      });
+      return {
+        passed: findings.length === 0,
+        score: this.calculateScore(findings),
+        severity: findings.some(f => f.severity === 'high') ? 'high' : findings.length > 0 ? 'medium' : 'info',
+        findings, duration: 0, timestamp: new Date(), rawOutput: result,
+      };
+    } catch (error) {
+      return this.createErrorResult('不可变文件检测失败');
+    }
   }
 }

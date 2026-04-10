@@ -107,7 +107,7 @@ export class StateManager {
   /**
    * 设置当前页面
    */
-  setCurrentPage(page: 'dashboard' | 'system-info' | 'ssh-terminal' | 'remote-operations' | 'docker' | 'emergency-commands' | 'log-analysis' | 'settings'): void {
+  setCurrentPage(page: AppState['currentPage']): void {
     this.setState({ currentPage: page });
   }
 

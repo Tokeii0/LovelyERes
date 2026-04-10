@@ -6,3 +6,12 @@
 @import './_system-info.css';
 @import './_log-analysis.css';
 @import './_kubernetes.css';
+@import './_baseline.css';
+@import './_quick-detection.css';
+@import './_packet-capture.css';
+@import './_database.css';
+@import './_java-hot-update.css';
+@import './_notes.css';
+@import './_secfix.css';
+@import './_check-audit.css';
+@import './_ai-history.css';

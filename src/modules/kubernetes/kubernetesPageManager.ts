@@ -3,6 +3,7 @@ import { KubernetesEmergencyManager } from './kubernetesEmergencyManager';
 import { KubernetesSecurityAuditor } from './kubernetesSecurityAuditor';
 import { KubernetesRenderer } from '../ui/kubernetesRenderer';
 import { sshConnectionManager } from '../remote/sshConnectionManager';
+import { showConfirm, showPrompt } from '../ui/confirmDialog';
 import type { K8sMainTab } from './types';
 
 const AUTO_REFRESH_EMERGENCY = 10000;
@@ -18,7 +19,11 @@ export class KubernetesPageManager {
     private globalEventsBound = false;
     private autoRefreshTimer: number | null = null;
     private emergencyMode = false;
+    private loading = false;
     private searchDebounceTimer: number | null = null;
+    private boundClickHandler: ((e: Event) => void) | null = null;
+    private boundChangeHandler: ((e: Event) => void) | null = null;
+    private boundInputHandler: ((e: Event) => void) | null = null;
 
     constructor(
         manager: KubernetesManager,
@@ -51,14 +56,33 @@ export class KubernetesPageManager {
 
     public deactivate(): void {
         this.stopAutoRefresh();
+        if (this.searchDebounceTimer) {
+            clearTimeout(this.searchDebounceTimer);
+            this.searchDebounceTimer = null;
+        }
+        if (this.boundClickHandler) {
+            document.removeEventListener('click', this.boundClickHandler);
+            this.boundClickHandler = null;
+        }
+        if (this.boundChangeHandler) {
+            document.removeEventListener('change', this.boundChangeHandler);
+            this.boundChangeHandler = null;
+        }
+        if (this.boundInputHandler) {
+            document.removeEventListener('input', this.boundInputHandler);
+            this.boundInputHandler = null;
+        }
+        this.globalEventsBound = false;
     }
 
     public async refresh(showNotification = false): Promise<void> {
         if (!sshConnectionManager.isConnected()) {
             return;
         }
+        if (this.loading) return; // 防止并发刷新
 
         try {
+            this.loading = true;
             await this.renderer.refreshData();
             if (showNotification) {
                 window.showNotification?.('Kubernetes 数据已刷新', 'success');
@@ -66,6 +90,8 @@ export class KubernetesPageManager {
         } catch (error) {
             console.error('Failed to refresh K8s data', error);
             window.showNotification?.(`刷新 K8s 数据失败: ${error}`, 'error');
+        } finally {
+            this.loading = false;
         }
     }
 
@@ -82,26 +108,28 @@ export class KubernetesPageManager {
         this.globalEventsBound = true;
 
         // Global click delegation
-        document.addEventListener('click', (e) => {
-            const target = e.target as HTMLElement;
+        this.boundClickHandler = (e: Event) => {
+            const target = (e as MouseEvent).target as HTMLElement;
             const actionEl = target.closest('[data-k8s-action]') as HTMLElement;
             if (!actionEl) return;
 
             const action = actionEl.getAttribute('data-k8s-action')!;
             this.handleAction(action, actionEl);
-        });
+        };
+        document.addEventListener('click', this.boundClickHandler);
 
         // Global change delegation (for selects)
-        document.addEventListener('change', (e) => {
+        this.boundChangeHandler = (e: Event) => {
             const target = e.target as HTMLElement;
             if (target.matches('[data-k8s-action="switch-namespace"]')) {
                 const ns = (target as HTMLSelectElement).value;
                 this.renderer.setNamespace(ns);
             }
-        });
+        };
+        document.addEventListener('change', this.boundChangeHandler);
 
         // Search input
-        document.addEventListener('input', (e) => {
+        this.boundInputHandler = (e: Event) => {
             const target = e.target as HTMLElement;
             if (target.matches('[data-k8s-action="search"]')) {
                 if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
@@ -109,7 +137,8 @@ export class KubernetesPageManager {
                     this.renderer.setSearch((target as HTMLInputElement).value);
                 }, SEARCH_DEBOUNCE);
             }
-        });
+        };
+        document.addEventListener('input', this.boundInputHandler);
 
         // Register global functions
         (window as any).switchKubernetesTab = (tabId: string) => {
@@ -245,10 +274,15 @@ export class KubernetesPageManager {
     // Auto Refresh
     // ============================================================
 
+    private isRefreshing = false;
+
     private startAutoRefresh(interval: number): void {
         this.stopAutoRefresh();
         this.autoRefreshTimer = window.setInterval(() => {
-            this.refresh();
+            if (!this.isRefreshing) {
+                this.isRefreshing = true;
+                this.refresh().finally(() => { this.isRefreshing = false; });
+            }
         }, interval);
     }
 
@@ -357,7 +391,7 @@ export class KubernetesPageManager {
     // ============================================================
 
     private async execInPod(podName: string, namespace: string): Promise<void> {
-        const command = prompt(`在 Pod "${podName}" 中执行命令:`, 'sh -c "ps aux"');
+        const command = await showPrompt({ title: '执行命令', message: `在 Pod "${podName}" 中执行命令:`, defaultValue: 'sh -c "ps aux"' });
         if (!command) return;
 
         try {
@@ -374,7 +408,7 @@ export class KubernetesPageManager {
     // ============================================================
 
     private async deleteResource(kind: string, name: string, namespace?: string): Promise<void> {
-        const confirmed = confirm(`确定要删除 ${kind}/${name}${namespace ? ` (${namespace})` : ''} 吗？`);
+        const confirmed = await showConfirm({ title: '删除资源', message: `确定要删除 ${kind}/${name}${namespace ? ` (${namespace})` : ''} 吗？`, dangerous: true });
         if (!confirmed) return;
 
         try {
@@ -395,7 +429,7 @@ export class KubernetesPageManager {
     // ============================================================
 
     private async scaleDeployment(name: string, namespace: string): Promise<void> {
-        const replicas = prompt(`将 Deployment "${name}" 缩放到多少副本？`, '1');
+        const replicas = await showPrompt({ title: '缩放部署', message: `将 Deployment "${name}" 缩放到多少副本？`, defaultValue: '1' });
         if (replicas === null) return;
 
         const num = parseInt(replicas);
@@ -418,7 +452,7 @@ export class KubernetesPageManager {
     }
 
     private async scaleToZero(name: string, namespace: string): Promise<void> {
-        const confirmed = confirm(`确定要将 Deployment "${name}" 缩容至 0 副本吗？\n这将停止所有关联的 Pod。`);
+        const confirmed = await showConfirm({ title: '缩容至零', message: `确定要将 Deployment "${name}" 缩容至 0 副本吗？\n这将停止所有关联的 Pod。`, dangerous: true });
         if (!confirmed) return;
 
         try {
@@ -443,7 +477,7 @@ export class KubernetesPageManager {
         const pods = this.renderer.getData().pods;
         const podNames = pods.map(p => `${p.namespace}/${p.name}`);
 
-        const selected = prompt(`选择要隔离的 Pod:\n${podNames.slice(0, 20).join('\n')}\n\n请输入格式: namespace/podname`);
+        const selected = await showPrompt({ title: '隔离 Pod', message: `选择要隔离的 Pod:\n${podNames.slice(0, 20).join('\n')}\n\n请输入格式: namespace/podname` });
         if (!selected) return;
 
         const [ns, name] = selected.split('/');
@@ -453,7 +487,7 @@ export class KubernetesPageManager {
             return;
         }
 
-        const confirmed = confirm(`确定要隔离 Pod "${name}" (${ns})？\n这将创建 deny-all NetworkPolicy 阻断所有网络流量。`);
+        const confirmed = await showConfirm({ title: '隔离 Pod', message: `确定要隔离 Pod "${name}" (${ns})？\n这将创建 deny-all NetworkPolicy 阻断所有网络流量。`, dangerous: true });
         if (!confirmed) return;
 
         try {
@@ -475,7 +509,7 @@ export class KubernetesPageManager {
         const deployments = this.renderer.getData().deployments;
         const names = deployments.map(d => `${d.namespace}/${d.name} (${d.availableReplicas}/${d.replicas})`);
 
-        const selected = prompt(`选择要缩容至 0 的 Deployment:\n${names.slice(0, 20).join('\n')}\n\n请输入格式: namespace/name`);
+        const selected = await showPrompt({ title: '缩容 Deployment', message: `选择要缩容至 0 的 Deployment:\n${names.slice(0, 20).join('\n')}\n\n请输入格式: namespace/name` });
         if (!selected) return;
 
         const [ns, name] = selected.split('/');
@@ -486,10 +520,10 @@ export class KubernetesPageManager {
         const nodes = this.renderer.getData().nodes;
         const names = nodes.map(n => `${n.name} (${n.status})`);
 
-        const selected = prompt(`选择要封锁的节点:\n${names.join('\n')}\n\n请输入节点名称:`);
+        const selected = await showPrompt({ title: '封锁节点', message: `选择要封锁的节点:\n${names.join('\n')}\n\n请输入节点名称:` });
         if (!selected) return;
 
-        const confirmed = confirm(`确定要封锁节点 "${selected}"？\n新的 Pod 将不会被调度到此节点。`);
+        const confirmed = await showConfirm({ title: '封锁节点', message: `确定要封锁节点 "${selected}"？\n新的 Pod 将不会被调度到此节点。`, dangerous: true });
         if (!confirmed) return;
 
         try {
@@ -510,10 +544,10 @@ export class KubernetesPageManager {
         const nodes = this.renderer.getData().nodes;
         const names = nodes.map(n => `${n.name} (${n.status})`);
 
-        const selected = prompt(`选择要排空的节点:\n${names.join('\n')}\n\n请输入节点名称:`);
+        const selected = await showPrompt({ title: '排空节点', message: `选择要排空的节点:\n${names.join('\n')}\n\n请输入节点名称:` });
         if (!selected) return;
 
-        const confirmed = confirm(`确定要排空节点 "${selected}"？\n这将驱逐节点上所有 Pod（DaemonSet 除外）。\n\n此操作可能需要较长时间。`);
+        const confirmed = await showConfirm({ title: '排空节点', message: `确定要排空节点 "${selected}"？\n这将驱逐节点上所有 Pod（DaemonSet 除外）。\n\n此操作可能需要较长时间。`, dangerous: true });
         if (!confirmed) return;
 
         try {
@@ -535,7 +569,7 @@ export class KubernetesPageManager {
         const pods = this.renderer.getData().pods;
         const podNames = pods.map(p => `${p.namespace}/${p.name}`);
 
-        const selected = prompt(`选择要采集取证数据的 Pod:\n${podNames.slice(0, 20).join('\n')}\n\n请输入格式: namespace/podname`);
+        const selected = await showPrompt({ title: '取证数据采集', message: `选择要采集取证数据的 Pod:\n${podNames.slice(0, 20).join('\n')}\n\n请输入格式: namespace/podname` });
         if (!selected) return;
 
         const [ns, name] = selected.split('/');
@@ -619,7 +653,7 @@ export class KubernetesPageManager {
     private async removeIsolation(podKey: string): Promise<void> {
         const [ns, name] = podKey.includes('/') ? podKey.split('/') : ['', podKey];
 
-        const confirmed = confirm(`确定要解除 Pod "${name || podKey}" 的隔离？\n这将删除对应的 NetworkPolicy。`);
+        const confirmed = await showConfirm({ title: '解除隔离', message: `确定要解除 Pod "${name || podKey}" 的隔离？\n这将删除对应的 NetworkPolicy。`, dangerous: true });
         if (!confirmed) return;
 
         try {
@@ -637,7 +671,7 @@ export class KubernetesPageManager {
     }
 
     private async rollbackAction(actionId: string): Promise<void> {
-        const confirmed = confirm('确定要回滚此操作？');
+        const confirmed = await showConfirm({ title: '回滚操作', message: '确定要回滚此操作？', dangerous: true });
         if (!confirmed) return;
 
         try {

@@ -86,6 +86,27 @@
 
 
 
+    <!-- 搜索栏 (Ctrl+Shift+F) -->
+    <div v-if="showSearchBar" class="terminal-search-bar">
+      <input
+        id="terminal-search-input"
+        v-model="searchQuery"
+        type="text"
+        placeholder="搜索终端内容..."
+        @input="searchTerminal(searchQuery)"
+        @keydown.enter.prevent="searchNext"
+        @keydown.escape="closeSearch"
+        class="search-input"
+      />
+      <button class="search-btn" @click="searchPrev" title="上一个">▲</button>
+      <button class="search-btn" @click="searchNext" title="下一个">▼</button>
+      <button class="search-btn" @click="closeSearch" title="关闭">✕</button>
+      <span class="search-separator"></span>
+      <span class="font-size-label">字号: {{ terminalFontSize }}</span>
+      <button class="search-btn" @click="changeFontSize(-1)" title="缩小字体">A-</button>
+      <button class="search-btn" @click="changeFontSize(1)" title="放大字体">A+</button>
+    </div>
+
     <!-- 终端内容区域 -->
     <div class="terminal-content" @contextmenu="handleContextMenu">
       <div
@@ -371,6 +392,8 @@
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
+import { SearchAddon } from 'xterm-addon-search'
+import { WebLinksAddon } from 'xterm-addon-web-links'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { commandHintsManager, type CommandHint } from '../modules/ssh/commandHints'
@@ -380,17 +403,15 @@ interface TerminalInstance {
   name: string
   terminal: Terminal
   fitAddon: FitAddon
+  searchAddon: SearchAddon
   isConnected: boolean
   connectionInfo?: {
     host: string
     port: number
     username: string
   }
-  // 事件反订阅句柄
   unlisten?: () => void
-  // 错误计数器用于错误处理
   errorCount?: number
-  // ResizeObserver引用，用于清理
   resizeObserver?: ResizeObserver
 }
 
@@ -422,9 +443,19 @@ const selectedContentPrompt = ref<string>('')
 const selectedUsername = ref<string>('')
 const accounts = ref<any[]>([])
 
+// 终端可配置选项
+const terminalFontSize = ref<number>(14)
+const showSearchBar = ref<boolean>(false)
+const searchQuery = ref<string>('')
+
 // 发送输入的缓冲（按终端分片，降低高频输入导致的抖动与拥塞）
 const inputBuffers = new Map<string, { buf: string; timer: number | null }>()
 const reconnecting = ref<boolean>(false)
+
+// AI 配置缓存（5 分钟后自动失效，避免设置更新后不生效）
+let cachedAIConfig: any = null
+let cachedAIConfigTime = 0
+const AI_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 // 命令提示相关
 const showCommandHint = ref<boolean>(false)
@@ -462,56 +493,58 @@ const createNewTerminal = async () => {
 
   const terminalId = generateId()
 
-  // 创建 xterm 实例
+  // 创建 xterm 实例（主题颜色与应用暗色主题协调）
   const terminal = new Terminal({
     theme: {
-      background: '#1e1e1e',
-      foreground: '#d4d4d4',
-      cursor: '#ffffff',
-      cursorAccent: '#000000',
-      selectionBackground: '#264f78',
-      selectionForeground: '#ffffff',
-      // 标准颜色
-      black: '#000000',
-      red: '#cd3131',
-      green: '#0dbc79',
-      yellow: '#e5e510',
-      blue: '#2472c8',
-      magenta: '#bc3fbc',
-      cyan: '#11a8cd',
-      white: '#e5e5e5',
-      // 高亮颜色
-      brightBlack: '#666666',
-      brightRed: '#f14c4c',
-      brightGreen: '#23d18b',
-      brightYellow: '#f5f543',
-      brightBlue: '#3b8eea',
-      brightMagenta: '#d670d6',
-      brightCyan: '#29b8db',
-      brightWhite: '#ffffff'
+      background: '#0f172a',
+      foreground: '#e2e8f0',
+      cursor: '#60a5fa',
+      cursorAccent: '#0f172a',
+      selectionBackground: '#334155',
+      selectionForeground: '#f1f5f9',
+      black: '#1e293b',
+      red: '#f87171',
+      green: '#4ade80',
+      yellow: '#facc15',
+      blue: '#60a5fa',
+      magenta: '#c084fc',
+      cyan: '#22d3ee',
+      white: '#e2e8f0',
+      brightBlack: '#64748b',
+      brightRed: '#fca5a5',
+      brightGreen: '#86efac',
+      brightYellow: '#fde68a',
+      brightBlue: '#93c5fd',
+      brightMagenta: '#d8b4fe',
+      brightCyan: '#67e8f9',
+      brightWhite: '#f8fafc'
     },
-    fontSize: 14,
+    fontSize: terminalFontSize.value,
     fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace',
     cursorBlink: true,
     cursorStyle: 'block',
-    scrollback: 10000, // 增加滚动缓冲区
+    scrollback: 10000,
     tabStopWidth: 4,
-    convertEol: true, // 自动转换行结束符
-    allowProposedApi: true, // 允许实验性 API
-    macOptionIsMeta: true, // Mac 选项键作为 Meta 键
-    rightClickSelectsWord: true, // 右键选择单词
+    convertEol: true,
+    allowProposedApi: true,
+    macOptionIsMeta: true,
+    rightClickSelectsWord: true,
     smoothScrollDuration: 0,
     windowsMode: false
   })
 
   const fitAddon = new FitAddon()
+  const searchAddon = new SearchAddon()
   terminal.loadAddon(fitAddon)
+  terminal.loadAddon(searchAddon)
+  terminal.loadAddon(new WebLinksAddon())
 
   const terminalInstance: TerminalInstance = {
     id: terminalId,
     name: `终端 ${terminals.value.length + 1}`,
     terminal,
     fitAddon,
+    searchAddon,
     isConnected: false
   }
 
@@ -543,17 +576,21 @@ const initializeTerminal = (terminalInstance: TerminalInstance) => {
     handleTerminalInput(terminalInstance.id, data)
   })
 
-  // 监听窗口大小变化
+  // 监听窗口大小变化（防抖 100ms 避免高频 resize）
+  let resizeTimer: number | null = null
   const resizeObserver = new ResizeObserver(() => {
-    try {
-      if (terminalInstance.terminal && terminalInstance.fitAddon &&
-          terminalInstance.terminal.element &&
-          terminalInstance.terminal.element.offsetParent) {
-        terminalInstance.fitAddon.fit()
+    if (resizeTimer) window.clearTimeout(resizeTimer)
+    resizeTimer = window.setTimeout(() => {
+      try {
+        if (terminalInstance.terminal && terminalInstance.fitAddon &&
+            terminalInstance.terminal.element &&
+            terminalInstance.terminal.element.offsetParent) {
+          terminalInstance.fitAddon.fit()
+        }
+      } catch (error) {
+        console.warn('终端 resize 失败:', error)
       }
-    } catch (error) {
-      console.warn('终端 resize 失败:', error)
-    }
+    }, 100)
   })
   resizeObserver.observe(terminalElement)
 
@@ -1410,6 +1447,26 @@ const handleKeydown = (event: KeyboardEvent) => {
     event.preventDefault()
     clearCurrentTerminal()
   }
+  // Ctrl+Shift+F - 搜索终端内容
+  else if (event.ctrlKey && event.shiftKey && event.key === 'F') {
+    event.preventDefault()
+    showSearchBar.value = !showSearchBar.value
+    if (showSearchBar.value) {
+      nextTick(() => {
+        const input = document.getElementById('terminal-search-input') as HTMLInputElement
+        if (input) input.focus()
+      })
+    }
+  }
+  // Ctrl+= / Ctrl+- 字体大小调节
+  else if (event.ctrlKey && (event.key === '=' || event.key === '+')) {
+    event.preventDefault()
+    changeFontSize(1)
+  }
+  else if (event.ctrlKey && event.key === '-') {
+    event.preventDefault()
+    changeFontSize(-1)
+  }
   // Ctrl+Tab - 切换到下一个终端
   else if (event.ctrlKey && event.key === 'Tab') {
     event.preventDefault()
@@ -1419,6 +1476,40 @@ const handleKeydown = (event: KeyboardEvent) => {
       switchTerminal(terminals.value[nextIndex].id)
     }
   }
+}
+
+// 终端搜索
+const searchTerminal = (query: string) => {
+  searchQuery.value = query
+  const active = terminals.value.find(t => t.id === activeTerminalId.value)
+  if (active && query) {
+    active.searchAddon.findNext(query)
+  }
+}
+
+const searchNext = () => {
+  const active = terminals.value.find(t => t.id === activeTerminalId.value)
+  if (active && searchQuery.value) active.searchAddon.findNext(searchQuery.value)
+}
+
+const searchPrev = () => {
+  const active = terminals.value.find(t => t.id === activeTerminalId.value)
+  if (active && searchQuery.value) active.searchAddon.findPrevious(searchQuery.value)
+}
+
+const closeSearch = () => {
+  showSearchBar.value = false
+  searchQuery.value = ''
+}
+
+// 字体大小调节
+const changeFontSize = (delta: number) => {
+  const newSize = Math.min(24, Math.max(10, terminalFontSize.value + delta))
+  terminalFontSize.value = newSize
+  terminals.value.forEach(t => {
+    t.terminal.options.fontSize = newSize
+    t.fitAddon.fit()
+  })
 }
 
 // AI助手相关方法
@@ -1451,24 +1542,20 @@ const toggleAIInput = () => {
 }
 
 const loadAIProviderInfo = async () => {
+  // 使用缓存避免重复 invoke（5 分钟 TTL）
+  if (cachedAIConfig && Date.now() - cachedAIConfigTime < AI_CACHE_TTL) {
+    currentAIProvider.value = cachedAIConfig.providerName || 'OpenAI'
+    return
+  }
+  cachedAIConfig = null
+
   try {
-    // 从AppData目录的settings.json读取AI提供商信息
     const settingsContent = await invoke('read_settings_file') as string
-    console.log('SSH终端读取到的设置内容长度:', settingsContent.length)
-    console.log('SSH终端读取到的设置内容:', settingsContent)
 
     let settings: any = {}
 
     if (settingsContent) {
       settings = JSON.parse(settingsContent)
-      console.log('SSH终端解析后的设置:', settings)
-
-      // 检查是否包含AI配置
-      if (settings.ai) {
-        console.log('✅ 发现AI配置:', settings.ai)
-      } else {
-        console.log('❌ 未发现AI配置，当前设置键:', Object.keys(settings))
-      }
     }
 
     // 如果后端设置文件没有AI配置，使用默认AI配置
@@ -1506,18 +1593,19 @@ const loadAIProviderInfo = async () => {
 
       if (provider && provider.name) {
         currentAIProvider.value = provider.name
-        console.log('✅ 成功设置AI提供商名称:', provider.name)
+        cachedAIConfig = { providerName: provider.name, settings: settings.ai }
+        cachedAIConfigTime = Date.now()
       } else {
         currentAIProvider.value = currentProviderKey || 'AI助手'
-        console.log('⚠️ 使用提供商键作为名称:', currentProviderKey)
+        cachedAIConfig = { providerName: currentProviderKey || 'AI助手', settings: settings.ai }
+        cachedAIConfigTime = Date.now()
       }
     } else {
-      console.warn('⚠️ AI配置异常，使用默认值')
       currentAIProvider.value = 'AI助手'
     }
   } catch (error) {
     console.error('❌ SSH终端加载AI提供商信息失败:', error)
-    currentAIProvider.value = 'AI助手' // 默认值
+    currentAIProvider.value = 'AI助手'
   }
 }
 
@@ -1583,38 +1671,36 @@ const sendAIRequest = async () => {
     // 构建提示词：如果有选中内容，使用选中内容的提示词；否则使用用户输入
     let systemPrompt = ''
 
+    const baseRules = `【严格格式要求 — 违反则回答无效】
+- 直接输出可执行的 shell 命令，不要包含任何其他内容
+- 绝对禁止使用 markdown 格式，禁止 \`\`\`、\`\`\`bash、\`\`\`sh 等代码块标记
+- 禁止添加注释、解释、说明、编号、标题
+- 禁止输出 "以下是命令" 之类的引导语
+- 多个命令用 && 或 ; 连接在一行
+- 只输出命令本身，用户会直接复制粘贴到终端执行`
+
     if (selectedContentPrompt.value && selectedContentHint.value) {
-      // 有选中内容时，结合选中内容和用户输入
-      systemPrompt = `你是一个Linux命令行专家。用户选中了一段终端输出内容，并提出了问题。请分析这段内容并提供相关的Linux命令建议。
+      const content = selectedContentPrompt.value.replace('请分析这段终端输出内容并提供相关的Linux命令建议：\n\n', '')
+      systemPrompt = `${baseRules}
 
-规则：
-1. 只返回命令本身，不要任何解释或说明
-2. 如果需要多个命令，用 && 或 ; 连接
-3. 确保命令的安全性和准确性
-4. 优先使用常用的、兼容性好的命令
+分析以下终端输出，给出相关的排查/处理命令：
+${content}
 
-选中的终端内容：
-${selectedContentPrompt.value.replace('请分析这段终端输出内容并提供相关的Linux命令建议：\n\n', '')}
-
-用户问题：${aiInputText.value.trim() || '请分析这段内容并提供相关命令建议'}`
+用户补充：${aiInputText.value.trim() || '给出排查命令'}`
     } else {
-      // 没有选中内容时，使用标准提示词
-      systemPrompt = `你是一个Linux命令行专家。用户会描述他们想要完成的任务，请你提供准确的Linux命令。
+      systemPrompt = `${baseRules}
 
-规则：
-1. 只返回命令本身，不要任何解释或说明
-2. 如果需要多个命令，用 && 或 ; 连接
-3. 确保命令的安全性和准确性
-4. 优先使用常用的、兼容性好的命令
-
-用户需求：${aiInputText.value.trim()}`
+任务：${aiInputText.value.trim()}`
     }
 
     // 调用真实的AI API，使用流式输出
     const response = await callAIAPI(systemPrompt, providerConfig, (chunk: string) => {
-      // 实时更新响应内容
       aiResponse.value += chunk
     })
+
+    // 清洗 AI 返回中可能残留的 markdown 格式
+    const cleaned = cleanAIResponse(aiResponse.value || response)
+    aiResponse.value = cleaned
 
     // 确保最终响应是完整的
     if (!aiResponse.value) {
@@ -1628,78 +1714,79 @@ ${selectedContentPrompt.value.replace('请分析这段终端输出内容并提�
   }
 }
 
+/**
+ * 清洗 AI 返回内容：移除 markdown 代码块标记和多余格式
+ */
+const cleanAIResponse = (text: string): string => {
+  let cleaned = text.trim()
+  // 移除 ```bash ... ``` 或 ```sh ... ``` 或 ``` ... ``` 代码块包裹
+  cleaned = cleaned.replace(/^```(?:bash|sh|shell|zsh)?\s*\n?/gm, '')
+  cleaned = cleaned.replace(/\n?```\s*$/gm, '')
+  // 移除行内 ` 包裹
+  cleaned = cleaned.replace(/^`+|`+$/g, '')
+  // 移除开头的 $ 或 # 提示符
+  cleaned = cleaned.replace(/^\s*[$#]\s+/gm, '')
+  // 移除 "以下是命令" 等引导语
+  cleaned = cleaned.replace(/^.*(?:以下是|命令如下|你可以|可以使用|请执行|运行以下).*[:：]\s*\n?/gm, '')
+  return cleaned.trim()
+}
+
 const callAIAPI = async (prompt: string, config: any, onChunk?: (chunk: string) => void): Promise<string> => {
   try {
-    console.log('🤖 调用AI API (流式模式):', config.name, config.baseUrl)
+    // 自动补全 URL 路径
+    let apiUrl = (config.baseUrl || '').replace(/\/+$/, '')
+    if (!apiUrl.endsWith('/chat/completions') && !apiUrl.endsWith('/messages')) {
+      if (apiUrl.endsWith('/v1')) {
+        apiUrl += '/chat/completions'
+      } else if (!apiUrl.includes('/v1/')) {
+        apiUrl += '/v1/chat/completions'
+      }
+    }
 
-    // 构建请求体 - 启用流式输出
-    const requestBody = {
+    console.log('🤖 调用AI API (Tauri代理):', config.name, apiUrl)
+
+    const requestBody = JSON.stringify({
       model: config.model,
-      messages: [
-        {
-          role: 'system',
-          content: prompt
-        }
-      ],
+      messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
       max_tokens: 200,
-      stream: true  // 启用流式输出
-    }
-
-    console.log('📤 AI请求体:', requestBody)
-
-    // 发送请求到AI API
-    const response = await fetch(config.baseUrl + '/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`
-      },
-      body: JSON.stringify(requestBody)
+      stream: true,
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('❌ AI API响应错误:', response.status, errorText)
-      throw new Error(`AI API请求失败: ${response.status} ${response.statusText}`)
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.apiKey}`,
     }
 
-    // 处理流式响应
-    const reader = response.body?.getReader()
-    if (!reader) {
-      throw new Error('无法获取响应流')
-    }
-
-    const decoder = new TextDecoder()
     let fullContent = ''
 
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      const chunk = decoder.decode(value, { stream: true })
-      const lines = chunk.split('\n').filter(line => line.trim() !== '')
-
+    // 注册流式事件监听
+    const unlistenChunk = await listen('ai_stream_chunk', (event: any) => {
+      const rawChunk = event.payload as string
+      const lines = rawChunk.split('\n').filter((l: string) => l.trim().startsWith('data:'))
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6)
-          if (data === '[DONE]') continue
-
-          try {
-            const parsed = JSON.parse(data)
-            const content = parsed.choices?.[0]?.delta?.content || ''
-            if (content) {
-              fullContent += content
-              // 调用回调函数，实时更新UI
-              if (onChunk) {
-                onChunk(content)
-              }
-            }
-          } catch (e) {
-            console.warn('解析流式数据失败:', e, data)
+        const data = line.replace(/^data:\s*/, '').trim()
+        if (data === '[DONE]') continue
+        try {
+          const parsed = JSON.parse(data)
+          const text = parsed.choices?.[0]?.delta?.content || parsed.delta?.text || ''
+          if (text) {
+            fullContent += text
+            if (onChunk) onChunk(text)
           }
-        }
+        } catch { /* ignore */ }
       }
+    })
+
+    const unlistenDone = await listen('ai_stream_done', () => {})
+    const unlistenError = await listen('ai_stream_error', () => {})
+
+    try {
+      await invoke('ai_proxy_stream', { url: apiUrl, headers, body: requestBody })
+    } finally {
+      unlistenChunk()
+      unlistenDone()
+      unlistenError()
     }
 
     console.log('✅ AI生成的命令:', fullContent)
@@ -2061,8 +2148,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #1e1e1e; /* Match terminal background for seamless look */
-  color: #d4d4d4;
+  background: #0f172a;
+  color: #e2e8f0;
 }
 
 /* --- Tabs Design --- */
@@ -2070,11 +2157,44 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #252526; /* VS Code like darker header */
-  border-bottom: 1px solid #1e1e1e;
+  background: #0b1022;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
   height: 36px;
   user-select: none;
 }
+
+/* --- Search Bar --- */
+.terminal-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: #1e293b;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+.search-input {
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 4px;
+  color: #e2e8f0;
+  padding: 3px 8px;
+  font-size: 12px;
+  outline: none;
+  width: 200px;
+}
+.search-input:focus { border-color: #60a5fa; }
+.search-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 11px;
+  border-radius: 3px;
+}
+.search-btn:hover { background: #334155; color: #e2e8f0; }
+.search-separator { width: 1px; height: 14px; background: rgba(148,163,184,0.2); margin: 0 4px; }
+.font-size-label { font-size: 11px; color: #94a3b8; }
 
 .tabs-left {
   display: flex;
@@ -2092,7 +2212,7 @@ onUnmounted(() => {
   padding: 0 8px;
   flex-shrink: 0;
   height: 100%;
-  background: #252526;
+  background: #0b1022;
 }
 
 .terminal-tab {
@@ -2101,7 +2221,7 @@ onUnmounted(() => {
   padding: 0 10px;
   height: 32px; /* Slightly shorter than container */
   background: #2d2d2d;
-  border-right: 1px solid #1e1e1e;
+  border-right: 1px solid rgba(148, 163, 184, 0.1);
   cursor: pointer;
   min-width: 140px;
   max-width: 200px;
@@ -2119,7 +2239,7 @@ onUnmounted(() => {
 }
 
 .terminal-tab.active {
-  background: #1e1e1e; /* Seamless with content */
+  background: #0f172a; /* Seamless with content */
   color: #ffffff;
   border-top: 2px solid var(--primary-color, #3b82f6);
   border-right: none;
@@ -2200,24 +2320,31 @@ onUnmounted(() => {
 
 .account-selector {
   font-size: 11px;
-  padding: 4px 8px;
-  background: #3c3c3c;
-  border: 1px solid #454545;
+  padding: 3px 24px 3px 8px;
+  background: #1e293b;
+  border: 1px solid rgba(148, 163, 184, 0.15);
   border-radius: 4px;
-  color: #e0e0e0;
+  color: #e2e8f0;
   outline: none;
   cursor: pointer;
   margin-right: 8px;
   min-width: 120px;
   height: 26px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 10px;
+  transition: border-color 0.15s;
 }
 
 .account-selector:hover {
-  border-color: #666;
+  border-color: rgba(148, 163, 184, 0.3);
 }
 
 .account-selector:focus {
-  border-color: var(--primary-color, #3b82f6);
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.12);
 }
 
 .connection-status {
@@ -2252,7 +2379,7 @@ onUnmounted(() => {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #1e1e1e;
+  background: #0f172a;
   padding: 4px 0 0 4px; /* Small padding for breathing room */
 }
 
@@ -2275,12 +2402,12 @@ onUnmounted(() => {
 }
 
 .terminal-instance :deep(.xterm-viewport)::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: #0f172a;
 }
 
 .terminal-instance :deep(.xterm-viewport)::-webkit-scrollbar-thumb {
   background: #424242;
-  border: 3px solid #1e1e1e; /* Creates padding effect */
+  border: 3px solid #0f172a; /* Creates padding effect */
   border-radius: 10px;
 }
 
@@ -2294,7 +2421,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  background: #1e1e1e;
+  background: #0f172a;
   color: #858585;
 }
 
@@ -2302,7 +2429,7 @@ onUnmounted(() => {
   text-align: center;
   max-width: 400px;
   padding: 40px;
-  background: #252526;
+  background: #0b1022;
   border-radius: 16px;
   border: 1px solid #333;
   box-shadow: 0 20px 40px rgba(0,0,0,0.2);
@@ -2602,104 +2729,99 @@ onUnmounted(() => {
 }
 
 /* --- Command Suggestions Panel --- */
+/* --- Command Suggestions (VS Code style dropdown) --- */
 .command-suggestions-panel {
   position: fixed;
-  width: 420px;
-  max-height: 400px;
-  background: rgba(37, 37, 38, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  width: 360px;
+  max-height: 300px;
+  background: #1e293b;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 6px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   z-index: 900;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: fadeIn 0.15s ease-out;
+  animation: suggestSlideIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .suggestions-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
 }
 
 .suggestions-header span {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
-  color: #e4e4e7;
+  color: #94a3b8;
 }
 
 .suggestions-count {
-  font-size: 11px;
-  color: #71717a;
+  font-size: 10px;
+  color: #64748b;
   font-weight: 500;
+  margin-left: auto;
 }
 
 .suggestions-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
-  max-height: 320px;
+  padding: 4px 0;
+  max-height: 240px;
 }
 
 .suggestion-item {
-  padding: 10px 12px;
-  margin-bottom: 6px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 10px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.08s;
 }
 
 .suggestion-item:hover {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.3);
-  transform: translateX(2px);
+  background: rgba(96, 165, 250, 0.1);
 }
 
 .suggestion-item.selected {
-  background: rgba(59, 130, 246, 0.2);
-  border-color: rgba(59, 130, 246, 0.4);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  background: rgba(96, 165, 250, 0.18);
 }
 
 .suggestion-command {
-  font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 13px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
   font-weight: 600;
-  color: #4ade80;
-  margin-bottom: 4px;
+  color: #60a5fa;
+  white-space: nowrap;
+  min-width: 70px;
 }
 
 .suggestion-description {
-  font-size: 12px;
-  color: #a1a1aa;
-  line-height: 1.4;
-  margin-bottom: 6px;
+  font-size: 11px;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
 }
 
 .suggestion-category {
-  display: inline-block;
-  font-size: 10px;
-  padding: 2px 8px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  color: #71717a;
-  font-weight: 500;
+  font-size: 9px;
+  padding: 1px 5px;
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 3px;
+  color: #64748b;
+  white-space: nowrap;
 }
 
 .suggestions-footer {
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.02);
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  font-size: 11px;
-  color: #71717a;
+  padding: 4px 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  font-size: 10px;
+  color: #475569;
   text-align: center;
 }
 
@@ -2707,20 +2829,18 @@ onUnmounted(() => {
 .command-hint-panel {
   position: absolute;
   top: 50px;
-  right: 20px;
-  width: 450px;
-  max-height: 500px;
-  background: rgba(37, 37, 38, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  right: 16px;
+  width: 400px;
+  max-height: 420px;
+  background: #1e293b;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
   z-index: 850;
   overflow: hidden;
   opacity: 0;
-  transform: translateY(-10px);
-  transition: all 0.2s ease-out;
+  transform: translateY(-6px);
+  transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
 }
 
@@ -2734,152 +2854,128 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
-  background: rgba(59, 130, 246, 0.1);
-  border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
 }
 
 .hint-title {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .command-name {
-  font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 15px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
   font-weight: 700;
   color: #60a5fa;
 }
 
 .command-category {
-  font-size: 10px;
-  padding: 3px 8px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  color: #a1a1aa;
+  font-size: 9px;
+  padding: 2px 6px;
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 3px;
+  color: #64748b;
   font-weight: 500;
 }
 
 .hint-close {
   background: transparent;
   border: none;
-  color: #71717a;
+  color: #64748b;
   cursor: pointer;
-  padding: 4px;
+  padding: 3px;
   border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: background 0.12s;
 }
 
 .hint-close:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e4e4e7;
+  background: rgba(148, 163, 184, 0.12);
+  color: #e2e8f0;
 }
 
 .hint-content {
-  padding: 16px;
+  padding: 10px 12px;
   overflow-y: auto;
-  max-height: 420px;
+  max-height: 340px;
 }
 
 .hint-description {
-  font-size: 13px;
-  line-height: 1.6;
-  color: #d4d4d4;
-  margin-bottom: 16px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
-  border-left: 3px solid #3b82f6;
-}
-
-.hint-usage {
-  margin-bottom: 16px;
-}
-
-.hint-usage strong {
-  display: block;
   font-size: 12px;
-  color: #a1a1aa;
-  margin-bottom: 8px;
+  line-height: 1.5;
+  color: #cbd5e1;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 4px;
+  border-left: 2px solid #3b82f6;
+}
+
+.hint-usage { margin-bottom: 10px; }
+
+.hint-usage strong,
+.hint-options strong,
+.hint-examples strong {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 6px;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .hint-usage code {
   display: block;
-  font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 13px;
-  padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 4px;
   color: #4ade80;
   overflow-x: auto;
 }
 
-.hint-options {
-  margin-bottom: 16px;
-}
-
-.hint-options strong {
-  display: block;
-  font-size: 12px;
-  color: #a1a1aa;
-  margin-bottom: 8px;
-  font-weight: 600;
-}
+.hint-options { margin-bottom: 10px; }
 
 .options-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .option-tag {
-  display: inline-block;
-  font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 11px;
-  padding: 4px 8px;
-  background: rgba(168, 85, 247, 0.15);
-  border: 1px solid rgba(168, 85, 247, 0.3);
-  border-radius: 4px;
-  color: #c084fc;
-  font-weight: 500;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(139, 92, 246, 0.12);
+  border-radius: 3px;
+  color: #a78bfa;
 }
 
-.hint-examples {
-  margin-bottom: 8px;
-}
-
-.hint-examples strong {
-  display: block;
-  font-size: 12px;
-  color: #a1a1aa;
-  margin-bottom: 8px;
-  font-weight: 600;
-}
+.hint-examples { margin-bottom: 6px; }
 
 .examples-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .example-item {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .example-item code {
   display: block;
-  font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 12px;
-  padding: 8px 10px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  padding: 5px 8px;
   color: #fbbf24;
   overflow-x: auto;
 }
@@ -2887,15 +2983,14 @@ onUnmounted(() => {
 /* --- Context Menu --- */
 .context-menu {
   position: fixed;
-  background: rgba(37, 37, 38, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  padding: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #1e293b;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   z-index: 9999;
   min-width: 180px;
+  animation: suggestSlideIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .context-menu-item {
@@ -2933,9 +3028,14 @@ onUnmounted(() => {
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+@keyframes suggestSlideIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes pulse {

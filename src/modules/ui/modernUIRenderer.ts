@@ -5,35 +5,30 @@
 
 import type { StateManager } from '../core/stateManager';
 import type { AppState } from '../core/app';
+import { version as APP_VERSION } from '../../../package.json';
 import { KubernetesRenderer } from './kubernetesRenderer';
 import { dockerPageManager } from '../docker/dockerPageManager';
 import { SftpContextMenuRenderer } from './sftpContextMenu';
 import { LogAnalysisRenderer } from './logAnalysisRenderer';
 import { DatabaseRenderer } from './databaseRenderer';
 import { PacketCaptureRenderer } from './packetCaptureRenderer';
-import { emergencyCategories } from '../emergency/commands';
+
 import { SystemInfoRenderer } from './renderers/systemInfoRenderer';
 import { ServerModalRenderer } from './renderers/serverModalRenderer';
 import { EmergencyRenderer } from './renderers/emergencyRenderer';
+import { BaselineRenderer } from './renderers/baselineRenderer';
 import {
-  List,
-  Peoples,
-  Earth,
   Rocket,
-  Calendar,
   SettingTwo,
   ApplicationMenu,
   FolderOpen,
   Whale,
   CheckOne,
   CloseOne,
-  Dashboard,
   Code,
   Plus,
   LinkInterrupt,
   Connection,
-  User,
-  Key,
   Up,
   Home,
   Refresh,
@@ -41,27 +36,22 @@ import {
   FolderPlus,
   History,
   // 快速检测图标
-  Lock,
   Shield,
-  Analysis,
-  Fire,
   FileText,
-  Config,
   NetworkTree,
   System,
-  Time,
   SettingConfig,
-  Cpu,
-  Memory,
-  Speed,
   LinkCloud,
-  BookOpen,
   Log,
-  Data,
   Left,
   Right,
+  Data,
   // 设置菜单图标
-  Bug
+  Bug,
+  Fire,
+  // 笔记 & 安全速查
+  DocDetail,
+  Protection
 } from '@icon-park/svg';
 
 // 添加系统信息页面的样式
@@ -83,6 +73,7 @@ export class ModernUIRenderer {
   private systemInfoRenderer: SystemInfoRenderer;
   private serverModalRenderer: ServerModalRenderer;
   private emergencyRenderer: EmergencyRenderer;
+  public baselineRenderer: BaselineRenderer;
 
   constructor(stateManager: StateManager) {
     this.stateManager = stateManager;
@@ -95,6 +86,7 @@ export class ModernUIRenderer {
     this.systemInfoRenderer = new SystemInfoRenderer();
     this.serverModalRenderer = new ServerModalRenderer();
     this.emergencyRenderer = new EmergencyRenderer(this.state);
+    this.baselineRenderer = new BaselineRenderer(this.state);
 
     // 注入系统信息页面样式
     if (!document.querySelector('#system-info-styles')) {
@@ -151,6 +143,7 @@ export class ModernUIRenderer {
           newConnected: newState.isConnected
         });
         this.rerenderConnectionPanel();
+        this.rerenderStatusBar();
 
         // 如果是从未连接变为已连接，触发状态变化动画
         if (!oldConnected && newState.isConnected) {
@@ -178,6 +171,7 @@ export class ModernUIRenderer {
     const oldTheme = this.state.theme;
     this.state = newState;
     this.emergencyRenderer.setState(this.state);
+    this.baselineRenderer.setState(this.state);
 
     console.log('🔄 ModernUIRenderer.updateState - 主题变化:', { oldTheme, newTheme: newState.theme });
 
@@ -224,6 +218,18 @@ export class ModernUIRenderer {
         console.warn('⚠️ 未能创建新卡片');
       }
     }
+  }
+
+  /**
+   * 重新渲染状态栏（连接状态变化时调用）
+   */
+  private rerenderStatusBar(): void {
+    const bar = document.querySelector('.status-bar');
+    if (!bar) return;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = this.renderStatusBar();
+    const newBar = tmp.firstElementChild;
+    if (newBar) bar.replaceWith(newBar);
   }
 
   /**
@@ -302,9 +308,15 @@ export class ModernUIRenderer {
         <div class="title-bar-left">
           <div class="app-logo">
             <div class="logo-icon" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2L14.09 8.26L20.18 8.63L15.54 12.74L17.12 19.04L12 15.77L6.88 19.04L8.46 12.74L3.82 8.63L9.91 8.26L12 2Z" fill="var(--primary-color)" stroke="var(--primary-color)" stroke-width="1" stroke-linejoin="round"/>
-                <path d="M12 6L13.09 9.26L16.18 9.47L13.82 11.54L14.56 14.72L12 13.05L9.44 14.72L10.18 11.54L7.82 9.47L10.91 9.26L12 6Z" fill="var(--bg-primary)" opacity="0.6"/>
+              <svg width="22" height="22" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="tbl-s" x1=".1" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#f9a8d4"/><stop offset="1" stop-color="#c4b5fd"/></linearGradient>
+                  <linearGradient id="tbl-h" x1=".36" y1="0" x2=".5" y2=".5"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+                </defs>
+                <g transform="rotate(-15 64 62)">
+                  <path d="M64,16 L75.8,47.8 L109.2,48.8 L83.2,68.8 L93,101.2 L64,83.2 L35,101.2 L44.8,68.8 L18.8,48.8 L52.2,47.8 Z" fill="url(#tbl-s)" stroke="url(#tbl-s)" stroke-width="12" stroke-linejoin="round" paint-order="stroke fill"/>
+                  <path d="M64,16 L75.8,47.8 L109.2,48.8 L83.2,68.8 L93,101.2 L64,83.2 L35,101.2 L44.8,68.8 L18.8,48.8 L52.2,47.8 Z" fill="url(#tbl-h)" stroke="url(#tbl-h)" stroke-width="12" stroke-linejoin="round" paint-order="stroke fill"/>
+                </g>
               </svg>
             </div>
             <span class="app-name" style="font-size: 13px; font-weight: 600; color: var(--text-primary);">LovelyRes</span>
@@ -351,6 +363,13 @@ export class ModernUIRenderer {
         </div>
 
         <div class="activity-bar-bottom">
+          <!-- 展开/收缩按钮 -->
+          <div class="activity-bar-toggle" onclick="window.toggleActivityBar()" data-tooltip="展开菜单">
+            <span class="toggle-icon">
+              ${Right({ theme: 'outline', size: '16', fill: 'currentColor' })}
+            </span>
+          </div>
+
           <!-- 设置按钮 -->
           <div class="sidebar-settings-container">
             ${this.renderSettingsMenu()}
@@ -358,6 +377,7 @@ export class ModernUIRenderer {
               <span class="nav-item-icon">
                 ${SettingTwo({ theme: 'outline', size: '22', fill: 'currentColor' })}
               </span>
+              <span class="nav-item-label">设置</span>
             </div>
           </div>
 
@@ -419,6 +439,20 @@ export class ModernUIRenderer {
         <div class="dropdown-divider"></div>
 
         <div class="settings-group">
+            <div class="settings-group-title">连接</div>
+            <button class="settings-item ${this.state.isConnected ? 'danger' : 'disabled'}"
+                onclick="window.confirmDisconnect()"
+                ${this.state.isConnected ? '' : 'disabled'}>
+                <div class="settings-item-icon" style="${this.state.isConnected ? 'color:var(--error-color)' : ''}">
+                    ${LinkInterrupt({ theme: 'outline', size: '16', fill: 'currentColor' })}
+                </div>
+                <span>${this.state.isConnected ? '断开服务器' : '未连接'}</span>
+            </button>
+        </div>
+
+        <div class="dropdown-divider"></div>
+
+        <div class="settings-group">
             <div class="settings-group-title">通用</div>
             <button class="settings-item" onclick="window.handleUserMenuAction('settings'); window.hideSettingsDropdown();">
                  <div class="settings-item-icon">
@@ -429,6 +463,13 @@ export class ModernUIRenderer {
         </div>
       </div>
     `;
+  }
+
+  /**
+   * 公开版本：供 app.ts 在主题切换后重新渲染设置菜单
+   */
+  renderSettingsMenuPublic(): string {
+    return this.renderSettingsMenu();
   }
 
   /**
@@ -456,6 +497,7 @@ export class ModernUIRenderer {
             : Plus({ theme: 'outline', size: '22', fill: 'currentColor' })
           }
         </span>
+        <span class="nav-item-label">${isConnected ? tooltipText : '连接服务器'}</span>
         ${isConnected ? `<span class="connection-status-dot"></span>` : ''}
       </div>
     `;
@@ -492,6 +534,18 @@ export class ModernUIRenderer {
         active: currentPage === 'kubernetes'
       },
       {
+        id: 'database',
+        icon: Data({ theme: 'outline', size: '18', fill: 'currentColor' }),
+        title: '数据库',
+        active: currentPage === 'database'
+      },
+      {
+        id: 'java-hot-update',
+        icon: Fire({ theme: 'outline', size: '18', fill: 'currentColor' }),
+        title: 'Java热更新',
+        active: currentPage === 'java-hot-update'
+      },
+      {
         id: 'emergency-commands',
         icon: Code({ theme: 'outline', size: '18', fill: 'currentColor' }),
         title: '命令执行',
@@ -510,10 +564,40 @@ export class ModernUIRenderer {
         active: currentPage === 'quick-detection'
       },
       {
+        id: 'baseline-quick-edit',
+        icon: SettingConfig({ theme: 'outline', size: '18', fill: 'currentColor' }),
+        title: '快速编辑',
+        active: currentPage === 'baseline-quick-edit'
+      },
+      {
         id: 'log-analysis',
         icon: Log({ theme: 'outline', size: '18', fill: 'currentColor' }),
         title: '日志审计',
         active: currentPage === 'log-analysis'
+      },
+      {
+        id: 'notes',
+        icon: DocDetail({ theme: 'outline', size: '18', fill: 'currentColor' }),
+        title: '笔记',
+        active: currentPage === 'notes'
+      },
+      {
+        id: 'secfix',
+        icon: Protection({ theme: 'outline', size: '18', fill: 'currentColor' }),
+        title: '安全速查',
+        active: currentPage === 'secfix'
+      },
+      {
+        id: 'check-audit',
+        icon: Bug({ theme: 'outline', size: '18', fill: 'currentColor' }),
+        title: 'Check审计',
+        active: currentPage === 'check-audit'
+      },
+      {
+        id: 'ai-history',
+        icon: History({ theme: 'outline', size: '18', fill: 'currentColor' }),
+        title: 'AI历史',
+        active: currentPage === 'ai-history'
       }
     ];
 
@@ -526,6 +610,7 @@ export class ModernUIRenderer {
           <span class="nav-item-icon">
             ${item.icon}
           </span>
+          <span class="nav-item-label">${item.title}</span>
           ${isDisabled ? `<span class="activity-bar-badge"></span>` : ''}
         </div>
       `;
@@ -674,10 +759,20 @@ export class ModernUIRenderer {
         return this.renderKubernetesPage();
       case 'database':
         return this.databaseRenderer.render();
+      case 'java-hot-update':
+        return this.renderJavaHotUpdatePage();
+      case 'notes':
+        return this.renderNotesPage();
+      case 'secfix':
+        return this.renderSecfixPage();
+      case 'check-audit':
+        return this.renderCheckAuditPage();
+      case 'ai-history':
+        return this.renderAIHistoryPage();
       case 'packet-capture':
-        // 使用 async render 方法，但这里需要返回字符串
-        // PacketCaptureRenderer.render() 是 async 的，因为它可能需要加载接口
-        // 我们可以在这里返回一个容器，然后调用 render 方法
+        // Initialize lifecycle (event delegation, Tauri listeners, rate timer)
+        this.packetCaptureRenderer.initialize();
+        // Async render: load interfaces then populate container
         setTimeout(async () => {
             const container = document.getElementById('packet-capture-wrapper');
             if (container) {
@@ -685,11 +780,13 @@ export class ModernUIRenderer {
                     container.innerHTML = await this.packetCaptureRenderer.render();
                 } catch (e) {
                     console.error('Failed to render packet capture:', e);
-                    container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">网络抓包模块加载失败</div>';
+                    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">网络抓包模块加载失败</div>';
                 }
             }
         }, 0);
-        return '<div id="packet-capture-wrapper" style="height: 100%;">正在加载网络抓包工具...</div>';
+        return '<div id="packet-capture-wrapper" style="height:100%"><div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-secondary)">正在加载网络抓包工具...</div></div>';
+      case 'baseline-quick-edit':
+        return this.baselineRenderer.renderBaselineQuickEditPage();
       case 'log-analysis':
         return this.renderLogAnalysisPage();
       case 'settings':
@@ -748,6 +845,42 @@ export class ModernUIRenderer {
     return this.serverModalRenderer.renderServerModal();
   }
 
+  /**
+   * 仅渲染服务器列表内容（用于局部刷新，不替换整个模态框）
+   */
+  renderServerList(): string {
+    return this.serverModalRenderer.renderServerList();
+  }
+
+  /**
+   * 渲染 Java 热更新页面骨架
+   */
+  private renderJavaHotUpdatePage(): string {
+    return `
+      <div class="jhu-page">
+        <div class="jhu-header">
+          <div class="jhu-header-left">
+            <h2>☕ Java 热更新</h2>
+            <span class="jhu-badge">Hot Update</span>
+          </div>
+          <div class="jhu-header-actions">
+            <button class="jhu-btn secondary" data-jhu-action="env-info">Java 环境</button>
+            <button class="jhu-btn primary" data-jhu-action="refresh">刷新</button>
+          </div>
+        </div>
+        <div class="jhu-tabs">
+          <button class="jhu-tab-btn active" data-jhu-action="switch-tab" data-jhu-param="processes">进程管理</button>
+          <button class="jhu-tab-btn" data-jhu-action="switch-tab" data-jhu-param="hotupdate">热更新</button>
+          <button class="jhu-tab-btn" data-jhu-action="switch-tab" data-jhu-param="diagnostics">JVM 诊断</button>
+          <button class="jhu-tab-btn" data-jhu-action="switch-tab" data-jhu-param="services">服务管理</button>
+          <button class="jhu-tab-btn" data-jhu-action="switch-tab" data-jhu-param="deploy">部署管理</button>
+          <button class="jhu-tab-btn" data-jhu-action="switch-tab" data-jhu-param="docker">Docker容器</button>
+        </div>
+        <div id="jhu-content" class="jhu-content"></div>
+      </div>
+    `;
+  }
+
 
     /**
    * 渲染连接提示
@@ -756,7 +889,68 @@ export class ModernUIRenderer {
     return this.serverModalRenderer.renderConnectionPrompt();
   }
 
+  /**
+   * 渲染笔记页面
+   */
+  private renderNotesPage(): string {
+    return `
+      <div class="notes-page">
+        <div class="notes-header">
+          <h2>笔记</h2>
+        </div>
+        <div id="notes-content" style="flex:1;overflow:hidden;"></div>
+      </div>
+    `;
+  }
 
+  /**
+   * 渲染安全速查页面
+   */
+  private renderSecfixPage(): string {
+    return `
+      <div class="sf-page">
+        <div class="sf-header">
+          <div class="sf-header-left">
+            <h2>安全速查</h2>
+            <span class="sf-badge">CTF / 应急</span>
+          </div>
+        </div>
+        <div id="secfix-content" class="sf-content"></div>
+      </div>
+    `;
+  }
+
+  private renderCheckAuditPage(): string {
+    return `
+      <div class="ca-page">
+        <div class="ca-header">
+          <div class="ca-header-left">
+            <h2>Check 审计</h2>
+            <span class="ca-badge">Check专武</span>
+          </div>
+          <div class="ca-header-actions">
+            <button class="ca-btn primary" data-ca-action="refresh">刷新状态</button>
+          </div>
+        </div>
+        <div class="ca-tabs">
+          <button class="ca-tab-btn active" data-ca-action="switch-tab" data-ca-param="hijack">命令劫持</button>
+          <button class="ca-tab-btn" data-ca-action="switch-tab" data-ca-param="audit-log">审计日志</button>
+          <button class="ca-tab-btn" data-ca-action="switch-tab" data-ca-param="analysis">Check分析</button>
+          <button class="ca-tab-btn" data-ca-action="switch-tab" data-ca-param="quick-fix">快速修复</button>
+        </div>
+        <div id="ca-content" class="ca-content"></div>
+      </div>
+    `;
+  }
+
+  private renderAIHistoryPage(): string {
+    return `
+      <div class="aih-page">
+        <div class="aih-header"><h2>AI 历史</h2></div>
+        <div id="ai-history-content" class="aih-content"></div>
+      </div>
+    `;
+  }
 
   /**
    * 渲染远程操作页面（SFTP + SSH终端分屏）
@@ -957,14 +1151,21 @@ export class ModernUIRenderer {
     const connectedIcon = CheckOne({ theme: 'filled', size: '12', fill: '#22c55e' });
     const disconnectedIcon = CloseOne({ theme: 'filled', size: '12', fill: '#ef4444' });
 
+    let statusText: string;
+    if (this.state.isConnected) {
+      const server = this.state.serverInfo?.name || this.state.currentServer || '';
+      statusText = `${connectedIcon} 已连接${server ? ` — ${server}` : ''}`;
+    } else {
+      statusText = `${disconnectedIcon} 未连接`;
+    }
+
     return `
       <div class="status-bar">
         <div class="status-left">
-          ${this.state.isConnected ? `<span style="margin-left: var(--spacing-md); display: flex; align-items: center; gap: 4px;">${connectedIcon} 已连接</span>` : `<span style="margin-left: var(--spacing-md); display: flex; align-items: center; gap: 4px;">${disconnectedIcon} 未连接</span>`}
+          <span style="margin-left: var(--spacing-md); display: flex; align-items: center; gap: 4px;">${statusText}</span>
         </div>
-
         <div class="status-right">
-          <span>LovelyRes v0.60</span>
+          <span>LovelyRes v${APP_VERSION}</span>
         </div>
       </div>
     `;
@@ -1136,6 +1337,17 @@ export class ModernUIRenderer {
               border-bottom: 2px solid transparent;
               transition: all 0.2s;
             ">AI设置</button>
+            <button class="settings-tab" data-tab="tools" style="
+              padding: var(--spacing-md) var(--spacing-lg);
+              background: none;
+              border: none;
+              color: var(--text-secondary);
+              font-size: 14px;
+              font-weight: 500;
+              cursor: pointer;
+              border-bottom: 2px solid transparent;
+              transition: all 0.2s;
+            ">工具</button>
           </div>
 
           <div class="settings-content">
@@ -1473,6 +1685,54 @@ export class ModernUIRenderer {
               </div>
             </div>
 
+            <!-- 工具设置 -->
+            <div class="settings-panel" id="tools-settings" style="display: none;">
+              <div class="settings-section" style="
+                background: var(--bg-secondary);
+                border-radius: var(--border-radius-lg);
+                padding: var(--spacing-lg);
+                margin-bottom: var(--spacing-lg);
+              ">
+                <h3 style="
+                  font-size: 16px;
+                  font-weight: 600;
+                  color: var(--text-primary);
+                  margin: 0 0 var(--spacing-md) 0;
+                ">Busybox 可信命令执行</h3>
+                <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px;">
+                  busybox 是静态编译的工具集合，不受系统命令篡改和 LD_PRELOAD 劫持影响。启用后所有 SSH 命令将通过 busybox sh 执行。
+                </p>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                  <span id="settings-bb-status" style="font-size:12px;color:var(--text-secondary);">状态: 检测中...</span>
+                  <span id="settings-bb-path" style="font-size:11px;color:var(--text-secondary);font-family:monospace;"></span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button class="modern-btn primary" id="settings-bb-upload" style="padding:8px 16px;font-size:13px;"
+                    onclick="window.__settingsBusyboxUpload?.()">
+                    上传本地 busybox
+                  </button>
+                  <button class="modern-btn secondary" id="settings-bb-enable" style="padding:8px 16px;font-size:13px;"
+                    onclick="window.__settingsBusyboxEnable?.()">
+                    启用
+                  </button>
+                  <button class="modern-btn secondary" id="settings-bb-disable" style="padding:8px 16px;font-size:13px;"
+                    onclick="window.__settingsBusyboxDisable?.()">
+                    禁用
+                  </button>
+                  <a href="https://busybox.net/downloads/binaries/" target="_blank" rel="noopener"
+                    style="padding:8px 16px;font-size:13px;color:var(--accent-color);text-decoration:none;border:1px solid var(--border-color);border-radius:var(--border-radius);display:inline-flex;align-items:center;">
+                    busybox 下载地址
+                  </a>
+                </div>
+                <div id="settings-bb-log" style="
+                  margin-top:12px;font-size:11px;font-family:monospace;
+                  color:var(--text-secondary);white-space:pre-wrap;
+                  max-height:120px;overflow-y:auto;display:none;
+                  background:var(--bg-tertiary);padding:8px;border-radius:6px;
+                "></div>
+              </div>
+            </div>
+
             <!-- 保存按钮 -->
             <div class="settings-actions" style="
               display: flex;
@@ -1585,43 +1845,64 @@ export class ModernUIRenderer {
               </div>
 
               <div class="setting-item" style="margin-bottom: var(--spacing-md);">
-                <label style="
-                  font-size: 14px;
-                  font-weight: 500;
-                  color: var(--text-primary);
-                  display: block;
-                  margin-bottom: 8px;
-                ">模型</label>
-                <input type="text" id="new-provider-model" placeholder="例如: gpt-4、claude-3等" style="
-                  width: 100%;
-                  padding: 10px 12px;
-                  border: 1px solid var(--border-color);
-                  border-radius: var(--border-radius);
-                  background: var(--bg-primary);
-                  color: var(--text-primary);
-                  font-size: 14px;
-                  box-sizing: border-box;
-                ">
+                <label style="font-size:14px;font-weight:500;color:var(--text-primary);display:block;margin-bottom:8px;">模型</label>
+                <input type="text" id="new-provider-model" list="ai-model-hints" placeholder="选择或输入模型名称" style="
+                  width:100%;padding:10px 12px;border:1px solid var(--border-color);border-radius:var(--border-radius);
+                  background:var(--bg-primary);color:var(--text-primary);font-size:14px;box-sizing:border-box;">
+                <datalist id="ai-model-hints">
+                  <option value="gpt-4o" label="OpenAI GPT-4o（推荐，速度快）">
+                  <option value="gpt-4o-mini" label="OpenAI GPT-4o Mini（最便宜）">
+                  <option value="gpt-4-turbo" label="OpenAI GPT-4 Turbo">
+                  <option value="gpt-3.5-turbo" label="OpenAI GPT-3.5（经济）">
+                  <option value="claude-sonnet-4-20250514" label="Claude Sonnet 4（推荐）">
+                  <option value="claude-3-5-sonnet-20241022" label="Claude 3.5 Sonnet">
+                  <option value="claude-3-haiku-20240307" label="Claude 3 Haiku（最快）">
+                  <option value="deepseek-chat" label="DeepSeek Chat（性价比高）">
+                  <option value="deepseek-reasoner" label="DeepSeek Reasoner（推理）">
+                  <option value="qwen-turbo" label="通义千问 Turbo">
+                  <option value="qwen-plus" label="通义千问 Plus">
+                  <option value="glm-4" label="智谱 GLM-4">
+                </datalist>
+                <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+                  💡 可从列表选择常见模型，也可手动输入自定义模型名称
+                </div>
+              </div>
+
+              <div class="setting-item" style="margin-bottom: var(--spacing-md);">
+                <label style="font-size:14px;font-weight:500;color:var(--text-primary);display:block;margin-bottom:8px;">
+                  API 格式
+                </label>
+                <div style="display:flex;gap:8px;">
+                  <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary);cursor:pointer;">
+                    <input type="radio" name="new-provider-format" value="openai" checked style="accent-color:var(--primary-color);">
+                    OpenAI 兼容（大多数国产模型）
+                  </label>
+                  <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary);cursor:pointer;">
+                    <input type="radio" name="new-provider-format" value="claude" style="accent-color:var(--primary-color);">
+                    Claude 格式
+                  </label>
+                </div>
+                <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+                  💡 DeepSeek/通义千问/智谱/Ollama 等均兼容 OpenAI 格式
+                </div>
               </div>
 
               <div class="setting-item" style="margin-bottom: var(--spacing-lg);">
-                <label style="
-                  font-size: 14px;
-                  font-weight: 500;
-                  color: var(--text-primary);
-                  display: block;
-                  margin-bottom: 8px;
-                ">Base URL</label>
-                <input type="url" id="new-provider-base-url" placeholder="例如: https://api.anthropic.com/v1" style="
-                  width: 100%;
-                  padding: 10px 12px;
-                  border: 1px solid var(--border-color);
-                  border-radius: var(--border-radius);
-                  background: var(--bg-primary);
-                  color: var(--text-primary);
-                  font-size: 14px;
-                  box-sizing: border-box;
-                ">
+                <label style="font-size:14px;font-weight:500;color:var(--text-primary);display:block;margin-bottom:8px;">Base URL</label>
+                <input type="url" id="new-provider-base-url" list="ai-baseurl-hints" placeholder="API 端点地址" style="
+                  width:100%;padding:10px 12px;border:1px solid var(--border-color);border-radius:var(--border-radius);
+                  background:var(--bg-primary);color:var(--text-primary);font-size:14px;box-sizing:border-box;">
+                <datalist id="ai-baseurl-hints">
+                  <option value="https://api.openai.com/v1/chat/completions" label="OpenAI 官方">
+                  <option value="https://api.anthropic.com/v1/messages" label="Claude 官方">
+                  <option value="https://api.deepseek.com/v1/chat/completions" label="DeepSeek 官方">
+                  <option value="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions" label="通义千问">
+                  <option value="https://open.bigmodel.cn/api/paas/v4/chat/completions" label="智谱 GLM">
+                  <option value="http://localhost:11434/v1/chat/completions" label="Ollama 本地">
+                </datalist>
+                <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+                  💡 填入完整 API 地址。不填则使用提供商默认地址
+                </div>
               </div>
 
               <div style="

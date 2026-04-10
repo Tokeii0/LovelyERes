@@ -2,7 +2,10 @@ import { emergencyCategories, type EmergencyCategory, type EmergencyCommand } fr
 import { CommandHistoryManager } from '../utils/commandHistoryManager';
 import { SystemDetector, type SystemInfo } from '../utils/systemDetector';
 import { CommandAdapter } from './commandAdapter';
-import { EmergencyResultModal } from '../ui/emergencyModal';
+import { aiService } from '../ai/aiService';
+import { matchLine, LEVEL_CSS } from './outputHighlightRules';
+import { initOutputContextMenu } from './outputContextMenu';
+import { busyboxManager } from '../core/busyboxManager';
 
 class EmergencyPageManager {
   private categories: EmergencyCategory[] = emergencyCategories;
@@ -11,239 +14,343 @@ class EmergencyPageManager {
   private systemInfo: SystemInfo | null = null;
   private eventsBound = false;
   private debounceTimer: number | null = null;
+  private boundClickHandler: ((e: Event) => void) | null = null;
+  private boundInputHandler: ((e: Event) => void) | null = null;
+
+  private selectedCmd: EmergencyCommand | null = null;
+  private lastOutput = '';
+  private isExecuting = false;
 
   constructor() {
     this.rebuildIndex();
   }
 
-  /**
-   * 处理搜索输入
-   */
-  handleSearch(query: string): void {
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
-    }
+  // ──── Search ────
 
+  handleSearch(query: string): void {
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.debounceTimer = window.setTimeout(() => {
       this.performSearch(query.trim().toLowerCase());
-    }, 300);
+    }, 200);
   }
 
-  /**
-   * 执行搜索过滤
-   */
   private performSearch(query: string): void {
-    const buttons = document.querySelectorAll('.em-cmd-btn');
-    const categories = document.querySelectorAll('.em-category-section');
+    const items = document.querySelectorAll('.em-list-item');
+    const groups = document.querySelectorAll('.em-group');
 
-    buttons.forEach((btn) => {
-      const button = btn as HTMLElement;
-      const nameEl = button.querySelector('.em-cmd-name');
-      const descEl = button.querySelector('.em-cmd-desc');
-      
-      const name = nameEl?.textContent?.toLowerCase() || '';
-      const desc = descEl?.textContent?.toLowerCase() || '';
-      
+    items.forEach(el => {
+      const name = (el.querySelector('.em-item-name')?.textContent || '').toLowerCase();
+      const id = el.getAttribute('data-em-id') || '';
+      const cmd = this.byId.get(id);
+      const desc = cmd?.desc?.toLowerCase() || '';
       const match = !query || name.includes(query) || desc.includes(query);
-      button.style.display = match ? 'flex' : 'none';
+      (el as HTMLElement).style.display = match ? '' : 'none';
     });
 
-    // 处理分类显示
-    categories.forEach((cat) => {
-      const category = cat as HTMLElement;
-      // 如果没有明确设置 style 或者 display: flex 的都算可见（初始状态可能没有 style 属性）
-      const allItems = category.querySelectorAll('.em-cmd-btn');
+    groups.forEach(g => {
+      const visibleItems = g.querySelectorAll('.em-list-item');
       let hasVisible = false;
-      
-      allItems.forEach(item => {
-        const style = (item as HTMLElement).style.display;
-        if (style !== 'none') hasVisible = true;
-      });
-
-      category.style.display = hasVisible ? 'block' : 'none';
+      visibleItems.forEach(i => { if ((i as HTMLElement).style.display !== 'none') hasVisible = true; });
+      (g as HTMLElement).style.display = hasVisible ? '' : 'none';
     });
   }
+
+  // ──── Init ────
 
   private rebuildIndex(): void {
     this.byId.clear();
     for (const cat of this.categories) {
-      for (const item of cat.items) {
-        this.byId.set(item.id, item);
-      }
+      for (const item of cat.items) this.byId.set(item.id, item);
     }
   }
 
-  getCategories(): EmergencyCategory[] {
-    return this.categories;
-  }
+  getCategories(): EmergencyCategory[] { return this.categories; }
 
   async initialize(): Promise<void> {
-    console.log('🔧 EmergencyPageManager.initialize 被调用，initialized:', this.initialized, 'eventsBound:', this.eventsBound);
-
-    if (this.initialized) {
-      console.log('⏭️ EmergencyPageManager 已初始化，跳过');
-      // 即使已初始化，也重新加载账号列表（可能已更新）
-      await this.loadAccountList();
-      // 重新显示系统信息（解决切换页面后显示"检测中..."的问题）
-      if (this.systemInfo) {
-        this.displaySystemInfo();
-      }
-      return;
-    }
-
-    // 检测系统类型
-    await this.detectSystem();
-
-    // 加载账号列表
-    await this.loadAccountList();
-
-    // 只绑定一次事件
+    // 事件绑定只做一次，但要在 DOM 渲染后立即绑定，不等 async 操作
     if (!this.eventsBound) {
-      console.log('🔗 绑定 EmergencyPageManager 事件监听器');
       this.bindEvents();
       this.eventsBound = true;
     }
 
-    this.initialized = true;
+    // 初始化命令输出右键菜单(全局仅绑定一次)
+    initOutputContextMenu();
+
+    // busybox 开关
+    this.setupBusyboxToggle();
+
     (window as any).emergencyPageManager = this;
+
+    if (this.initialized) {
+      await this.loadAccountList();
+      if (this.systemInfo) this.displaySystemInfo();
+      return;
+    }
+
+    // async 操作不阻塞事件绑定
+    await this.detectSystem();
+    await this.loadAccountList();
+
+    this.initialized = true;
   }
 
-  /**
-   * 检测系统类型
-   */
+  deactivate(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    if (this.boundClickHandler) {
+      document.removeEventListener('click', this.boundClickHandler);
+      this.boundClickHandler = null;
+    }
+    if (this.boundInputHandler) {
+      document.removeEventListener('input', this.boundInputHandler);
+      this.boundInputHandler = null;
+    }
+    this.eventsBound = false;
+  }
+
+  // ──── Busybox Toggle ────
+
+  private setupBusyboxToggle(): void {
+    (window as any).__busyboxToggle = async () => {
+      const btn = document.getElementById('em-busybox-btn');
+      const label = document.getElementById('em-busybox-label');
+      const dot = document.getElementById('em-busybox-indicator');
+      if (!btn || !label || !dot) return;
+
+      if (busyboxManager.isEnabled()) {
+        // 关闭
+        await busyboxManager.disable();
+        dot.className = 'em-busybox-dot off';
+        label.textContent = 'Busybox';
+        window.showNotification?.('Busybox 模式已关闭，使用系统原生命令', 'info');
+      } else {
+        // 一键部署并启用
+        label.textContent = '部署中...';
+        dot.className = 'em-busybox-dot loading';
+        try {
+          const log = await busyboxManager.deployAndEnable();
+          dot.className = 'em-busybox-dot on';
+          label.textContent = 'Busybox ON';
+          window.showNotification?.('Busybox 可信模式已启用', 'success');
+          console.log('[busybox]', log);
+        } catch (e) {
+          dot.className = 'em-busybox-dot off';
+          label.textContent = 'Busybox';
+          window.showNotification?.(`Busybox 部署失败: ${e}`, 'error');
+        }
+      }
+    };
+
+    // 初始检测 busybox 状态
+    busyboxManager.detect().then(({ status }) => {
+      const dot = document.getElementById('em-busybox-indicator');
+      const label = document.getElementById('em-busybox-label');
+      if (dot && label) {
+        if (status === 'enabled') {
+          dot.className = 'em-busybox-dot on';
+          label.textContent = 'Busybox ON';
+        } else if (status === 'installed') {
+          dot.className = 'em-busybox-dot installed';
+          label.textContent = 'Busybox (就绪)';
+        }
+      }
+    });
+  }
+
+  // ──── System Detection ────
+
   private async detectSystem(): Promise<void> {
     try {
-      console.log('🔍 开始检测系统类型...');
       this.systemInfo = await SystemDetector.detectSystem();
-      console.log('✅ 系统检测完成:', this.systemInfo);
-
-      // 显示系统信息
       this.displaySystemInfo();
-    } catch (error) {
-      console.error('❌ 系统检测失败:', error);
-      // 使用默认系统信息
+    } catch {
       this.systemInfo = {
-        type: 'generic',
-        name: 'Linux',
-        version: '',
-        prettyName: 'Generic Linux',
-        packageManager: 'unknown',
-        initSystem: 'unknown'
+        type: 'generic', name: 'Linux', version: '',
+        prettyName: 'Generic Linux', packageManager: 'unknown', initSystem: 'unknown'
       };
     }
   }
 
-  /**
-   * 显示系统信息
-   */
   private displaySystemInfo(): void {
     if (!this.systemInfo) return;
-
-    const systemDisplayName = SystemDetector.getSystemDisplayName(this.systemInfo.type);
-    const systemInfoText = `${systemDisplayName} ${this.systemInfo.version}`.trim();
-
-    // 在页面上显示系统信息
-    const systemInfoEl = document.getElementById('detected-system-info');
-    if (systemInfoEl) {
-      systemInfoEl.textContent = systemInfoText;
-      systemInfoEl.title = `系统: ${this.systemInfo.prettyName}\n包管理器: ${this.systemInfo.packageManager}\nInit系统: ${this.systemInfo.initSystem}`;
+    const name = SystemDetector.getSystemDisplayName(this.systemInfo.type);
+    const text = `${name} ${this.systemInfo.version}`.trim();
+    const el = document.getElementById('detected-system-info');
+    if (el) {
+      el.textContent = text;
+      el.title = `${this.systemInfo.prettyName}\n${this.systemInfo.packageManager} / ${this.systemInfo.initSystem}`;
     }
-
-    // 显示通知
-    (window as any).showNotification?.(
-      `已检测到系统: ${systemInfoText}`,
-      'success'
-    );
+    (window as any).showNotification?.(`已检测到系统: ${text}`, 'success');
   }
 
-  /**
-   * 获取系统信息
-   */
-  getSystemInfo(): SystemInfo | null {
-    return this.systemInfo;
-  }
+  getSystemInfo(): SystemInfo | null { return this.systemInfo; }
 
-  /**
-   * 加载账号列表
-   */
+  // ──── Account List ────
+
   private async loadAccountList(): Promise<void> {
     try {
-      // 获取当前所有SSH连接
       const invoke = (window as any).__TAURI__?.core?.invoke;
-      if (!invoke) {
-        console.warn('⚠️ Tauri invoke 不可用，无法加载账号列表');
-        return;
-      }
-
+      if (!invoke) return;
       const connections = await invoke('load_ssh_connections') as any[];
-      if (connections.length === 0) {
-        console.log('📋 没有可用的SSH连接');
-        return;
-      }
+      if (!connections.length) return;
 
-      // 假设使用第一个连接的账号列表（在实际应用中，应该获取当前活动连接）
-      const connection = connections[0];
-      const accounts = connection.accounts || [];
-
-      // 更新账号下拉列表
+      const accounts = connections[0].accounts || [];
       const select = document.getElementById('emergency-account-select') as HTMLSelectElement;
-      if (!select) {
-        console.warn('⚠️ 账号选择下拉框未找到');
-        return;
-      }
+      if (!select) return;
 
-      // 清空现有选项
       select.innerHTML = '<option value="">默认账号</option>';
-
-      // 添加账号选项
-      accounts.forEach((account: any) => {
-        const option = document.createElement('option');
-        option.value = account.username;
-        option.textContent = `${account.username}${account.description ? ` (${account.description})` : ''}${account.is_default ? ' [默认]' : ''}`;
-        select.appendChild(option);
+      accounts.forEach((a: any) => {
+        const opt = document.createElement('option');
+        opt.value = a.username;
+        opt.textContent = `${a.username}${a.description ? ` (${a.description})` : ''}${a.is_default ? ' [默认]' : ''}`;
+        select.appendChild(opt);
       });
-
-      console.log(`✅ 应急命令页面加载了 ${accounts.length} 个账号`);
-    } catch (error) {
-      console.error('❌ 加载账号列表失败:', error);
+    } catch (e) {
+      console.error('加载账号列表失败:', e);
     }
   }
 
+  // ──── Events ────
+
   private bindEvents(): void {
-    document.addEventListener('click', async (event) => {
+    this.boundClickHandler = async (event: Event) => {
+      const target = (event as MouseEvent).target as HTMLElement;
+
+      // Group collapse/expand
+      const groupHeader = target.closest('.em-group-header') as HTMLElement | null;
+      if (groupHeader) {
+        const group = groupHeader.closest('.em-group');
+        if (group) group.classList.toggle('collapsed');
+        return;
+      }
+
+      // List item click
+      const listItem = target.closest('.em-list-item[data-em-id]') as HTMLElement | null;
+      if (listItem) {
+        const id = listItem.getAttribute('data-em-id') || '';
+        this.selectCommand(id);
+        return;
+      }
+
+      // Only handle if on emergency page
       const currentPage = (window as any).app?.stateManager?.getState()?.currentPage;
-      if (currentPage !== 'emergency-commands') {
-        // 不在应急命令页面，不处理
+      if (currentPage !== 'emergency-commands') return;
+
+      if (target.closest('#em-btn-execute')) {
+        await this.executeSelectedCommand();
         return;
       }
-
-      const target = event.target as HTMLElement;
-      const btn = target.closest('[data-em-id]') as HTMLElement | null;
-      if (!btn) {
-        // 不是应急命令按钮，不处理
+      if (target.closest('#em-btn-edit')) {
+        this.toggleEdit();
         return;
       }
-
-      // 防止重复点击
-      if ((btn as HTMLButtonElement).disabled) {
-        console.log('⚠️ 按钮已禁用，忽略点击');
+      if (target.closest('#em-btn-copy')) {
+        this.copyCommand();
         return;
       }
-
-      const id = btn.getAttribute('data-em-id') || '';
-      const cmd = this.byId.get(id);
-      if (!cmd) {
-        console.warn('⚠️ 未找到命令:', id);
+      if (target.closest('#em-btn-ai')) {
+        await this.explainWithAI();
         return;
       }
+    };
+    document.addEventListener('click', this.boundClickHandler);
 
-      console.log('🖱️ 点击执行命令:', cmd.name, id);
-      await this.executeCommand(btn as HTMLButtonElement, cmd);
-    });
+    // Output search
+    this.boundInputHandler = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (target.id === 'em-output-search') {
+        this.highlightOutput((target as HTMLInputElement).value);
+      }
+    };
+    document.addEventListener('input', this.boundInputHandler);
   }
 
-  private async executeCommand(btn: HTMLButtonElement, cmd: EmergencyCommand): Promise<void> {
-    console.log('🚀 开始执行命令:', cmd.name, cmd.id);
+  // ──── Select Command ────
+
+  selectCommand(id: string): void {
+    const cmd = this.byId.get(id);
+    if (!cmd) return;
+
+    this.selectedCmd = cmd;
+
+    // Update active state in sidebar
+    document.querySelectorAll('.em-list-item').forEach(el => {
+      el.classList.toggle('active', el.getAttribute('data-em-id') === id);
+    });
+
+    // Get adapted command (use generic fallback if system not yet detected)
+    const sysInfo = this.systemInfo || {
+      type: 'generic', name: 'Linux', version: '',
+      prettyName: 'Generic Linux', packageManager: 'unknown', initSystem: 'unknown'
+    };
+    const adaptedCmd = CommandAdapter.getAdaptedCommand(cmd, sysInfo);
+
+    // Show detail panel, hide empty state
+    const emptyState = document.getElementById('em-empty-state');
+    const detailPanel = document.getElementById('em-detail-panel');
+    const outputPanel = document.getElementById('em-output-panel');
+
+    if (emptyState) emptyState.style.display = 'none';
+    if (detailPanel) detailPanel.style.display = '';
+    if (outputPanel) outputPanel.style.display = '';
+
+    // Fill detail
+    const titleEl = document.getElementById('em-detail-title');
+    const descEl = document.getElementById('em-detail-desc');
+    const codeEl = document.getElementById('em-detail-code');
+
+    if (titleEl) titleEl.textContent = cmd.name;
+    if (descEl) descEl.textContent = cmd.desc || '';
+    if (codeEl) {
+      codeEl.textContent = adaptedCmd;
+      codeEl.contentEditable = 'false';
+    }
+
+    // Reset edit button text
+    const editBtn = document.getElementById('em-btn-edit');
+    if (editBtn) editBtn.textContent = '编辑命令';
+
+    // Clear previous output
+    const outputContent = document.getElementById('em-output-content');
+    if (outputContent) outputContent.textContent = '';
+    const aiBox = document.getElementById('em-ai-box');
+    if (aiBox) aiBox.style.display = 'none';
+    const searchInput = document.getElementById('em-output-search') as HTMLInputElement;
+    if (searchInput) searchInput.value = '';
+
+    this.lastOutput = '';
+  }
+
+  // ──── Edit / Copy ────
+
+  private toggleEdit(): void {
+    const codeEl = document.getElementById('em-detail-code');
+    const editBtn = document.getElementById('em-btn-edit');
+    if (!codeEl || !editBtn) return;
+
+    const isEditing = codeEl.contentEditable === 'true';
+    codeEl.contentEditable = isEditing ? 'false' : 'true';
+    editBtn.textContent = isEditing ? '编辑命令' : '完成编辑';
+    if (!isEditing) codeEl.focus();
+  }
+
+  private copyCommand(): void {
+    const codeEl = document.getElementById('em-detail-code');
+    if (!codeEl) return;
+    navigator.clipboard.writeText(codeEl.textContent || '');
+    (window as any).showNotification?.('命令已复制', 'success');
+  }
+
+  // ──── Execute ────
+
+  private async executeSelectedCommand(): Promise<void> {
+    if (!this.selectedCmd || this.isExecuting) return;
+
+    const codeEl = document.getElementById('em-detail-code');
+    const command = codeEl?.textContent?.trim() || '';
+    if (!command) return;
 
     const app = (window as any).app;
     const sshManager = app?.sshManager;
@@ -253,92 +360,42 @@ class EmergencyPageManager {
     const hasCoordinatorConn = sshManager?.isConnected?.() ?? false;
     const hasDirectConn = sshConnectionManager?.isConnected?.() ?? false;
 
-    console.log('🔍 连接状态检查:', { hasCoordinatorConn, hasDirectConn });
-
     if (!hasCoordinatorConn && !hasDirectConn) {
-      console.warn('⚠️ 未连接到服务器');
-      (window as any).showNotification?.('未连接到服务器，无法执行命令', 'warning');
+      (window as any).showNotification?.('未连接到服务器', 'warning');
       return;
     }
 
-    // 获取选中的账号
     const accountSelect = document.getElementById('emergency-account-select') as HTMLSelectElement;
     const selectedUsername = accountSelect?.value || '';
-    if (selectedUsername) {
-      console.log('👤 使用账号执行:', selectedUsername);
-    } else {
-      console.log('👤 使用默认账号执行');
-    }
 
-    // 如果还没有检测系统，先检测
-    if (!this.systemInfo) {
-      await this.detectSystem();
-    }
+    // UI: show loading
+    this.isExecuting = true;
+    const executeBtn = document.getElementById('em-btn-execute') as HTMLButtonElement;
+    const outputContent = document.getElementById('em-output-content');
+    const outputPanel = document.getElementById('em-output-panel');
+    const aiBox = document.getElementById('em-ai-box');
 
-    // 根据系统类型适配命令
-    let adaptedCommand: string;
-    try {
-      adaptedCommand = CommandAdapter.getAdaptedCommand(cmd, this.systemInfo!);
-      console.log(`📝 适配后的命令 (${this.systemInfo!.type}):`, adaptedCommand);
-    } catch (error) {
-      console.error('命令适配失败:', error);
-      (window as any).showNotification?.(`命令适配失败: ${error}`, 'error');
-      return;
-    }
+    if (executeBtn) executeBtn.disabled = true;
+    if (outputPanel) outputPanel.style.display = '';
+    if (aiBox) aiBox.style.display = 'none';
+    if (outputContent) outputContent.innerHTML = '<div class="em-loading"><div class="em-loading-spinner"></div>执行中...</div>';
 
-    // Helper: timeout wrapper to avoid indefinite pending state
     const withTimeout = <T>(p: Promise<T>, ms = 30000): Promise<T> => {
       return new Promise<T>((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error('执行超时，请稍后重试或关闭终端重试')), ms);
-        p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+        const t = setTimeout(() => reject(new Error('执行超时')), ms);
+        p.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
       });
     };
 
-    btn.disabled = true;
-    const originalHTML = btn.innerHTML;
-    // 暂时替换内容，保持结构
-    const nameEl = btn.querySelector('.em-cmd-name');
-    const descEl = btn.querySelector('.em-cmd-desc');
-    if (nameEl) nameEl.textContent = '执行中...';
-    if (descEl) descEl.textContent = '请稍候';
-
     let output = '';
-    let displayedCommand = adaptedCommand;
-
-    const showResult = () => {
-      const title = `${cmd.name} · ${cmd.id}`;
-      CommandHistoryManager.saveCommand(displayedCommand, title, output ?? '');
-      let modal = (window as any).emergencyResultModal;
-      if (!modal) {
-        console.warn('⚠️ emergencyResultModal 未初始化，正在创建...');
-        try {
-          modal = new EmergencyResultModal();
-          (window as any).emergencyResultModal = modal;
-          console.log('✅ EmergencyResultModal 创建成功');
-        } catch (e) {
-          console.error('❌ 创建 EmergencyResultModal 失败:', e);
-        }
-      }
-      if (modal?.show) {
-        console.log('🪟 显示命令结果模态框');
-        modal.show(title, displayedCommand, output ?? '');
-      } else {
-        console.error('❌ 无法显示命令结果模态框，modal:', modal);
-      }
-    };
+    let displayedCommand = command;
 
     try {
-      // 优先使用应急响应专用通道（使用仪表盘 session，速度快）
       if (hasDirectConn && tauriInvoke) {
-        console.log('🚨 [应急响应] 使用专用 session 快速执行命令');
         try {
-          const invokeParams: any = { command: adaptedCommand };
-          if (selectedUsername) {
-            invokeParams.username = selectedUsername;
-            console.log('👤 使用指定账号执行:', selectedUsername);
-          }
-          const result: any = await withTimeout(tauriInvoke('ssh_execute_emergency_command_direct', invokeParams));
-          console.log('✅ [应急响应] 专用 session 执行完成');
+          const params: any = { command };
+          if (selectedUsername) params.username = selectedUsername;
+          const result: any = await withTimeout(tauriInvoke('ssh_execute_emergency_command_direct', params));
           if (result && typeof result === 'object') {
             if (typeof result.command === 'string' && result.command.length > 0) displayedCommand = result.command;
             if (typeof result.output === 'string') output = result.output;
@@ -350,43 +407,113 @@ class EmergencyPageManager {
             output = String(result ?? '');
           }
         } catch (e: any) {
-          console.error('❌ [应急响应] 专用 session 执行失败:', e);
-          // 如果专用 session 失败，尝试使用协调器通道
           if (hasCoordinatorConn && sshManager?.executeCommand) {
-            console.warn('⚠️ 专用 session 失败，尝试切换到协调器通道...');
-            (window as any).showNotification?.('正在切换备用执行通道...', 'warning');
-            // 注意：协调器通道暂不支持账号参数，使用默认账号
-            output = await withTimeout(sshManager.executeCommand(adaptedCommand), 20000);
+            output = await withTimeout(sshManager.executeCommand(command), 20000);
           } else {
             throw e;
           }
         }
       } else if (hasCoordinatorConn && sshManager?.executeCommand) {
-        console.log('📡 使用协调器通道执行命令');
-        // 注意：协调器通道暂不支持账号参数，使用默认账号
-        if (selectedUsername) {
-          console.warn('⚠️ 协调器通道暂不支持账号切换，将使用默认账号执行');
-          (window as any).showNotification?.('当前通道不支持账号切换，使用默认账号', 'warning');
-        }
-        output = await withTimeout(sshManager.executeCommand(adaptedCommand));
+        output = await withTimeout(sshManager.executeCommand(command));
       } else {
         throw new Error('当前连接状态不支持执行命令');
       }
 
-      console.log('✅ 命令执行完成，输出长度:', output.length);
       (window as any).showNotification?.('命令执行完成', 'success');
-      showResult();
     } catch (err) {
-      console.error('❌ 执行应急命令失败', err);
       output = `命令执行失败: ${err}`;
       (window as any).showNotification?.(String(output), 'error');
-      showResult();
-    } finally {
-      console.log('🔄 恢复按钮状态');
-      btn.innerHTML = originalHTML;
-      btn.disabled = false;
     }
 
+    // Save to history
+    const title = `${this.selectedCmd.name} · ${this.selectedCmd.id}`;
+    CommandHistoryManager.saveCommand(displayedCommand, title, output ?? '');
+
+    // Display output with smart highlighting
+    this.lastOutput = output;
+    if (outputContent) {
+      outputContent.innerHTML = this.applyHighlight(output || '(无输出)');
+    }
+
+    // Scroll to top
+    const scrollEl = document.getElementById('em-output-scroll');
+    if (scrollEl) scrollEl.scrollTop = 0;
+
+    this.isExecuting = false;
+    if (executeBtn) executeBtn.disabled = false;
+  }
+
+  // ──── 智能高亮引擎 ────
+
+  private escHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /** 对命令输出的每一行应用规则匹配，标记可疑项 */
+  private applyHighlight(output: string): string {
+    return output.split('\n').map(rawLine => {
+      const escaped = this.escHtml(rawLine);
+      const rule = matchLine(rawLine);
+      if (rule) {
+        const cls = LEVEL_CSS[rule.level];
+        return `<span class="hl-line ${cls}" title="${this.escHtml(rule.description)}">${escaped}<span class="hl-badge">${this.escHtml(rule.label)}</span></span>`;
+      }
+      return escaped;
+    }).join('\n');
+  }
+
+  // ──── Output Search Highlight ────
+
+  private highlightOutput(query: string): void {
+    const contentEl = document.getElementById('em-output-content');
+    if (!contentEl || !this.lastOutput) return;
+
+    if (!query) {
+      // 无搜索词时，恢复智能高亮
+      contentEl.innerHTML = this.applyHighlight(this.lastOutput);
+      return;
+    }
+
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${escaped})`, 'gi');
+    // 先应用智能高亮，再叠加搜索高亮
+    const highlighted = this.applyHighlight(this.lastOutput);
+    contentEl.innerHTML = highlighted.replace(regex, '<mark>$1</mark>');
+  }
+
+  // ──── AI Explain ────
+
+  private async explainWithAI(): Promise<void> {
+    if (!this.lastOutput || !this.selectedCmd) {
+      (window as any).showNotification?.('请先执行命令', 'info');
+      return;
+    }
+
+    const aiBox = document.getElementById('em-ai-box');
+    const aiContent = document.getElementById('em-ai-content');
+    if (!aiBox || !aiContent) return;
+
+    aiBox.style.display = '';
+    aiContent.textContent = '正在分析...';
+
+    try {
+      const codeEl = document.getElementById('em-detail-code');
+      const command = codeEl?.textContent || '';
+      const prompt = `请分析以下 Linux 命令的输出结果，用中文简要说明发现了什么，有哪些需要注意的安全问题：\n\n命令: ${command}\n\n输出:\n${this.lastOutput.substring(0, 8000)}`;
+
+      await aiService.generateConciseSolutionStream(
+        this.selectedCmd.name,
+        prompt,
+        'info',
+        undefined,
+        (chunk: string) => { aiContent.textContent = chunk; }
+      );
+      if (!aiContent.textContent || aiContent.textContent === '正在分析...') {
+        aiContent.textContent = '分析完成';
+      }
+    } catch (e) {
+      aiContent.textContent = `AI 分析失败: ${e}`;
+    }
   }
 }
 

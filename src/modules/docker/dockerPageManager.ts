@@ -1,4 +1,5 @@
 import { dockerManager } from './dockerManager';
+import { showConfirm } from '../ui/confirmDialog';
 import type {
   DockerContainerSummary,
   DockerCopyDirection,
@@ -60,6 +61,8 @@ export class DockerPageManager {
   private fileModal = new DockerFileModal();
   private globalEventsBound = false;
   private searchDebounceTimer: number | null = null;
+  private boundClickHandler: ((e: Event) => void) | null = null;
+  private boundInputHandler: ((e: Event) => void) | null = null;
 
   // ============================================================
   // Lifecycle
@@ -77,6 +80,7 @@ export class DockerPageManager {
       this.renderDisconnected();
       return;
     }
+    if (this.loading) return; // 防止并发刷新
 
     try {
       this.loading = true;
@@ -103,6 +107,19 @@ export class DockerPageManager {
 
   deactivate(): void {
     this.stopAutoRefresh();
+    if (this.searchDebounceTimer) {
+      clearTimeout(this.searchDebounceTimer);
+      this.searchDebounceTimer = null;
+    }
+    if (this.boundClickHandler) {
+      document.removeEventListener('click', this.boundClickHandler);
+      this.boundClickHandler = null;
+    }
+    if (this.boundInputHandler) {
+      document.removeEventListener('input', this.boundInputHandler);
+      this.boundInputHandler = null;
+    }
+    this.globalEventsBound = false;
   }
 
   // ============================================================
@@ -211,13 +228,17 @@ export class DockerPageManager {
 
   private async fetchTabData(): Promise<void> {
     switch (this.currentTab) {
-      case 'overview':
-        [this.overviewStats, this.diskUsage, this.systemInfo] = await Promise.all([
+      case 'overview': {
+        const results = await Promise.allSettled([
           dockerManager.getOverviewStats(),
           dockerManager.getDiskUsage(),
           dockerManager.getSystemInfo()
         ]);
+        this.overviewStats = results[0].status === 'fulfilled' ? results[0].value : null;
+        this.diskUsage = results[1].status === 'fulfilled' ? results[1].value : null;
+        this.systemInfo = results[2].status === 'fulfilled' ? results[2].value : null;
         break;
+      }
       case 'images':
         this.images = await dockerManager.listImages();
         break;
@@ -643,20 +664,21 @@ export class DockerPageManager {
     this.globalEventsBound = true;
 
     // Global click delegation
-    document.addEventListener('click', (event) => {
+    this.boundClickHandler = (event: Event) => {
       const currentPage = (window as any).app?.stateManager?.getState()?.currentPage;
       if (currentPage !== 'docker') return;
 
-      const targetEl = event.target as HTMLElement;
+      const targetEl = (event as MouseEvent).target as HTMLElement;
       const actionBtn = targetEl.closest('[data-docker-action]') as HTMLElement | null;
       if (!actionBtn) return;
 
       const action = actionBtn.getAttribute('data-docker-action') || '';
       this.handleAction(action, actionBtn);
-    });
+    };
+    document.addEventListener('click', this.boundClickHandler);
 
     // Search input
-    document.addEventListener('input', (e) => {
+    this.boundInputHandler = (e: Event) => {
       const target = e.target as HTMLElement;
       if (target.matches('[data-docker-action="search"]')) {
         if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
@@ -666,7 +688,8 @@ export class DockerPageManager {
           this.renderFullPage();
         }, SEARCH_DEBOUNCE);
       }
-    });
+    };
+    document.addEventListener('input', this.boundInputHandler);
   }
 
   // ============================================================
@@ -777,14 +800,14 @@ export class DockerPageManager {
   // ============================================================
 
   private async removeImage(ref: string): Promise<void> {
-    if (!confirm(`确定要删除镜像 ${ref}？`)) return;
+    if (!(await showConfirm({ title: '删除镜像', message: `确定要删除镜像 ${ref}？`, dangerous: true }))) return;
     const r = await dockerManager.removeImage(ref);
     window.showNotification?.(r.success ? '镜像已删除' : `删除失败: ${r.output}`, r.success ? 'success' : 'error');
     if (r.success) { this.images = await dockerManager.listImages(); this.renderFullPage(); }
   }
 
   private async pruneImages(): Promise<void> {
-    if (!confirm('确定要清理所有悬空（dangling）镜像？')) return;
+    if (!(await showConfirm({ title: '清理镜像', message: '确定要清理所有悬空（dangling）镜像？', dangerous: true }))) return;
     const r = await dockerManager.pruneImages();
     window.showNotification?.(r.success ? '清理完成' : `清理失败: ${r.output}`, r.success ? 'success' : 'error');
     if (r.success) await this.refresh(false);
@@ -796,28 +819,28 @@ export class DockerPageManager {
   }
 
   private async removeNetwork(name: string): Promise<void> {
-    if (!confirm(`确定要删除网络 ${name}？`)) return;
+    if (!(await showConfirm({ title: '删除网络', message: `确定要删除网络 ${name}？`, dangerous: true }))) return;
     const r = await dockerManager.removeNetwork(name);
     window.showNotification?.(r.success ? '网络已删除' : `删除失败: ${r.output}`, r.success ? 'success' : 'error');
     if (r.success) { this.networks = await dockerManager.listNetworks(); this.renderFullPage(); }
   }
 
   private async pruneNetworks(): Promise<void> {
-    if (!confirm('确定要清理所有未使用的网络？')) return;
+    if (!(await showConfirm({ title: '清理网络', message: '确定要清理所有未使用的网络？', dangerous: true }))) return;
     const r = await dockerManager.pruneNetworks();
     window.showNotification?.(r.success ? '清理完成' : `清理失败`, r.success ? 'success' : 'error');
     if (r.success) await this.refresh(false);
   }
 
   private async removeVolume(name: string): Promise<void> {
-    if (!confirm(`确定要删除卷 ${name}？此操作不可恢复！`)) return;
+    if (!(await showConfirm({ title: '删除卷', message: `确定要删除卷 ${name}？此操作不可恢复！`, dangerous: true }))) return;
     const r = await dockerManager.removeVolume(name);
     window.showNotification?.(r.success ? '卷已删除' : `删除失败: ${r.output}`, r.success ? 'success' : 'error');
     if (r.success) { this.volumes = await dockerManager.listVolumes(); this.renderFullPage(); }
   }
 
   private async pruneVolumes(): Promise<void> {
-    if (!confirm('确定要清理所有未使用的卷？此操作不可恢复！')) return;
+    if (!(await showConfirm({ title: '清理卷', message: '确定要清理所有未使用的卷？此操作不可恢复！', dangerous: true }))) return;
     const r = await dockerManager.pruneVolumes();
     window.showNotification?.(r.success ? '清理完成' : `清理失败`, r.success ? 'success' : 'error');
     if (r.success) await this.refresh(false);
@@ -825,7 +848,7 @@ export class DockerPageManager {
 
   private async pruneSystem(all: boolean): Promise<void> {
     const msg = all ? '确定要深度清理？将删除所有未使用的镜像、容器、网络和卷！' : '确定要清理未使用的资源？';
-    if (!confirm(msg)) return;
+    if (!(await showConfirm({ title: '系统清理', message: msg, dangerous: true }))) return;
     const r = await dockerManager.systemPrune(all);
     window.showNotification?.(r.success ? '系统清理完成' : `清理失败: ${r.output}`, r.success ? 'success' : 'error');
     if (r.success) await this.refresh(false);
@@ -848,7 +871,7 @@ export class DockerPageManager {
   // Auto Refresh
   // ============================================================
 
-  private toggleAutoRefresh(button: HTMLElement): void {
+  private toggleAutoRefresh(_button: HTMLElement): void {
     this.autoRefreshEnabled = !this.autoRefreshEnabled;
     if (this.autoRefreshEnabled) {
       this.startAutoRefresh();

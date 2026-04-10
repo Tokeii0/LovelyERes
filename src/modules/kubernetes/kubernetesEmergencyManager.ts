@@ -19,8 +19,17 @@ export class KubernetesEmergencyManager {
         'public.ecr.aws', 'registry.cn-'
     ];
 
+    private static readonly MAX_ACTION_HISTORY = 100;
+
     constructor(manager: KubernetesManager) {
         this.manager = manager;
+    }
+
+    private recordAction(action: K8sEmergencyAction): void {
+        this.actionHistory.push(action);
+        if (this.actionHistory.length > KubernetesEmergencyManager.MAX_ACTION_HISTORY) {
+            this.actionHistory.length = KubernetesEmergencyManager.MAX_ACTION_HISTORY;
+        }
     }
 
     // ============================================================
@@ -50,7 +59,7 @@ export class KubernetesEmergencyManager {
             action.error = String(e);
         }
 
-        this.actionHistory.unshift(action);
+        this.recordAction(action);
         return action;
     }
 
@@ -62,7 +71,7 @@ export class KubernetesEmergencyManager {
         if (!policyName) {
             action.status = 'failed';
             action.error = `No isolation policy found for ${key}`;
-            this.actionHistory.unshift(action);
+            this.recordAction(action);
             return action;
         }
 
@@ -81,7 +90,7 @@ export class KubernetesEmergencyManager {
             action.error = String(e);
         }
 
-        this.actionHistory.unshift(action);
+        this.recordAction(action);
         return action;
     }
 
@@ -112,7 +121,7 @@ export class KubernetesEmergencyManager {
             action.error = String(e);
         }
 
-        this.actionHistory.unshift(action);
+        this.recordAction(action);
         return action;
     }
 
@@ -134,7 +143,7 @@ export class KubernetesEmergencyManager {
             action.error = String(e);
         }
 
-        this.actionHistory.unshift(action);
+        this.recordAction(action);
         return action;
     }
 
@@ -156,7 +165,7 @@ export class KubernetesEmergencyManager {
             action.error = String(e);
         }
 
-        this.actionHistory.unshift(action);
+        this.recordAction(action);
         return action;
     }
 
@@ -183,7 +192,7 @@ export class KubernetesEmergencyManager {
             action.error = String(e);
         }
 
-        this.actionHistory.unshift(action);
+        this.recordAction(action);
         return action;
     }
 

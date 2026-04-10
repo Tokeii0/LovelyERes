@@ -66,7 +66,7 @@ pub async fn ssh_connect_direct(
     }
 
     let auth = auth_type.as_deref().unwrap_or("password");
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
 
     let result = match auth {
         "key" => {
@@ -109,7 +109,7 @@ pub async fn ssh_test_connection(
     println!("🔍 [ssh_test_connection] 开始测试连接: {}@{}:{}", username, host, port);
 
     // 复用 AppState 的 manager，避免创建新的 Tokio runtime
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
 
     let result = match auth_type.as_str() {
         "key" => {
@@ -142,7 +142,7 @@ pub async fn ssh_test_connection(
 
 #[tauri::command]
 pub async fn ssh_disconnect_direct(state: State<'_, AppState>) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager.disconnect().map_err(|e| e.to_string())
 }
 
@@ -154,22 +154,46 @@ pub async fn start_packet_capture(
     window: tauri::Window,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager.start_packet_capture(&interface, filter, count, window)
 }
 
 #[tauri::command]
 pub async fn stop_packet_capture(state: State<'_, AppState>) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager.stop_packet_capture()
 }
 
 #[tauri::command]
-pub async fn get_network_interfaces(state: State<'_, AppState>) -> Result<String, String> {
-    let manager = state.ssh_manager.lock().unwrap();
+pub async fn get_network_interfaces(state: State<'_, AppState>) -> Result<Vec<packet_capture::NetworkInterface>, String> {
+    let manager = &state.ssh_manager;
     let cmd = packet_capture::generate_list_interfaces_command();
-    let output = manager.execute_command(&cmd)?;
-    Ok(output.output)
+    let output = manager.execute_command(&cmd)
+        .map_err(|e| format!("获取网络接口失败: {}", e))?;
+
+    let mut interfaces: Vec<packet_capture::NetworkInterface> = Vec::new();
+    let mut index = 0u32;
+
+    for line in output.output.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 {
+            let name = parts[0].to_string();
+            let ip = parts[1].split('/').next().unwrap_or(parts[1]).to_string();
+
+            if let Some(existing) = interfaces.iter_mut().find(|i| i.name == name) {
+                if !existing.ips.contains(&ip) {
+                    existing.ips.push(ip);
+                }
+            } else {
+                index += 1;
+                interfaces.push(packet_capture::NetworkInterface {
+                    name, index, mac: None, ips: vec![ip],
+                });
+            }
+        }
+    }
+
+    Ok(interfaces)
 }
 
 #[tauri::command]
@@ -178,7 +202,7 @@ pub async fn ssh_execute_command_direct(
     username: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<ssh_manager_russh::TerminalOutput, String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     // 使用仪表盘专用 session 快速执行（右键菜单命令都是快速查询）
     let result = manager.execute_dashboard_command_as_user(&command, username.as_deref()).map_err(|e| e.to_string());
 
@@ -190,7 +214,7 @@ pub async fn ssh_execute_dashboard_command_direct(
     command: String,
     state: State<'_, AppState>,
 ) -> Result<ssh_manager_russh::TerminalOutput, String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     let result = manager.execute_dashboard_command(&command).map_err(|e| e.to_string());
 
     result
@@ -202,7 +226,7 @@ pub async fn ssh_execute_batch_commands(
     commands: Vec<String>,
     state: State<'_, AppState>,
 ) -> Result<Vec<ssh_manager_russh::BatchCommandResult>, String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     let results = manager.execute_batch_commands(&commands)?;
     
     Ok(results.into_iter().enumerate().map(|(i, r)| {
@@ -229,7 +253,7 @@ pub async fn ssh_execute_emergency_command_direct(
     username: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<ssh_manager_russh::TerminalOutput, String> {
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     let result = if username.is_some() {
         manager.execute_dashboard_command_as_user(&command, username.as_deref()).map_err(|e| e.to_string())
     } else {
@@ -247,7 +271,7 @@ pub async fn execute_detection_command(
 ) -> Result<ssh_manager_russh::TerminalOutput, String> {
     println!("🤖 [AI命令执行] 开始执行: {}", command);
 
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     let result = manager.execute_dashboard_command(&command).map_err(|e| {
         println!("❌ [AI命令执行] 执行失败: {}", e);
         e.to_string()
@@ -274,7 +298,7 @@ pub async fn execute_detection_command(
 pub async fn test_ssh_performance(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
 
     let test_commands = vec![
         ("echo test", "基础响应测试"),
@@ -315,7 +339,7 @@ pub async fn test_ssh_performance(
 pub async fn diagnose_shell_performance(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
 
     let mut results = Vec::new();
     results.push("=== Shell性能诊断 ===".to_string());
@@ -378,7 +402,7 @@ pub async fn detect_system_type(state: State<'_, AppState>) -> Result<serde_json
 
     println!("🔍 [后端] 开始系统类型检测...");
 
-    let mut manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
 
     if !manager.is_connected() {
         println!("❌ [后端] 没有活动的 SSH 连接");
@@ -535,7 +559,7 @@ pub async fn ssh_create_terminal_session(
     // 获取终端创建锁，确保原子性
     let _creation_lock = state.ssh_terminal_creation_lock.lock().unwrap();
 
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
 
     if !manager.is_connected() {
         return Err("没有活动的 SSH 连接".to_string());
@@ -559,7 +583,7 @@ pub async fn ssh_close_terminal_session(
     terminal_id: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
 
     match manager.close_terminal_session(&terminal_id) {
         Ok(_) => {
@@ -578,7 +602,7 @@ pub async fn ssh_close_terminal_session(
 pub async fn ssh_close_all_terminal_sessions(
     state: State<'_, AppState>,
 ) -> Result<usize, String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
 
     match manager.close_all_terminal_sessions() {
         Ok(_) => {
@@ -599,7 +623,7 @@ pub async fn ssh_send_input(
     data: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
 
     match manager.send_terminal_input(&terminal_id, data.as_bytes().to_vec()) {
         Ok(_) => Ok(()),
@@ -617,7 +641,7 @@ pub async fn ssh_get_completion(
     #[allow(unused_variables)] cursor_position: usize,
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
 
     // 基本的命令补全逻辑
     let words: Vec<&str> = input.split_whitespace().collect();
@@ -695,7 +719,7 @@ pub async fn ssh_get_completion(
 pub async fn get_bash_environment_info(
     state: State<'_, AppState>,
 ) -> Result<types::BashEnvironmentInfo, String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager
         .get_bash_environment_info()
         .map_err(|e| e.to_string())
@@ -706,7 +730,7 @@ pub async fn get_command_completion(
     input: String,
     state: State<'_, AppState>,
 ) -> Result<types::CommandCompletion, String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     manager
         .get_command_completion(&input)
         .map_err(|e| e.to_string())
@@ -716,7 +740,66 @@ pub async fn get_command_completion(
 pub async fn ssh_get_connection_status(
     state: State<'_, AppState>,
 ) -> Result<Option<ssh_manager_russh::SSHConnectionStatus>, String> {
-    let manager = state.ssh_manager.lock().unwrap();
+    let manager = &state.ssh_manager;
     let status = manager.get_connection_status();
     Ok(status)
+}
+
+// ═══ busybox 管理 ═══
+
+/// 检测远端是否已有 busybox，返回路径或空
+#[tauri::command]
+pub async fn busybox_detect(state: State<'_, AppState>) -> Result<String, String> {
+    let manager = &state.ssh_manager;
+    let cmd = r#"for p in /tmp/busybox /usr/local/bin/busybox /usr/bin/busybox /bin/busybox; do [ -x "$p" ] && echo "$p" && exit 0; done; which busybox 2>/dev/null || echo ''"#;
+    let output = manager.execute_dashboard_command(cmd)
+        .map_err(|e| format!("检测 busybox 失败: {}", e))?;
+    Ok(output.output.trim().to_string())
+}
+
+/// 从本地上传 busybox 静态二进制到远端 /tmp/busybox
+#[tauri::command]
+pub async fn busybox_install(
+    local_path: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let manager = &state.ssh_manager;
+    let remote_path = "/tmp/busybox";
+
+    // 1. 通过 SFTP 上传本地文件到远端
+    manager.upload_file(&local_path, remote_path)
+        .map_err(|e| format!("上传 busybox 失败: {}", e))?;
+
+    // 2. 添加执行权限并验证
+    let verify = manager.execute_dashboard_command(
+        &format!("chmod +x {} && {} --help 2>&1 | head -1 && echo 'INSTALL_OK:{}'", remote_path, remote_path, remote_path)
+    ).map_err(|e| format!("验证 busybox 失败: {}", e))?;
+
+    Ok(verify.output)
+}
+
+/// 启用 busybox 模式（所有后续命令优先用 busybox sh 执行）
+#[tauri::command]
+pub async fn busybox_enable(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let manager = &state.ssh_manager;
+    manager.set_busybox_path(Some(path));
+    Ok(())
+}
+
+/// 禁用 busybox 模式（恢复使用系统原生命令）
+#[tauri::command]
+pub async fn busybox_disable(state: State<'_, AppState>) -> Result<(), String> {
+    let manager = &state.ssh_manager;
+    manager.set_busybox_path(None);
+    Ok(())
+}
+
+/// 获取当前 busybox 状态
+#[tauri::command]
+pub async fn busybox_status(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    let manager = &state.ssh_manager;
+    Ok(manager.get_busybox_path())
 }

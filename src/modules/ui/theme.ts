@@ -57,29 +57,12 @@ export class ThemeManager {
   }
 
   /**
-   * 动态加载主题CSS文件
+   * 主题CSS已通过 main.css 静态导入，无需动态加载。
+   * 主题通过 [data-theme="xxx"] 选择器在 CSS 文件中切换。
    */
-  private loadThemeCSS(theme: string): void {
-    // 移除之前的主题CSS
-    const existingThemeLinks = document.querySelectorAll('link[data-theme-css]');
-    existingThemeLinks.forEach(link => link.remove());
-
-    // 加载新的主题CSS
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = `/src/css/themes/${theme}.css`;
-    link.setAttribute('data-theme-css', theme);
-
-    // 添加加载完成事件监听
-    link.onload = () => {
-      console.log(`✅ 主题CSS已加载: ${theme}`);
-    };
-
-    link.onerror = () => {
-      console.error(`❌ 主题CSS加载失败: ${theme}`);
-    };
-
-    document.head.appendChild(link);
+  private loadThemeCSS(_theme: string): void {
+    // 所有主题 CSS 在 main.css → themes/index.css 中静态导入
+    // 切换通过 body[data-theme] 属性自动生效，无需动态 <link>
   }
 
   /**

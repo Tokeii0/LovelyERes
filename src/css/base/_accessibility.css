@@ -16,4 +16,13 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* 品牌呼吸动画豁免 */
+  .connection-prompt-logo,
+  .connection-prompt-logo::after,
+  .logo-container,
+  .logo-container::after {
+    animation-duration: 3s !important;
+    animation-iteration-count: infinite !important;
+  }
 }

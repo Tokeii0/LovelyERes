@@ -509,3 +509,71 @@ fn get_default_fonts() -> Vec<String> {
         "Poppins".to_string(),
     ]
 }
+
+// ==================== AI 代理命令 ====================
+
+/// AI 请求代理（绕过 CORS）— 非流式
+#[tauri::command]
+pub async fn ai_proxy_request(
+    url: String,
+    headers: std::collections::HashMap<String, String>,
+    body: String,
+) -> Result<crate::ai_proxy::AIProxyResponse, String> {
+    crate::ai_proxy::proxy_ai_request(crate::ai_proxy::AIProxyRequest {
+        url, headers, body,
+    }).await
+}
+
+/// AI 流式请求代理（绕过 CORS）— 通过事件逐块发送
+#[tauri::command]
+pub async fn ai_proxy_stream(
+    url: String,
+    headers: std::collections::HashMap<String, String>,
+    body: String,
+    window: tauri::Window,
+) -> Result<(), String> {
+    use tauri::Emitter;
+
+    let client = reqwest::Client::new();
+    let mut builder = client.post(&url);
+
+    for (key, value) in &headers {
+        builder = builder.header(key.as_str(), value.as_str());
+    }
+
+    let response = builder
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| format!("AI 请求发送失败: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status().as_u16();
+        let err_body = response.text().await.unwrap_or_default();
+        let _ = window.emit("ai_stream_error", serde_json::json!({
+            "status": status,
+            "body": err_body,
+        }));
+        return Err(format!("AI API 请求失败: {} - {}", status, err_body));
+    }
+
+    // 逐块读取并发送事件
+    use futures::StreamExt;
+    let mut stream = response.bytes_stream();
+
+    while let Some(chunk) = stream.next().await {
+        match chunk {
+            Ok(bytes) => {
+                let text = String::from_utf8_lossy(&bytes).to_string();
+                let _ = window.emit("ai_stream_chunk", &text);
+            }
+            Err(e) => {
+                let _ = window.emit("ai_stream_error", format!("{}", e));
+                break;
+            }
+        }
+    }
+
+    let _ = window.emit("ai_stream_done", ());
+    Ok(())
+}

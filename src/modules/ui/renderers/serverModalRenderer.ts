@@ -4,13 +4,9 @@
  * server list, add server form, and connection prompt rendering.
  */
 
-import type { AppState } from '../../core/app';
 import {
-  BookOpen,
   CloseOne,
-  Code,
   Connection,
-  Dashboard,
   Earth,
   FileText,
   FolderOpen,
@@ -22,11 +18,9 @@ import {
   Plus,
   Refresh,
   SettingConfig,
-  SettingTwo,
   Shield,
   System,
   User,
-  Whale,
 } from '@icon-park/svg';
 
 export class ServerModalRenderer {
@@ -486,10 +480,20 @@ export class ServerModalRenderer {
     return `
       <div class="connection-prompt">
         <div class="connection-prompt-inner">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" style="margin-bottom: 12px; opacity: 0.4;">
-            <path d="M12 2L14.09 8.26L20.18 8.63L15.54 12.74L17.12 19.04L12 15.77L6.88 19.04L8.46 12.74L3.82 8.63L9.91 8.26L12 2Z" fill="var(--text-secondary)" stroke="var(--text-secondary)" stroke-width="1" stroke-linejoin="round"/>
-          </svg>
-          <p style="font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 0 0 16px 0;">LovelyRes</p>
+          <div class="connection-prompt-logo">
+            <svg width="80" height="80" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="cp-s" x1=".1" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#f9a8d4"/><stop offset="1" stop-color="#c4b5fd"/></linearGradient>
+                <linearGradient id="cp-h" x1=".36" y1="0" x2=".5" y2=".5"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+              </defs>
+              <g transform="rotate(-15 64 62)">
+                <path d="M64,16 L75.8,47.8 L109.2,48.8 L83.2,68.8 L93,101.2 L64,83.2 L35,101.2 L44.8,68.8 L18.8,48.8 L52.2,47.8 Z" fill="url(#cp-s)" stroke="url(#cp-s)" stroke-width="12" stroke-linejoin="round" paint-order="stroke fill"/>
+                <path d="M64,16 L75.8,47.8 L109.2,48.8 L83.2,68.8 L93,101.2 L64,83.2 L35,101.2 L44.8,68.8 L18.8,48.8 L52.2,47.8 Z" fill="url(#cp-h)" stroke="url(#cp-h)" stroke-width="12" stroke-linejoin="round" paint-order="stroke fill"/>
+              </g>
+            </svg>
+          </div>
+          <p style="font-size: 17px; font-weight: 600; color: var(--text-primary); margin: 0 0 6px 0;">LovelyRes</p>
+          <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 20px 0;">Linux Emergency Response Tool</p>
           <button class="modern-btn primary" onclick="window.showServerModal()" style="padding: 8px 24px; font-size: 13px;">
             ${Connection({ theme: 'outline', size: '16', fill: 'currentColor' })}
             <span>连接服务器</span>

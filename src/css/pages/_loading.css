@@ -93,3 +93,37 @@
   flex-direction: column;
   align-items: center;
 }
+
+.connection-prompt-logo {
+  margin-bottom: 16px;
+  position: relative;
+  animation: cpBreathe 3s ease-in-out infinite;
+}
+
+.connection-prompt-logo::after {
+  content: '';
+  position: absolute;
+  inset: -28px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(249, 168, 212, 0.18) 0%, rgba(196, 181, 253, 0.08) 50%, transparent 72%);
+  animation: cpGlow 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes cpBreathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+    filter: drop-shadow(0 4px 16px rgba(196, 181, 253, 0.2));
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+    filter: drop-shadow(0 8px 32px rgba(249, 168, 212, 0.4));
+  }
+}
+
+@keyframes cpGlow {
+  0%, 100% { opacity: 0.3; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.3); }
+}

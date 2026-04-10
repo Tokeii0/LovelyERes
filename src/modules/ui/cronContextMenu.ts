@@ -290,19 +290,19 @@ export class CronContextMenu extends BaseContextMenu {
       },
       'command': {
         command: `echo "=== 执行命令 ==="; echo ""; echo "${command}"; echo ""; echo "=== 命令分析 ==="; which ${command.split(' ')[0]} 2>/dev/null || echo "命令路径: 未找到或不在PATH中"`,
-        title: `执行命令 - ${command.substring(0, 50)}...`,
+        title: `执行命令 - ${command.substring(0, 120)}...`,
         actionName: '查看执行命令'
       },
 
       // 任务管理
       'run-now': {
         command: `echo "立即执行计划任务"; echo ""; echo "用户: ${user}"; echo "命令: ${command}"; echo ""; echo "执行中..."; echo ""; ${command}`,
-        title: `立即执行 - ${command.substring(0, 50)}...`,
+        title: `立即执行 - ${command.substring(0, 120)}...`,
         actionName: '立即执行任务'
       },
       'test-command': {
         command: `echo "=== 测试命令 ==="; echo ""; echo "命令: ${command}"; echo ""; echo "检查命令语法..."; bash -n -c "${command}" 2>&1 && echo "✓ 语法检查通过" || echo "✗ 语法错误"; echo ""; echo "⚠️ 提示：这只是语法检查，实际执行可能需要其他条件"`,
-        title: `测试命令 - ${command.substring(0, 50)}...`,
+        title: `测试命令 - ${command.substring(0, 120)}...`,
         actionName: '测试命令'
       },
       'view-crontab': {
@@ -314,7 +314,7 @@ export class CronContextMenu extends BaseContextMenu {
       // 执行历史
       'execution-logs': {
         command: `echo "=== 计划任务执行日志 ==="; echo ""; echo "搜索关键词: ${command.split(' ')[0]}"; echo ""; grep CRON /var/log/syslog 2>/dev/null | grep "${user}" | grep "${command.split(' ')[0]}" | tail -50 || journalctl -u cron 2>/dev/null | grep "${user}" | grep "${command.split(' ')[0]}" | tail -50 || echo "无执行日志或日志文件不可访问"`,
-        title: `执行日志 - ${command.substring(0, 50)}...`,
+        title: `执行日志 - ${command.substring(0, 120)}...`,
         actionName: '查看执行日志'
       },
       'recent-runs': {
@@ -348,7 +348,7 @@ export class CronContextMenu extends BaseContextMenu {
       // 安全检查
       'security-check': {
         command: `echo "=== 命令安全性检查 ==="; echo ""; echo "命令: ${command}"; echo ""; echo "1. 检查危险命令:"; if echo "${command}" | grep -qE "rm -rf|dd if=|mkfs|fdisk|>/dev/"; then echo "⚠️ 包含危险命令"; else echo "✓ 未发现明显危险命令"; fi; echo ""; echo "2. 检查网络操作:"; if echo "${command}" | grep -qE "wget|curl|nc|telnet|ssh"; then echo "⚠️ 包含网络操作命令"; else echo "✓ 未检测到网络操作"; fi; echo ""; echo "3. 检查权限提升:"; if echo "${command}" | grep -qE "sudo|su -"; then echo "⚠️ 包含权限提升命令"; else echo "✓ 未检测到权限提升"; fi`,
-        title: `安全检查 - ${command.substring(0, 50)}...`,
+        title: `安全检查 - ${command.substring(0, 120)}...`,
         actionName: '命令安全性检查'
       },
       'check-path': {
@@ -358,7 +358,7 @@ export class CronContextMenu extends BaseContextMenu {
       },
       'suspicious-check': {
         command: `echo "=== 可疑命令检测 ==="; echo ""; echo "命令: ${command}"; echo ""; echo "检测项:"; echo ""; echo "1. 编码/混淆:"; if echo "${command}" | grep -qE "base64|eval|exec"; then echo "⚠️ 可能包含编码或混淆"; else echo "✓ 未发现编码"; fi; echo ""; echo "2. 反弹shell:"; if echo "${command}" | grep -qE "bash -i|/bin/sh|nc.*-e"; then echo "⚠️ 可能是反弹shell"; else echo "✓ 未发现反弹shell特征"; fi; echo ""; echo "3. 下载执行:"; if echo "${command}" | grep -qE "curl.*\\||wget.*\\||chmod\\+x"; then echo "⚠️ 可能下载并执行文件"; else echo "✓ 未发现下载执行"; fi`,
-        title: `可疑检测 - ${command.substring(0, 50)}...`,
+        title: `可疑检测 - ${command.substring(0, 120)}...`,
         actionName: '可疑命令检测'
       },
 
@@ -370,7 +370,7 @@ export class CronContextMenu extends BaseContextMenu {
       },
       'export': {
         command: `echo "=== 导出任务配置 ==="; echo ""; echo "用户: ${user}"; echo "时间表: ${schedule}"; echo "命令: ${command}"; echo ""; echo "JSON格式:"; echo "{"; echo '  "user": "'${user}'",'; echo '  "schedule": "'${schedule}'",'; echo '  "command": "'${command}'"'; echo "}"`,
-        title: `导出配置 - ${command.substring(0, 50)}...`,
+        title: `导出配置 - ${command.substring(0, 120)}...`,
         actionName: '导出任务配置'
       },
     }

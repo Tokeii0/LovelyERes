@@ -1,5 +1,8 @@
 /* LovelyRes - Modular CSS Entry Point */
 
+/* 0. Themes (all loaded statically, switched via data-theme attribute) */
+@import './themes/index.css';
+
 /* 1. Design Tokens */
 @import './tokens/_index.css';
 

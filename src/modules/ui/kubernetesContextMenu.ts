@@ -3,6 +3,7 @@ import {
     FileText, Log, Terminal, Delete, Shield, Lock,
     Copy, SettingConfig, Analysis, Refresh, CloseOne
 } from '@icon-park/svg';
+import { showConfirm } from './confirmDialog';
 
 const icon = (fn: any, size = '14') => fn({ theme: 'outline', size, fill: 'currentColor' });
 
@@ -94,7 +95,7 @@ export class KubernetesContextMenu extends BaseContextMenu {
             if (pod) {
                 const emergencyMgr = (window as any).app?.kubernetesEmergencyManager;
                 if (emergencyMgr) {
-                    const confirmed = confirm(`确定要隔离 Pod "${this.currentName}"？`);
+                    const confirmed = await showConfirm({ title: '隔离 Pod', message: `确定要隔离 Pod "${this.currentName}"？`, dangerous: true });
                     if (confirmed) {
                         const result = await emergencyMgr.isolatePod(this.currentName, this.currentNamespace, pod.labels);
                         if (result.status === 'completed') {

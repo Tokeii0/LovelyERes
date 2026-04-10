@@ -18,6 +18,8 @@ pub mod theme_manager;
 pub mod types;
 pub mod window_manager;
 pub mod commands;
+pub mod ai_proxy;
+pub mod db_manager;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -26,7 +28,9 @@ use tauri::Manager;
 pub struct AppState {
     pub settings: Mutex<settings::AppSettings>,
     pub ssh_connection_manager: Mutex<ssh_connection_manager::SSHConnectionManager>,
-    pub ssh_manager: Mutex<ssh_manager_russh::SSHManagerRussh>,
+    /// SSH Manager — internally synchronized via Mutex<mpsc::Sender> + worker thread.
+    /// No outer Mutex needed, allowing concurrent command execution.
+    pub ssh_manager: ssh_manager_russh::SSHManagerRussh,
     pub ssh_terminal_creation_lock: Mutex<()>,
 }
 
@@ -39,7 +43,7 @@ pub fn run() {
         .manage(AppState {
             settings: Mutex::new(settings::load_settings().unwrap_or_default()),
             ssh_connection_manager: Mutex::new(ssh_connection_manager::SSHConnectionManager::new().expect("Failed to initialize SSH Connection Manager")),
-            ssh_manager: Mutex::new(ssh_manager_russh::SSHManagerRussh::new()),
+            ssh_manager: ssh_manager_russh::SSHManagerRussh::new(),
             ssh_terminal_creation_lock: Mutex::new(()),
         })
         .invoke_handler(tauri::generate_handler![
@@ -55,6 +59,8 @@ pub fn run() {
             commands::misc_commands::read_settings_file,
             commands::misc_commands::write_settings_file,
             commands::misc_commands::get_system_fonts,
+            commands::misc_commands::ai_proxy_request,
+            commands::misc_commands::ai_proxy_stream,
             commands::misc_commands::get_rsa_public_key,
             // SSH commands
             commands::ssh_commands::load_ssh_connections,
@@ -83,6 +89,11 @@ pub fn run() {
             commands::ssh_commands::get_bash_environment_info,
             commands::ssh_commands::get_command_completion,
             commands::ssh_commands::ssh_get_connection_status,
+            commands::ssh_commands::busybox_detect,
+            commands::ssh_commands::busybox_install,
+            commands::ssh_commands::busybox_enable,
+            commands::ssh_commands::busybox_disable,
+            commands::ssh_commands::busybox_status,
             // SFTP commands
             commands::sftp_commands::sftp_list_files,
             commands::sftp_commands::sftp_read_file,
@@ -127,6 +138,19 @@ pub fn run() {
             detection_commands::detect_history_audit,
             detection_commands::detect_ntp_config,
             detection_commands::detect_dns_config,
+            // 竞赛级高级检测命令
+            detection_commands::detect_webshell,
+            detection_commands::detect_rootkit,
+            detection_commands::detect_persistence,
+            detection_commands::detect_log_tamper,
+            detection_commands::detect_network_backdoor,
+            detection_commands::detect_enhanced_user,
+            detection_commands::detect_hidden_cron,
+            detection_commands::detect_ssh_key_audit,
+            detection_commands::detect_timestomp,
+            detection_commands::detect_enhanced_process,
+            detection_commands::detect_bin_tamper,
+            detection_commands::detect_immutable_files,
             // Docker 命令（来自 docker_commands 模块）
             docker_commands::docker_list_containers,
             docker_commands::docker_container_action,
@@ -142,6 +166,18 @@ pub fn run() {
             commands::log_commands::read_journalctl_log,
             commands::log_commands::list_log_files,
             commands::log_commands::get_log_file_info,
+            commands::log_commands::analyze_multi_log,
+            commands::log_commands::search_ioc_in_logs,
+            // 数据库管理
+            commands::db_commands::db_detect,
+            commands::db_commands::db_execute_sql,
+            commands::db_commands::db_list_databases,
+            commands::db_commands::db_list_tables,
+            commands::db_commands::db_list_columns,
+            commands::db_commands::db_list_users,
+            commands::db_commands::db_service_control,
+            commands::db_commands::db_backup,
+            commands::db_commands::db_get_stats,
             // 设备信息
             device_info::get_device_uuid,
         ])

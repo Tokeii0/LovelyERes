@@ -4,9 +4,55 @@
  */
 
 import { sshConnectionManager } from '../remote/sshConnectionManager';
+import { showConfirm } from './confirmDialog';
+import { busyboxManager } from '../core/busyboxManager';
 
 function getApp(): any {
   return (window as any).app;
+}
+
+/**
+ * 连接成功后弹窗：选择命令执行模式
+ * - 默认模式: 使用系统原生命令
+ * - Busybox 模式: 上传本地 busybox 静态二进制，所有命令通过 busybox sh 执行
+ */
+async function promptBusyboxMode(): Promise<void> {
+  // 先检测远端是否已有 busybox
+  const { status } = await busyboxManager.detect();
+
+  if (status === 'enabled') return; // 已启用，不再提示
+
+  const useBusybox = await showConfirm({
+    title: '选择命令执行模式',
+    message: status === 'installed'
+      ? `检测到远端已有 busybox (${busyboxManager.getPath()})。\n\n启用 Busybox 可信模式？所有命令将通过 busybox sh 执行，不受系统命令篡改和 LD_PRELOAD 劫持影响。`
+      : '是否启用 Busybox 可信命令执行模式？\n\n启用后需要选择本地 busybox 静态二进制文件上传到远端服务器。所有命令将通过 busybox sh 执行，不受系统命令篡改和 LD_PRELOAD 劫持影响。\n\n如果不需要可信执行环境（如日常运维），选择"取消"使用默认模式。',
+    confirmText: status === 'installed' ? '启用 Busybox' : '上传并启用 Busybox',
+    cancelText: '使用默认模式',
+  });
+
+  if (!useBusybox) return;
+
+  try {
+    if (status === 'installed') {
+      // 远端已有，直接启用
+      await busyboxManager.enable();
+      window.showNotification?.('Busybox 可信模式已启用', 'success');
+    } else {
+      // 需要从本地上传
+      window.showNotification?.('请选择本地 busybox 文件...', 'info');
+      await busyboxManager.uploadFromLocal();
+      await busyboxManager.enable();
+      window.showNotification?.('Busybox 上传并启用成功', 'success');
+    }
+  } catch (e: any) {
+    if (e?.message?.includes('未选择文件')) {
+      window.showNotification?.('已取消，使用默认模式', 'info');
+    } else {
+      console.warn('busybox 部署失败:', e);
+      window.showNotification?.(`Busybox 部署失败: ${e}，将使用默认模式`, 'warning');
+    }
+  }
 }
 
 function showServerModal(): void {
@@ -171,7 +217,9 @@ async function connectServer(serverId: string): Promise<void> {
 
     try {
       let password = '';
-      if (connection.authType === 'password' && connection.encryptedPassword) {
+      const authType = connection.authType || 'password';
+
+      if (authType === 'password' && connection.encryptedPassword) {
         try {
           stateManager?.setLoadingStep?.('解密凭据...');
           password = await (window as any).__TAURI__.core.invoke('decrypt_password', {
@@ -187,7 +235,15 @@ async function connectServer(serverId: string): Promise<void> {
 
       stateManager?.setLoadingStep?.(`正在连接 ${connection.host}:${connection.port}...`);
       (window as any).refreshDashboard?.();
-      await sshConnectionManager.connect(connection.host, connection.port, connection.username, password);
+      await sshConnectionManager.connect(
+        connection.host,
+        connection.port,
+        connection.username,
+        password,
+        authType,
+        connection.keyPath,
+        connection.keyPassphrase
+      );
 
       stateManager?.setLoadingStep?.('连接成功，正在初始化...');
       (window as any).refreshDashboard?.();
@@ -206,9 +262,12 @@ async function connectServer(serverId: string): Promise<void> {
         console.warn('⚠️ 获取系统信息失败，但SSH连接成功:', error);
       }
 
-      (window as any).refreshServerList();
-      (window as any).refreshSidebar();
-      (window as any).refreshDashboard();
+      // 批量刷新 UI，合并到单个 rAF 避免多次全量渲染造成卡顿
+      requestAnimationFrame(() => {
+        (window as any).refreshServerList?.();
+        (window as any).refreshSidebar?.();
+        (window as any).refreshDashboard?.();
+      });
 
       const currentPage = (window as any).app?.stateManager?.getState()?.currentPage;
       if (currentPage === 'dashboard' || currentPage === 'system-info') {
@@ -216,9 +275,12 @@ async function connectServer(serverId: string): Promise<void> {
       }
 
       (window as any).showNotification?.(`已成功连接到 ${connection.name}`, 'success');
+
+      // 连接成功后询问是否启用 busybox 可信模式
+      promptBusyboxMode();
     } finally {
       stateManager?.setLoading(false);
-      (window as any).refreshDashboard?.();
+      requestAnimationFrame(() => (window as any).refreshDashboard?.());
     }
   } catch (error) {
     console.error('❌ 连接服务器失败:', error);
@@ -534,7 +596,7 @@ export function initServerModalManager(): void {
 
   (window as any).deleteServer = async (serverId: string) => {
     try {
-      const userConfirmed = window.confirm ? window.confirm('确定要删除这个服务器配置吗？') : true;
+      const userConfirmed = await showConfirm({ title: '删除服务器', message: '确定要删除这个服务器配置吗？', dangerous: true });
       if (userConfirmed) {
         const sshManager = getApp()?.sshManager;
         if (sshManager) {
@@ -549,20 +611,19 @@ export function initServerModalManager(): void {
 
   (window as any).refreshServerList = async () => {
     try {
-      const modal = document.getElementById('server-modal');
       const app = getApp();
-      if (modal && app) {
-        const wasVisible = modal.style.display === 'flex';
-        const renderer = app.stateManager?.getUIRenderer?.() ?? (window as any).app?.getStateManager?.()?.getUIRenderer?.();
-        if (renderer) {
-          const newModalHTML = renderer.renderServerModal();
-          modal.outerHTML = newModalHTML;
-          if (wasVisible) {
-            const newModal = document.getElementById('server-modal');
-            if (newModal) newModal.style.display = 'flex';
-          }
-        }
+      const renderer = app?.stateManager?.getUIRenderer?.()
+        ?? (window as any).app?.getStateManager?.()?.getUIRenderer?.();
+      if (!renderer) return;
+
+      // 仅更新服务器列表内容，不替换整个 modal（outerHTML 会销毁表单和事件监听）
+      const serverListEl = document.getElementById('server-list');
+      if (serverListEl && renderer.renderServerList) {
+        serverListEl.innerHTML = renderer.renderServerList();
       }
+
+      // 同时更新侧边栏连接卡片
+      (window as any).refreshSidebar?.();
     } catch (error) {
       console.error('刷新服务器列表失败:', error);
     }

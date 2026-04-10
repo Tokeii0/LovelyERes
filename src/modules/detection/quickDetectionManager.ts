@@ -8,21 +8,14 @@ import { ReportExporter } from './reportExporter';
 import { DetectionModules } from './detectionModules';
 import { DetectionReportRenderer } from './detectionReportRenderer';
 import { DetectionAIManager } from './detectionAIManager';
-
-// 评分规则常量
-const SCORING_RULES = {
-  CRITICAL_DEDUCTION: 40,
-  HIGH_DEDUCTION: 20,
-  MEDIUM_DEDUCTION: 10,
-  LOW_DEDUCTION: 5
-};
+import { showAlert, showConfirm } from '../ui/confirmDialog';
 
 // 检测项目类型
 export interface DetectionItem {
   id: string;
   name: string;
   description: string;
-  category: 'security' | 'performance';
+  category: 'security' | 'performance' | 'competition';
   status: 'pending' | 'running' | 'completed' | 'failed';
   result?: DetectionResult;
 }
@@ -68,17 +61,31 @@ export class QuickDetectionManager {
   private currentReport: DetectionReport | null = null;
   private detectionHistory: DetectionReport[] = [];
   private isRunning: boolean = false;
+  private cancelled: boolean = false;
   private progressCallback?: (progress: number, current: string) => void;
 
   private detectionModules: DetectionModules;
   private reportRenderer: DetectionReportRenderer;
   private aiManager: DetectionAIManager;
 
+  /** 并发组大小 — 同时发出的检测请求数 */
+  private static readonly CONCURRENCY = 3;
+
   constructor() {
     this.detectionModules = new DetectionModules();
     this.reportRenderer = new DetectionReportRenderer();
     this.aiManager = new DetectionAIManager();
     this.loadHistory();
+  }
+
+  /**
+   * 取消正在进行的扫描
+   */
+  cancelScan(): void {
+    if (this.isRunning) {
+      this.cancelled = true;
+      window.showNotification?.('正在取消检测...', 'info');
+    }
   }
 
   /**
@@ -90,6 +97,7 @@ export class QuickDetectionManager {
     }
 
     this.isRunning = true;
+    this.cancelled = false;
     this.showProgressPanel();
 
     // 获取选中的检测项
@@ -117,49 +125,70 @@ export class QuickDetectionManager {
     const startTime = Date.now();
 
     try {
-      // 逐个执行检测
-      for (const itemId of itemsToRun) {
-        this.updateProgress(
-          (completedItems / totalItems) * 100,
-          `正在执行: ${this.getCheckName(itemId)}`
-        );
-
-        this.updateCheckStatus(itemId, 'running');
-
-        try {
-          const result = await this.executeDetection(itemId);
-          this.updateCheckStatus(itemId, 'completed', result);
-
-          // 添加到报告
-          this.currentReport.items.push({
-            id: itemId,
-            name: this.getCheckName(itemId),
-            description: this.getCheckDescription(itemId),
-            category: this.getCheckCategory(itemId),
-            status: 'completed',
-            result
-          });
-
-          // 更新摘要
-          if (result.findings.length > 0) {
-            result.findings.forEach(finding => {
-              this.currentReport!.summary[finding.severity]++;
-            });
-          }
-        } catch (error) {
-          console.error(`检测失败: ${itemId}`, error);
-          this.updateCheckStatus(itemId, 'failed');
-
-          this.currentReport.items.push({
-            id: itemId,
-            name: this.getCheckName(itemId),
-            description: this.getCheckDescription(itemId),
-            category: this.getCheckCategory(itemId),
-            status: 'failed'
-          });
+      // 分批并行执行检测（每批 CONCURRENCY 个同时执行）
+      for (let i = 0; i < itemsToRun.length; i += QuickDetectionManager.CONCURRENCY) {
+        if (this.cancelled) {
+          window.showNotification?.('检测已取消', 'warning');
+          break;
         }
 
-        completedItems++;
+        const batch = itemsToRun.slice(i, i + QuickDetectionManager.CONCURRENCY);
+
+        // 标记当前批次为运行中
+        batch.forEach(itemId => this.updateCheckStatus(itemId, 'running'));
+        this.updateProgress(
+          (completedItems / totalItems) * 100,
+          `正在执行: ${batch.map(id => this.getCheckName(id)).join(', ')}`
+        );
+
+        // 批次内并行执行
+        const results = await Promise.allSettled(
+          batch.map(async (itemId) => {
+            const result = await this.executeDetection(itemId);
+            return { itemId, result };
+          })
+        );
+
+        // 处理批次结果
+        for (const settled of results) {
+          if (this.cancelled) break;
+
+          if (settled.status === 'fulfilled') {
+            const { itemId, result } = settled.value;
+            this.updateCheckStatus(itemId, 'completed', result);
+
+            this.currentReport.items.push({
+              id: itemId,
+              name: this.getCheckName(itemId),
+              description: this.getCheckDescription(itemId),
+              category: this.getCheckCategory(itemId),
+              status: 'completed',
+              result
+            });
+
+            if (result.findings.length > 0) {
+              result.findings.forEach(finding => {
+                this.currentReport!.summary[finding.severity]++;
+              });
+            }
+          } else {
+            // rejected
+            const itemId = batch[results.indexOf(settled)];
+            console.error(`检测失败: ${itemId}`, settled.reason);
+            this.updateCheckStatus(itemId, 'failed');
+
+            this.currentReport.items.push({
+              id: itemId,
+              name: this.getCheckName(itemId),
+              description: this.getCheckDescription(itemId),
+              category: this.getCheckCategory(itemId),
+              status: 'failed'
+            });
+          }
+
+          completedItems++;
+        }
+
         this.updateProgress((completedItems / totalItems) * 100, '');
       }
 
@@ -176,6 +205,7 @@ export class QuickDetectionManager {
       return this.currentReport;
     } finally {
       this.isRunning = false;
+      this.cancelled = false;
       this.hideProgressPanel();
     }
   }
@@ -260,6 +290,44 @@ export class QuickDetectionManager {
         break;
       case 'dns-config':
         result = await this.runDNSConfigCheck();
+        break;
+
+      // 竞赛级检测
+      case 'webshell-scan':
+        result = await this.detectionModules.runWebshellScan();
+        break;
+      case 'rootkit-scan':
+        result = await this.detectionModules.runRootkitScan();
+        break;
+      case 'persistence-scan':
+        result = await this.detectionModules.runPersistenceScan();
+        break;
+      case 'log-tamper':
+        result = await this.detectionModules.runLogTamperCheck();
+        break;
+      case 'network-backdoor':
+        result = await this.detectionModules.runNetworkBackdoorScan();
+        break;
+      case 'enhanced-user':
+        result = await this.detectionModules.runEnhancedUserAudit();
+        break;
+      case 'hidden-cron':
+        result = await this.detectionModules.runHiddenCronCheck();
+        break;
+      case 'ssh-key-audit':
+        result = await this.detectionModules.runSSHKeyAudit();
+        break;
+      case 'timestomp-check':
+        result = await this.detectionModules.runTimestompCheck();
+        break;
+      case 'enhanced-process':
+        result = await this.detectionModules.runEnhancedProcessAnalysis();
+        break;
+      case 'bin-tamper':
+        result = await this.detectionModules.runBinTamperScan();
+        break;
+      case 'immutable-files':
+        result = await this.detectionModules.runImmutableFilesScan();
         break;
 
       // 性能检测
@@ -387,18 +455,6 @@ export class QuickDetectionManager {
     return this.detectionModules.runDNSConfigCheck();
   }
 
-  private processBasicDetectionResult(result: any, name: string): DetectionResult {
-    return this.detectionModules.processBasicDetectionResult(result, name);
-  }
-
-  private isHighRiskPort(port: number): boolean {
-    return this.detectionModules.isHighRiskPort(port);
-  }
-
-  private createErrorResult(message: string): DetectionResult {
-    return this.detectionModules.createErrorResult(message);
-  }
-
   // ========== Report Renderer 委托方法 ==========
 
   private updateProgress(progress: number, currentTask: string): void {
@@ -422,10 +478,6 @@ export class QuickDetectionManager {
     this.reportRenderer.showSummaryPanel(report);
   }
 
-  private getSeverityColor(severity: string, opacity: number): string {
-    return this.reportRenderer.getSeverityColor(severity, opacity);
-  }
-
   private getScoreColor(score: number): string {
     return this.reportRenderer.getScoreColor(score);
   }
@@ -433,38 +485,6 @@ export class QuickDetectionManager {
   viewReport(): void {
     this.reportRenderer.setCurrentReport(this.currentReport);
     this.reportRenderer.viewReport();
-  }
-
-  private ensureReportModalExists(): void {
-    this.reportRenderer.ensureReportModalExists();
-  }
-
-  private renderReportModal(): string {
-    return this.reportRenderer.renderReportModal();
-  }
-
-  private fillReportData(report: DetectionReport): void {
-    this.reportRenderer.fillReportData(report);
-  }
-
-  private renderReportDetails(report: DetectionReport): void {
-    this.reportRenderer.renderReportDetails(report);
-  }
-
-  private renderReportCategory(title: string, items: DetectionItem[]): string {
-    return this.reportRenderer.renderReportCategory(title, items);
-  }
-
-  private renderReportItem(item: DetectionItem): string {
-    return this.reportRenderer.renderReportItem(item);
-  }
-
-  private getScoreLabel(score: number): string {
-    return this.reportRenderer.getScoreLabel(score);
-  }
-
-  private getSeverityLabel(severity: string): string {
-    return this.reportRenderer.getSeverityLabel(severity);
   }
 
   closeReportModal(): void {
@@ -476,19 +496,11 @@ export class QuickDetectionManager {
     this.reportRenderer.showRawOutput(itemId);
   }
 
-  private syntaxHighlight(json: string): string {
-    return this.reportRenderer.syntaxHighlight(json);
-  }
-
   // ========== AI Manager 委托方法 ==========
 
   async generateAISolutionStream(title: string, description: string, severity: string, containerId: string): Promise<void> {
     this.aiManager.currentReport = this.currentReport;
     return this.aiManager.generateAISolutionStream(title, description, severity, containerId);
-  }
-
-  private renderStreamContent(element: HTMLElement, text: string): void {
-    this.aiManager.renderStreamContent(element, text);
   }
 
   private showConfirm(options: {
@@ -499,36 +511,12 @@ export class QuickDetectionManager {
     cancelText?: string;
     dangerous?: boolean;
   }): Promise<boolean> {
-    return this.aiManager.showConfirm(options);
-  }
-
-  private async showConfirmDialog(command: string): Promise<boolean> {
-    return this.aiManager.showConfirmDialog(command);
-  }
-
-  private async executeCommand(command: string): Promise<void> {
-    return this.aiManager.executeCommand(command);
-  }
-
-  private escapeHtml(text: string): string {
-    return this.aiManager.escapeHtml(text);
+    return showConfirm(options);
   }
 
   async generateAISolution(title: string, description: string, severity: string = 'medium'): Promise<void> {
     this.aiManager.currentReport = this.currentReport;
     return this.aiManager.generateAISolution(title, description, severity);
-  }
-
-  private showLoadingModal(message: string): HTMLElement {
-    return this.aiManager.showLoadingModal(message);
-  }
-
-  private closeLoadingModal(modal: HTMLElement): void {
-    this.aiManager.closeLoadingModal(modal);
-  }
-
-  private showSolutionModal(title: string, description: string, solution: any): void {
-    this.aiManager.showSolutionModal(title, description, solution);
   }
 
   // ========== 评分计算（保留在本类中） ==========
@@ -571,11 +559,19 @@ export class QuickDetectionManager {
       this.detectionHistory = this.detectionHistory.slice(0, 10);
     }
 
-    // 保存到 localStorage
+    // 保存到 localStorage（移除 rawOutput 防止超出 5MB 限制）
     try {
-      localStorage.setItem('detection-history', JSON.stringify(this.detectionHistory));
+      const compactHistory = this.detectionHistory.map(r => ({
+        ...r,
+        items: r.items.map(item => ({
+          ...item,
+          result: item.result ? { ...item.result, rawOutput: undefined } : item.result,
+        })),
+      }));
+      localStorage.setItem('detection-history', JSON.stringify(compactHistory));
     } catch (error) {
       console.error('保存历史记录失败:', error);
+      window.showNotification?.('检测历史保存失败，可能存储空间不足', 'warning');
     }
 
     // 更新 UI
@@ -683,7 +679,7 @@ export class QuickDetectionManager {
    */
   exportReport(): void {
     if (!this.currentReport) {
-      alert('暂无可导出的报告');
+      showAlert({ title: '提示', message: '暂无可导出的报告' });
       return;
     }
 
@@ -691,7 +687,7 @@ export class QuickDetectionManager {
       ReportExporter.exportAsHTML(this.currentReport);
     } catch (e) {
       console.error('❌ 导出报告失败:', e);
-      alert('导出报告失败，请重试');
+      showAlert({ title: '错误', message: '导出报告失败，请重试', type: 'error' });
     }
   }
 
@@ -745,18 +741,27 @@ export class QuickDetectionManager {
    */
   private getCheckName(id: string): string {
     const names: Record<string, string> = {
-      'port-scan': '端口安全扫描',
-      'user-audit': '用户权限审计',
-      'backdoor-scan': '后门检测',
-      'process-analysis': '可疑进程分析',
-      'file-permission': '文件权限检测',
-      'ssh-audit': 'SSH 安全审计',
-      'log-analysis': '日志安全分析',
-      'firewall-check': '防火墙状态检查',
-      'cpu-test': 'CPU 压力测试',
-      'memory-test': '内存性能测试',
-      'disk-test': '磁盘 I/O 测试',
-      'network-test': '网络性能测试'
+      'port-scan': '端口安全扫描', 'user-audit': '用户权限审计',
+      'backdoor-scan': '后门检测', 'process-analysis': '可疑进程分析',
+      'file-permission': '文件权限检测', 'ssh-audit': 'SSH 安全审计',
+      'log-analysis': '日志安全分析', 'firewall-check': '防火墙状态检查',
+      'password-policy': '密码策略检查', 'sudo-audit': 'Sudo 配置审计',
+      'pam-config': 'PAM 配置检查', 'account-lockout': '账号锁定策略',
+      'selinux-status': 'SELinux/AppArmor', 'kernel-params': '内核参数检查',
+      'system-updates': '系统补丁状态', 'unnecessary-services': '不必要服务',
+      'auto-start-services': '自启动服务审计', 'audit-config': '审计配置检查',
+      'history-audit': '历史命令审计', 'ntp-config': 'NTP 配置检查',
+      'dns-config': 'DNS 配置检查',
+      // 竞赛级检测
+      'webshell-scan': 'Webshell 扫描', 'rootkit-scan': 'Rootkit 检测',
+      'persistence-scan': '持久化机制扫描', 'log-tamper': '日志篡改检测',
+      'network-backdoor': '网络后门检测', 'enhanced-user': '增强用户审计',
+      'hidden-cron': '隐藏计划任务', 'ssh-key-audit': 'SSH 密钥审计',
+      'timestomp-check': '时间戳篡改检测', 'enhanced-process': '增强进程分析',
+      'bin-tamper': '命令篡改检测(bin/sbin)', 'immutable-files': '文件不可变属性检测',
+      // 性能检测
+      'cpu-test': 'CPU 压力测试', 'memory-test': '内存性能测试',
+      'disk-test': '磁盘 I/O 测试', 'network-test': '网络性能测试',
     };
     return names[id] || id;
   }
@@ -766,18 +771,25 @@ export class QuickDetectionManager {
    */
   private getCheckDescription(id: string): string {
     const descriptions: Record<string, string> = {
-      'port-scan': '检测开放端口和高危服务',
-      'user-audit': '检查用户权限和空密码账号',
-      'backdoor-scan': '扫描 Webshell 和计划任务',
-      'process-analysis': '识别异常进程和网络连接',
-      'file-permission': '检查敏感文件和 SUID 文件',
-      'ssh-audit': '检查 SSH 配置安全性',
-      'log-analysis': '分析异常登录和暴力破解',
-      'firewall-check': '检查防火墙规则配置',
-      'cpu-test': '测试 CPU 性能和频率',
-      'memory-test': '测试内存读写速度',
-      'disk-test': '测试磁盘读写性能',
-      'network-test': '测试带宽和延迟'
+      'port-scan': '检测开放端口和高危服务', 'user-audit': '检查用户权限和空密码账号',
+      'backdoor-scan': '扫描后门和可疑计划任务', 'process-analysis': '识别异常进程和网络连接',
+      'file-permission': '检查敏感文件和 SUID 文件', 'ssh-audit': '检查 SSH 配置安全性',
+      'log-analysis': '分析异常登录和暴力破解', 'firewall-check': '检查防火墙规则配置',
+      'password-policy': '检查密码复杂度和有效期策略', 'sudo-audit': '检查 NOPASSWD 等危险配置',
+      'pam-config': '检查 PAM 认证模块配置', 'account-lockout': '检查登录失败锁定策略',
+      'selinux-status': '检查强制访问控制状态', 'kernel-params': '检查安全相关内核参数',
+      'system-updates': '检查可用安全补丁', 'unnecessary-services': '检查危险服务 (telnet/ftp)',
+      'auto-start-services': '审计自启动服务数量', 'audit-config': '检查 auditd 审计配置',
+      'history-audit': '扫描命令历史中的可疑操作', 'ntp-config': '检查时间同步配置',
+      'dns-config': '检查 DNS 解析配置',
+      'webshell-scan': '扫描 Web 目录中的 Webshell 文件', 'rootkit-scan': '检测隐藏进程、内核模块、LD_PRELOAD',
+      'persistence-scan': '全量扫描持久化机制 (cron/bashrc/systemd/rc.local)', 'log-tamper': '检测日志被清空、删除、篡改的证据',
+      'network-backdoor': '检测反弹 Shell、C2 连接、可疑监听', 'enhanced-user': 'UID 冲突、全用户历史命令、sudo 组异常',
+      'hidden-cron': '深度扫描所有 cron 目录和 at 队列', 'ssh-key-audit': '审计所有 SSH 密钥和 sshd 配置',
+      'timestomp-check': '检测 mtime 与 ctime 异常的文件', 'enhanced-process': '扩大进程扫描范围，检测可疑二进制',
+      'bin-tamper': '检测 /bin /sbin 中被替换为脚本的命令(命令劫持)', 'immutable-files': '检测 chattr +i 不可变文件(rootkit隐藏手段)',
+      'cpu-test': '测试 CPU 性能和频率', 'memory-test': '测试内存读写速度',
+      'disk-test': '测试磁盘读写性能', 'network-test': '测试带宽和延迟',
     };
     return descriptions[id] || '';
   }
@@ -785,9 +797,44 @@ export class QuickDetectionManager {
   /**
    * 工具方法：获取检测项分类
    */
-  private getCheckCategory(id: string): 'security' | 'performance' {
+  private getCheckCategory(id: string): 'security' | 'performance' | 'competition' {
     const performanceChecks = ['cpu-test', 'memory-test', 'disk-test', 'network-test'];
-    return performanceChecks.includes(id) ? 'performance' : 'security';
+    const competitionChecks = [
+      'webshell-scan', 'rootkit-scan', 'persistence-scan', 'log-tamper',
+      'network-backdoor', 'enhanced-user', 'hidden-cron', 'ssh-key-audit',
+      'timestomp-check', 'enhanced-process', 'bin-tamper', 'immutable-files',
+    ];
+    if (performanceChecks.includes(id)) return 'performance';
+    if (competitionChecks.includes(id)) return 'competition';
+    return 'security';
+  }
+
+  /**
+   * 竞赛模式：全量扫描 35 项，并发提升到 5
+   */
+  async startCompetitionScan(): Promise<DetectionReport> {
+    const allIds = [
+      // 安全检测 21 项
+      'port-scan', 'user-audit', 'backdoor-scan', 'process-analysis', 'file-permission',
+      'ssh-audit', 'log-analysis', 'firewall-check', 'password-policy', 'sudo-audit',
+      'pam-config', 'account-lockout', 'selinux-status', 'kernel-params', 'system-updates',
+      'unnecessary-services', 'auto-start-services', 'audit-config', 'history-audit',
+      'ntp-config', 'dns-config',
+      // 竞赛级检测 12 项
+      'webshell-scan', 'rootkit-scan', 'persistence-scan', 'log-tamper',
+      'network-backdoor', 'enhanced-user', 'hidden-cron', 'ssh-key-audit',
+      'timestomp-check', 'enhanced-process', 'bin-tamper', 'immutable-files',
+      // 性能检测 4 项
+      'cpu-test', 'memory-test', 'disk-test', 'network-test',
+    ];
+    // 竞赛模式使用更高并发
+    const savedConcurrency = QuickDetectionManager.CONCURRENCY;
+    (QuickDetectionManager as any).CONCURRENCY = 5;
+    try {
+      return await this.startFullScan(allIds);
+    } finally {
+      (QuickDetectionManager as any).CONCURRENCY = savedConcurrency;
+    }
   }
 
   /**

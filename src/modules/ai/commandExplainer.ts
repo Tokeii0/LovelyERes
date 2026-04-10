@@ -25,12 +25,20 @@ export async function explainCommand(command: string): Promise<string> {
 
   try {
     const config = aiService.getConfig();
-    if (!config.apiKey || !config.apiUrl) {
+    if (!config || !config.apiKey) {
       return getFallbackExplanation(trimmed);
     }
 
-    const response = await aiService.generateConciseSolution(prompt);
-    const explanation = response || '无法获取解释';
+    let result = '';
+    await aiService.generateConciseSolutionStream(
+      '命令解释',
+      prompt,
+      'info',
+      undefined,
+      undefined,
+      (fullText) => { result = fullText; }
+    );
+    const explanation = result || '无法获取解释';
     explanationCache.set(trimmed, explanation);
     return explanation;
   } catch {

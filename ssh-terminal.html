@@ -83,8 +83,17 @@
         <div class="modern-title-bar" data-tauri-drag-region id="custom-title-bar">
             <div class="title-bar-left">
                 <div class="app-logo">
-                    <div class="logo-icon" style="background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); width: 24px; height: 24px; border-radius: var(--border-radius-lg); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">
-                        SSH
+                    <div class="logo-icon" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
+                        <svg width="22" height="22" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+                          <defs>
+                            <linearGradient id="ssh-s" x1=".1" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#f9a8d4"/><stop offset="1" stop-color="#c4b5fd"/></linearGradient>
+                            <linearGradient id="ssh-h" x1=".36" y1="0" x2=".5" y2=".5"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+                          </defs>
+                          <g transform="rotate(-15 64 62)">
+                            <path d="M64,16 L75.8,47.8 L109.2,48.8 L83.2,68.8 L93,101.2 L64,83.2 L35,101.2 L44.8,68.8 L18.8,48.8 L52.2,47.8 Z" fill="url(#ssh-s)" stroke="url(#ssh-s)" stroke-width="12" stroke-linejoin="round" paint-order="stroke fill"/>
+                            <path d="M64,16 L75.8,47.8 L109.2,48.8 L83.2,68.8 L93,101.2 L64,83.2 L35,101.2 L44.8,68.8 L18.8,48.8 L52.2,47.8 Z" fill="url(#ssh-h)" stroke="url(#ssh-h)" stroke-width="12" stroke-linejoin="round" paint-order="stroke fill"/>
+                          </g>
+                        </svg>
                     </div>
                     <div class="app-info">
                         <div class="app-name" style="font-size: 14px;">SSH Terminal</div>
