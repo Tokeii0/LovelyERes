@@ -9,6 +9,10 @@ import { DetectionModules } from './detectionModules';
 import { DetectionReportRenderer } from './detectionReportRenderer';
 import { DetectionAIManager } from './detectionAIManager';
 import { showAlert, showConfirm } from '../ui/confirmDialog';
+import { getFixActionsForFinding, getFixActionsForDetectionItem, HARDENING_ITEMS, type FixActionDef, type HardeningItem } from './detectionFixMapper';
+import { fixExecutor, type FixAction, type FixResult, type ResolvedBaselineItem } from './fixExecutor';
+import { fixHistoryManager, type FixHistoryEntry } from './fixHistoryManager';
+import { invoke } from '@tauri-apps/api/core';
 
 // 检测项目类型
 export interface DetectionItem {
@@ -86,6 +90,10 @@ export class QuickDetectionManager {
       this.cancelled = true;
       window.showNotification?.('正在取消检测...', 'info');
     }
+  }
+
+  getCurrentReport(): DetectionReport | null {
+    return this.currentReport;
   }
 
   /**
@@ -863,6 +871,166 @@ export class QuickDetectionManager {
    */
   setProgressCallback(callback: (progress: number, current: string) => void): void {
     this.progressCallback = callback;
+  }
+
+  // ════════════════════════════════════════════════════
+  // 修复能力集成
+  // ════════════════════════════════════════════════════
+
+  /** 获取某个检测项的所有可用修复动作 */
+  getFixActions(detectionItemId: string, findingTitle?: string): FixActionDef[] {
+    if (findingTitle) return getFixActionsForFinding(detectionItemId, findingTitle);
+    return getFixActionsForDetectionItem(detectionItemId);
+  }
+
+  /** 创建 FixAction 实例 */
+  createFixAction(detectionItemId: string, findingTitle: string, def: FixActionDef): FixAction {
+    return {
+      id: `fa_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      detectionItemId,
+      findingTitle,
+      def,
+      status: 'pending',
+    };
+  }
+
+  /** 执行单个修复 */
+  async executeSingleFix(
+    detectionItemId: string,
+    findingTitle: string,
+    actionDef: FixActionDef,
+    onStatus?: (action: FixAction) => void,
+  ): Promise<FixResult> {
+    const action = this.createFixAction(detectionItemId, findingTitle, actionDef);
+    fixExecutor.setServer(this.getServerInfo());
+
+    // 解析 baseline 配置项 (如果是 baseline 类型)
+    let resolved: ResolvedBaselineItem | undefined;
+    if (actionDef.type === 'baseline' && actionDef.baselineItemId) {
+      resolved = await this.resolveBaselineItem(actionDef.baselineItemId, actionDef.recommendedValue);
+    }
+
+    return fixExecutor.executeFix(action, resolved, onStatus);
+  }
+
+  /** 批量执行所有可修复的 findings */
+  async executeAllFixes(
+    onStatus?: (action: FixAction) => void,
+    onProgress?: (completed: number, total: number) => void,
+  ): Promise<FixResult[]> {
+    if (!this.currentReport) return [];
+    fixExecutor.setServer(this.getServerInfo());
+
+    const actions: FixAction[] = [];
+    const resolvedMap = new Map<string, ResolvedBaselineItem>();
+
+    for (const item of this.currentReport.items) {
+      if (!item.result?.findings) continue;
+      for (const finding of item.result.findings) {
+        const defs = getFixActionsForFinding(item.id, finding.title);
+        for (const def of defs) {
+          const action = this.createFixAction(item.id, finding.title, def);
+          actions.push(action);
+          if (def.type === 'baseline' && def.baselineItemId && !resolvedMap.has(def.baselineItemId)) {
+            const resolved = await this.resolveBaselineItem(def.baselineItemId, def.recommendedValue);
+            if (resolved) resolvedMap.set(def.baselineItemId, resolved);
+          }
+        }
+      }
+    }
+
+    if (actions.length === 0) {
+      window.showNotification?.('没有可自动修复的项目', 'info');
+      return [];
+    }
+
+    const confirmed = await showConfirm({
+      title: '批量修复',
+      message: `将执行 ${actions.length} 项修复操作，所有修改前会自动备份。确认继续？`,
+      confirmText: `执行 ${actions.length} 项修复`,
+      cancelText: '取消',
+      dangerous: true,
+    });
+    if (!confirmed) return [];
+
+    return fixExecutor.executeBatch(actions, resolvedMap, onStatus, onProgress);
+  }
+
+  /** 重新验证某个检测项 */
+  async reVerify(detectionItemId: string): Promise<DetectionResult> {
+    return this.detectionModules.runSingleDetection(detectionItemId);
+  }
+
+  /** 回滚历史修复 */
+  async rollbackFix(entryId: string): Promise<{ success: boolean; output: string }> {
+    return fixHistoryManager.rollback(entryId);
+  }
+
+  /** 获取修复历史 */
+  getFixHistory(): FixHistoryEntry[] {
+    return fixHistoryManager.getHistory();
+  }
+
+  /** 清空修复历史 */
+  clearFixHistory(): void {
+    fixHistoryManager.clear();
+  }
+
+  /** 获取加固项列表 */
+  getHardeningItems(): HardeningItem[] {
+    return HARDENING_ITEMS;
+  }
+
+  /** 检查单个加固项状态 */
+  async checkHardeningStatus(item: HardeningItem): Promise<boolean> {
+    try {
+      const result = await invoke('ssh_execute_command_direct', { command: item.checkCommand }) as any;
+      const output = result?.output || '';
+      return item.checkPassed.test(output);
+    } catch { return false; }
+  }
+
+  /** 执行单个加固项 */
+  async executeHardening(item: HardeningItem): Promise<string> {
+    try {
+      const result = await invoke('ssh_execute_command_direct', { command: item.fixCommand }) as any;
+      return result?.output || 'done';
+    } catch (e) { return `failed: ${e}`; }
+  }
+
+  /** 解析 baseline 配置项为可执行数据 */
+  private async resolveBaselineItem(baselineItemId: string, overrideValue?: string): Promise<ResolvedBaselineItem | undefined> {
+    try {
+      // 动态导入 baselineConfigs 避免循环依赖
+      const { baselineCategories, resolveForDistro } = await import('../baseline/baselineConfigs');
+
+      for (const cat of baselineCategories) {
+        for (const item of cat.items) {
+          if (item.id === baselineItemId) {
+            const resolved = resolveForDistro ? resolveForDistro(item, 'generic') : item;
+            return {
+              id: item.id,
+              readCommand: resolved.readCommand || item.readCommand,
+              writeCommand: resolved.writeCommand || item.writeCommand,
+              parseRegex: item.parseRegex,
+              backupCommand: resolved.backupCommand || item.backupCommand,
+              restartCommand: resolved.restartCommand || item.restartCommand,
+              recommendedValue: overrideValue || item.recommendedValue,
+            };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('解析 baseline 配置失败:', baselineItemId, e);
+    }
+    return undefined;
+  }
+
+  private getServerInfo(): string {
+    try {
+      const conn = (window as any).sshConnectionManager;
+      return conn?.getConnectionStatus?.()?.host || 'unknown';
+    } catch { return 'unknown'; }
   }
 }
 

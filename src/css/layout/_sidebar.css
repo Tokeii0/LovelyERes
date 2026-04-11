@@ -163,40 +163,108 @@
   margin-bottom: 4px;
 }
 
-/* Connection status indicator (bottom icon) */
-.activity-bar-connection {
-  width: 44px;
-  height: 40px;
+/* ──── User Panel (bottom of sidebar) ──── */
+.user-panel {
   display: flex;
   align-items: center;
-  justify-content: center;
-  position: relative;
+  gap: 8px;
+  padding: 8px 10px;
+  margin: 4px 6px;
+  border-radius: 8px;
   cursor: pointer;
-  color: var(--activitybar-icon-inactive);
-  transition: color 0.15s ease;
-  border: none;
-  background: transparent;
-  outline: none;
+  transition: background 0.15s;
+  position: relative;
 }
 
-.activity-bar-connection:hover {
-  color: var(--activitybar-icon-active);
+.user-panel:hover {
+  background: var(--hover-bg);
 }
 
-.activity-bar-connection.connected {
-  color: var(--success-color);
+.user-panel-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 
-/* Connection status dot */
-.activity-bar-connection .connection-status-dot {
+.user-panel-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* 收起状态隐藏文字 */
+.activity-bar:not(.expanded) .user-panel-info { display: none; }
+.activity-bar:not(.expanded) .user-panel { justify-content: center; padding: 8px; margin: 4px; }
+
+.user-panel-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.user-panel-status {
+  font-size: 10px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-panel-dot {
   position: absolute;
   bottom: 8px;
-  right: 8px;
-  width: 6px;
-  height: 6px;
+  left: 28px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--success-color);
-  border: 1.5px solid var(--activitybar-bg);
+  background: #94a3b8;
+  border: 2px solid var(--activitybar-bg);
+}
+
+.user-panel-dot.connected {
+  background: #22c55e;
+}
+
+.activity-bar:not(.expanded) .user-panel-dot {
+  bottom: 6px;
+  left: 22px;
+}
+
+/* User dropdown */
+.user-dropdown-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 6px;
+  min-width: 160px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.15);
+  padding: 4px 0;
+  z-index: 1001;
+  margin-bottom: 4px;
+}
+
+.user-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.user-dropdown-item:hover {
+  background: var(--hover-bg);
 }
 
 /* Tooltip — only in collapsed state */

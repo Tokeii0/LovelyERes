@@ -24,7 +24,15 @@ const dataKeyMap: Record<string, string> = {
   sudoers: 'sudoersConfig',
   timers: 'systemdTimers',
   kernelmodules: 'kernelModules',
-  recentfiles: 'recentFiles'
+  recentfiles: 'recentFiles',
+  docker: 'dockerContainers',
+  kubernetes: 'kubernetesPods',
+  webapps: 'webApps',
+  openports: 'openPorts',
+  established: 'established',
+  autoruns: 'autoruns',
+  rootcheck: 'rootcheck',
+  sensitive: 'sensitiveFiles'
 };
 
 // detailedInfo 属性名 → tabId 反向映射
@@ -51,7 +59,15 @@ const updateMap: Record<string, string> = {
   sudoers: 'updateSudoersTable',
   timers: 'updateSystemdTimersTable',
   kernelmodules: 'updateKernelModulesTable',
-  recentfiles: 'updateRecentFilesTable'
+  recentfiles: 'updateRecentFilesTable',
+  docker: 'updateDockerTable',
+  kubernetes: 'updateKubernetesTable',
+  webapps: 'updateGenericTable_webapps',
+  openports: 'updateGenericTable_openports',
+  established: 'updateGenericTable_established',
+  autoruns: 'updateGenericTable_autoruns',
+  rootcheck: 'updateGenericTable_rootcheck',
+  sensitive: 'updateGenericTable_sensitive'
 };
 
 /**
@@ -109,6 +125,19 @@ function switchSystemInfoTab(tabId: string): void {
       const cache = (window as any).systemInfoCache;
       const dataKey = dataKeyMap[tabId];
 
+      // 特殊 Tab: 独立获取数据（不走渐进式加载）
+      const extraTabs = ['docker', 'kubernetes', 'webapps', 'openports', 'established', 'autoruns', 'rootcheck', 'sensitive'];
+      if (extraTabs.includes(tabId)) {
+        showTableLoadingState(tabId);
+        fetchExtraTabData(tabId).then(data => {
+          if (!cache.detailedInfo) cache.detailedInfo = {};
+          cache.detailedInfo[dataKey] = data;
+          loadSystemInfoTabData(tabId, cache.detailedInfo);
+        }).catch(() => {
+          const tbody = document.getElementById(`${tabId}-table-body`);
+          if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text-secondary);">获取数据失败或服务未运行</td></tr>';
+        });
+      } else
       // 检查此标签页的数据是否已加载
       if (cache.detailedInfo && cache.detailedInfo[dataKey] &&
           Array.isArray(cache.detailedInfo[dataKey]) && cache.detailedInfo[dataKey].length > 0) {
@@ -348,6 +377,117 @@ function injectLoadingStyles(): void {
     }
   `;
   document.head.appendChild(style);
+}
+
+/**
+ * Docker/K8s 数据获取 (通过 SSH 直接获取)
+ */
+async function fetchExtraTabData(tabId: string): Promise<any[]> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  const exec = async (cmd: string) => {
+    const r = await invoke('ssh_execute_command_direct', { command: cmd }) as any;
+    return r?.output || '';
+  };
+
+  if (tabId === 'docker') {
+    const out = await exec("docker ps -a --format '{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}|{{.CreatedAt}}' 2>/dev/null | head -50");
+    return out.split('\n').filter(Boolean).map((line: string) => {
+      const [id, name, image, status, ports, created] = line.split('|');
+      return {
+        id: id?.substring(0, 12) || '', name: name || '', image: image || '',
+        status: status || '', ports: ports || '', created: created || '',
+      };
+    });
+  }
+
+  if (tabId === 'kubernetes') {
+    const out = await exec("kubectl get pods -A --no-headers 2>/dev/null | head -50 || echo ''");
+    return out.split('\n').filter(Boolean).map((line: string) => {
+      const parts = line.trim().split(/\s+/);
+      return {
+        namespace: parts[0] || '', name: parts[1] || '', ready: parts[2] || '',
+        status: parts[3] || '', restarts: parts[4] || '', age: parts[5] || '',
+      };
+    });
+  }
+
+  if (tabId === 'webapps') {
+    // 检测 Nginx/Apache/Tomcat/PHP-FPM 站点
+    const out = await exec(`echo "=== Nginx ===" && (nginx -T 2>/dev/null | grep -E 'server_name|listen|root' | head -20 || echo "未安装") && echo "=== Apache ===" && (apachectl -S 2>/dev/null | head -15 || httpd -S 2>/dev/null | head -15 || echo "未安装") && echo "=== Tomcat ===" && (ls /opt/tomcat*/webapps/ /var/lib/tomcat*/webapps/ 2>/dev/null | head -10 || echo "未安装") && echo "=== PHP-FPM ===" && (php-fpm -t 2>/dev/null | head -3 || echo "未安装")`);
+    return out.split('\n').filter(Boolean).map((line: string) => {
+      const isHeader = line.startsWith('===');
+      return { type: isHeader ? '' : 'config', path: line, status: '', config: '', user: '' };
+    });
+  }
+
+  if (tabId === 'openports') {
+    // 所有监听端口 + 进程
+    const out = await exec("ss -tlnp 2>/dev/null | tail -n +2 | head -50 || netstat -tlnp 2>/dev/null | tail -n +2 | head -50");
+    return out.split('\n').filter(Boolean).map((line: string) => {
+      const parts = line.trim().split(/\s+/);
+      const local = parts[3] || '';
+      const [addr, port] = local.includes(':') ? [local.substring(0, local.lastIndexOf(':')), local.substring(local.lastIndexOf(':') + 1)] : ['', local];
+      const proc = parts[5] || parts[6] || '';
+      const pidMatch = proc.match(/pid=(\d+)/);
+      const nameMatch = proc.match(/\("([^"]+)"/);
+      return { proto: parts[0] || 'tcp', addr, port, pid: pidMatch?.[1] || '', process: nameMatch?.[1] || proc, user: '' };
+    });
+  }
+
+  if (tabId === 'established') {
+    // 外连排查: ESTABLISHED 连接
+    const out = await exec("ss -tnp state established 2>/dev/null | tail -n +2 | head -50 || netstat -tnp 2>/dev/null | grep ESTABLISHED | head -50");
+    return out.split('\n').filter(Boolean).map((line: string) => {
+      const parts = line.trim().split(/\s+/);
+      const local = parts[3] || '';
+      const remote = parts[4] || '';
+      const remotePort = remote.includes(':') ? remote.substring(remote.lastIndexOf(':') + 1) : '';
+      const remoteAddr = remote.includes(':') ? remote.substring(0, remote.lastIndexOf(':')) : remote;
+      const proc = parts[5] || parts[6] || '';
+      const pidMatch = proc.match(/pid=(\d+)/);
+      const nameMatch = proc.match(/\("([^"]+)"/);
+      return { local, remote: remoteAddr, remotePort, pid: pidMatch?.[1] || '', process: nameMatch?.[1] || proc, user: '' };
+    });
+  }
+
+  if (tabId === 'autoruns') {
+    // 启动项汇总: systemd enabled + cron + rc.local + init.d + bashrc
+    const out = await exec(`echo "=SYSTEMD=" && systemctl list-unit-files --type=service --state=enabled --no-pager 2>/dev/null | grep enabled | head -20 && echo "=CRON=" && for u in $(cut -d: -f1 /etc/passwd | head -20); do c=$(crontab -l -u $u 2>/dev/null | grep -v '^#' | grep -v '^$'); [ -n "$c" ] && echo "$u: $c"; done | head -15 && echo "=RCLOCAL=" && cat /etc/rc.local 2>/dev/null | grep -v '^#' | grep -v '^$' | head -5 && echo "=INITD=" && ls /etc/init.d/ 2>/dev/null | head -10`);
+    const items: any[] = [];
+    let currentType = '';
+    out.split('\n').filter(Boolean).forEach((line: string) => {
+      if (line.startsWith('=')) { currentType = line.replace(/=/g, ''); return; }
+      const typeMap: Record<string, string> = { SYSTEMD: 'systemd', CRON: 'crontab', RCLOCAL: 'rc.local', INITD: 'init.d' };
+      items.push({ type: typeMap[currentType] || currentType, name: line.split(/\s+/)[0] || line, status: 'enabled', path: line, user: '' });
+    });
+    return items;
+  }
+
+  if (tabId === 'rootcheck') {
+    // Rootkit 快速检查
+    const out = await exec(`echo "CHECK|LD_PRELOAD|" && (cat /etc/ld.so.preload 2>/dev/null | head -3 || echo "CHECK|LD_PRELOAD|clean") && echo "CHECK|SUID异常|" && find /usr/bin /usr/sbin /bin /sbin -perm -4000 -type f 2>/dev/null | xargs file 2>/dev/null | grep -E "script|text" | head -5 && echo "CHECK|隐藏进程|" && (ps aux | wc -l; ls /proc/ | grep -E '^[0-9]+$' | wc -l) && echo "CHECK|内核模块|" && lsmod 2>/dev/null | grep -v -E '^Module|^ip|^nf|^x_|^xt_|^br_|^overlay|^veth' | head -10 && echo "CHECK|PAM后门|" && find /lib/security /lib64/security -name '*.so' -mmin -10080 2>/dev/null | head -5 && echo "CHECK|SSH后门|" && (strings /usr/sbin/sshd 2>/dev/null | grep -ic 'backdoor\\|secret\\|hack' || echo "0")`);
+    const items: any[] = [];
+    let check = '';
+    out.split('\n').filter(Boolean).forEach((line: string) => {
+      if (line.startsWith('CHECK|')) { const p = line.split('|'); check = p[1] || ''; if (p[2]) items.push({ check, result: p[2], detail: '' }); return; }
+      items.push({ check, result: line.includes('clean') || line.trim() === '0' ? 'clean' : 'suspicious', detail: line });
+    });
+    return items;
+  }
+
+  if (tabId === 'sensitive') {
+    // 敏感文件: SSH密钥/密码文件/配置文件/数据库凭据
+    const out = await exec(`find / -maxdepth 4 \\( -name "*.pem" -o -name "*.key" -o -name "id_rsa*" -o -name "id_ed25519*" -o -name ".env" -o -name "wp-config.php" -o -name "config.php" -o -name "database.yml" -o -name ".git-credentials" -o -name ".netrc" -o -name ".pgpass" -o -name ".my.cnf" -o -name "shadow" -o -name "gshadow" \\) -type f 2>/dev/null | head -30 | while read f; do echo "$f|$(stat -c '%a|%U|%Y' "$f" 2>/dev/null)"; done`);
+    return out.split('\n').filter(Boolean).map((line: string) => {
+      const [path, perms, owner, mtime] = line.split('|');
+      const ext = (path || '').split('.').pop() || '';
+      const typeMap: Record<string, string> = { pem: 'SSL证书', key: '私钥', env: '环境变量', php: 'PHP配置', yml: 'DB配置' };
+      const ts = mtime ? new Date(parseInt(mtime) * 1000).toLocaleString() : '';
+      return { path: path || line, type: typeMap[ext] || '敏感文件', perms: perms || '', owner: owner || '', modified: ts };
+    });
+  }
+
+  return [];
 }
 
 /**

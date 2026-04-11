@@ -27,7 +27,9 @@ import {
   Box,
   DataFile,
   Cpu,
-  FolderOpen
+  FolderOpen,
+  Whale,
+  NetworkTree
 } from '@icon-park/svg';
 
 export class SystemInfoRenderer {
@@ -54,7 +56,14 @@ export class SystemInfoRenderer {
       sudoers: detailedInfo?.sudoersConfig?.length || 0,
       timers: detailedInfo?.systemdTimers?.length || 0,
       kernelmodules: detailedInfo?.kernelModules?.length || 0,
-      recentfiles: detailedInfo?.recentFiles?.length || 0
+      recentfiles: detailedInfo?.recentFiles?.length || 0,
+      docker: detailedInfo?.dockerContainers?.length || 0,
+      kubernetes: detailedInfo?.kubernetesPods?.length || 0,
+      webapps: detailedInfo?.webApps?.length || 0,
+      openports: detailedInfo?.openPorts?.length || 0,
+      established: detailedInfo?.established?.length || 0,
+      autoruns: detailedInfo?.autoruns?.length || 0,
+      sensitive: detailedInfo?.sensitiveFiles?.length || 0
     };
 
     // 读取折叠状态
@@ -162,6 +171,45 @@ export class SystemInfoRenderer {
               <span class="tab-label">最近文件</span>
               ${counts.recentfiles > 0 ? `<span class="count-badge">${counts.recentfiles}</span>` : ''}
             </button>
+            <button class="tab-btn" data-tab="docker" onclick="window.switchSystemInfoTab('docker')">
+              <span class="tab-icon">${Whale({ theme: 'outline', size: '14', fill: 'currentColor' })}</span>
+              <span class="tab-label">Docker</span>
+              ${counts.docker > 0 ? `<span class="count-badge">${counts.docker}</span>` : ''}
+            </button>
+            <button class="tab-btn" data-tab="kubernetes" onclick="window.switchSystemInfoTab('kubernetes')">
+              <span class="tab-icon">${NetworkTree({ theme: 'outline', size: '14', fill: 'currentColor' })}</span>
+              <span class="tab-label">Kubernetes</span>
+              ${counts.kubernetes > 0 ? `<span class="count-badge">${counts.kubernetes}</span>` : ''}
+            </button>
+            <button class="tab-btn" data-tab="webapps" onclick="window.switchSystemInfoTab('webapps')">
+              <span class="tab-icon">${Earth({ theme: 'outline', size: '14', fill: 'currentColor' })}</span>
+              <span class="tab-label">Web应用</span>
+              ${counts.webapps > 0 ? `<span class="count-badge">${counts.webapps}</span>` : ''}
+            </button>
+            <button class="tab-btn" data-tab="openports" onclick="window.switchSystemInfoTab('openports')">
+              <span class="tab-icon">${Lock({ theme: 'outline', size: '14', fill: 'currentColor' })}</span>
+              <span class="tab-label">开放端口</span>
+              ${counts.openports > 0 ? `<span class="count-badge">${counts.openports}</span>` : ''}
+            </button>
+            <button class="tab-btn" data-tab="established" onclick="window.switchSystemInfoTab('established')">
+              <span class="tab-icon">${NetworkTree({ theme: 'outline', size: '14', fill: 'currentColor' })}</span>
+              <span class="tab-label">外连排查</span>
+              ${counts.established > 0 ? `<span class="count-badge">${counts.established}</span>` : ''}
+            </button>
+            <button class="tab-btn" data-tab="autoruns" onclick="window.switchSystemInfoTab('autoruns')">
+              <span class="tab-icon">${Rocket({ theme: 'outline', size: '14', fill: 'currentColor' })}</span>
+              <span class="tab-label">启动项汇总</span>
+              ${counts.autoruns > 0 ? `<span class="count-badge">${counts.autoruns}</span>` : ''}
+            </button>
+            <button class="tab-btn" data-tab="rootcheck" onclick="window.switchSystemInfoTab('rootcheck')">
+              <span class="tab-icon">${Shield({ theme: 'outline', size: '14', fill: 'currentColor' })}</span>
+              <span class="tab-label">Rootkit检查</span>
+            </button>
+            <button class="tab-btn" data-tab="sensitive" onclick="window.switchSystemInfoTab('sensitive')">
+              <span class="tab-icon">${Key({ theme: 'outline', size: '14', fill: 'currentColor' })}</span>
+              <span class="tab-label">敏感文件</span>
+              ${counts.sensitive > 0 ? `<span class="count-badge">${counts.sensitive}</span>` : ''}
+            </button>
           </div>
 
           <div class="system-info-actions">
@@ -219,6 +267,22 @@ export class SystemInfoRenderer {
         return this.renderKernelModulesTable();
       case 'recentfiles':
         return this.renderRecentFilesTable();
+      case 'docker':
+        return this.renderDockerTable();
+      case 'kubernetes':
+        return this.renderKubernetesTable();
+      case 'webapps':
+        return this.renderGenericTable('webapps', 'Web 应用/站点', ['类型', '路径/URL', '状态', '配置文件', '运行用户']);
+      case 'openports':
+        return this.renderGenericTable('openports', '开放端口', ['协议', '地址', '端口', '进程PID', '进程名', '用户']);
+      case 'established':
+        return this.renderGenericTable('established', '外连排查 (ESTABLISHED)', ['本地地址', '远程地址', '远程端口', '进程PID', '进程名', '用户']);
+      case 'autoruns':
+        return this.renderGenericTable('autoruns', '启动项汇总', ['类型', '名称', '状态', '路径/命令', '用户']);
+      case 'rootcheck':
+        return this.renderGenericTable('rootcheck', 'Rootkit 检查', ['检查项', '结果', '详情']);
+      case 'sensitive':
+        return this.renderGenericTable('sensitive', '敏感文件', ['文件路径', '类型', '权限', '所有者', '修改时间']);
       default:
         return '<p>选择一个标签页查看详细信息</p>';
     }
@@ -987,6 +1051,87 @@ export class SystemInfoRenderer {
             </thead>
             <tbody id="recentfiles-table-body">
               <tr><td colspan="5" style="padding: var(--spacing-lg); text-align: center; color: var(--text-secondary);">正在加载最近修改文件...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  // ──── Generic Table (复用模板) ────
+  private renderGenericTable(id: string, title: string, columns: string[]): string {
+    const ths = columns.map(c => `<th>${c}</th>`).join('');
+    return `
+      <div class="info-table-container">
+        <div class="table-header-toolbar">
+          <span class="table-title">${title}</span>
+          <div class="search-container">
+            <input type="text" class="system-input" placeholder="搜索..." oninput="window.searchInTable('${id}', this.value)" style="width:160px;">
+          </div>
+        </div>
+        <div class="table-content">
+          <table class="system-table">
+            <thead><tr>${ths}</tr></thead>
+            <tbody id="${id}-table-body">
+              <tr><td colspan="${columns.length}" style="text-align:center;padding:20px;color:var(--text-secondary);">点击加载...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  // ──── Docker Table ────
+  private renderDockerTable(): string {
+    return `
+      <div class="info-table-container">
+        <div class="table-header-toolbar">
+          <span class="table-title">
+            ${Whale({ theme: 'outline', size: '20', fill: 'currentColor' })}
+            Docker 容器
+          </span>
+          <div class="search-container">
+            <input type="text" class="system-input" placeholder="搜索容器..." oninput="window.searchInTable('docker', this.value)" style="width:160px;">
+          </div>
+        </div>
+        <div class="table-content">
+          <table class="system-table">
+            <thead>
+              <tr>
+                <th>ID</th><th>名称</th><th>镜像</th><th>状态</th><th>端口</th><th>创建时间</th>
+              </tr>
+            </thead>
+            <tbody id="docker-table-body">
+              <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-secondary);">点击此 Tab 加载 Docker 容器列表</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  // ──── Kubernetes Table ────
+  private renderKubernetesTable(): string {
+    return `
+      <div class="info-table-container">
+        <div class="table-header-toolbar">
+          <span class="table-title">
+            ${NetworkTree({ theme: 'outline', size: '20', fill: 'currentColor' })}
+            Kubernetes Pods
+          </span>
+          <div class="search-container">
+            <input type="text" class="system-input" placeholder="搜索 Pod..." oninput="window.searchInTable('kubernetes', this.value)" style="width:160px;">
+          </div>
+        </div>
+        <div class="table-content">
+          <table class="system-table">
+            <thead>
+              <tr>
+                <th>Namespace</th><th>名称</th><th>Ready</th><th>状态</th><th>重启</th><th>Age</th>
+              </tr>
+            </thead>
+            <tbody id="kubernetes-table-body">
+              <tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-secondary);">点击此 Tab 加载 K8s Pod 列表</td></tr>
             </tbody>
           </table>
         </div>

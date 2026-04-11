@@ -162,6 +162,24 @@ export class DatabaseManager {
     try {
       this.detectedDatabases = await invoke('db_detect') as DatabaseInfo[];
       window.showNotification?.(`发现 ${this.detectedDatabases.length} 个数据库实例`, 'success');
+
+      // 对每个检测到的数据库尝试本地连接测试
+      for (const db of this.detectedDatabases) {
+        if (db.status !== 'running') continue;
+        try {
+          const testSql = db.db_type === 'redis' ? 'PING'
+            : db.db_type === 'mongodb' ? 'db.runCommand({ping:1})'
+            : 'SELECT 1';
+          await invoke('db_execute_sql', {
+            dbType: db.db_type, host: '127.0.0.1', port: db.port || 0,
+            username: db.db_type === 'redis' ? '' : 'root',
+            password: '', database: '', sql: testSql,
+          });
+          (db as any).connectable = true;
+        } catch {
+          (db as any).connectable = false;
+        }
+      }
     } catch (e) {
       console.error('数据库检测失败:', e);
       window.showNotification?.(`检测失败: ${e}`, 'error');

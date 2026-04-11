@@ -54,6 +54,9 @@ export class EmergencyRenderer {
             <svg class="em-chevron" width="12" height="12" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span>${cat.title}</span>
             <span class="em-group-count">${cat.items.length}</span>
+            <button class="em-group-run-all" data-em-group="${cat.id}" title="一键执行该分组所有命令" onclick="event.stopPropagation(); window.emergencyPageManager?.runGroup('${cat.id}')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            </button>
           </div>
           <div class="em-group-items">${items}</div>
         </div>`;
@@ -291,14 +294,17 @@ export class EmergencyRenderer {
           <button class="qd-tab-btn active" data-qd-tab="detection">
             ${icon(Shield, '16', 'filled')} 检测中心
           </button>
-          <button class="qd-tab-btn" data-qd-tab="report">
-            ${icon(Analysis, '16')} 检测报告
+          <button class="qd-tab-btn" data-qd-tab="results">
+            ${icon(Analysis, '16')} 检测结果
           </button>
           <button class="qd-tab-btn" data-qd-tab="compliance">
             ${icon(FileText, '16')} 合规检查
           </button>
-          <button class="qd-tab-btn" data-qd-tab="history">
-            ${icon(History, '16')} 检测历史
+          <button class="qd-tab-btn" data-qd-tab="fix-history">
+            ${icon(History, '16')} 修复历史
+          </button>
+          <button class="qd-tab-btn" data-qd-tab="hardening">
+            ${icon(Shield, '16')} 快速加固
           </button>
         </div>
 
@@ -421,11 +427,22 @@ export class EmergencyRenderer {
             </div>
           </div>
 
-          <!-- Tab: 检测报告 -->
-          <div id="qd-tab-report" class="qd-tab-panel" style="display:none;padding:var(--spacing-md);">
-            <div id="qd-report-content">
+          <!-- Tab: 检测结果 (inline results with fix buttons) -->
+          <div id="qd-tab-results" class="qd-tab-panel" style="display:none;padding:var(--spacing-md);">
+            <div class="qd-results-toolbar">
+              <div class="qd-filter-chips">
+                <button class="qd-filter-chip active" data-qd-filter="all">全部</button>
+                <button class="qd-filter-chip" data-qd-filter="critical">严重</button>
+                <button class="qd-filter-chip" data-qd-filter="high">高危</button>
+                <button class="qd-filter-chip" data-qd-filter="medium">中危</button>
+                <button class="qd-filter-chip" data-qd-filter="low">低危</button>
+              </div>
+              <div style="flex:1"></div>
+              <button class="qd-action-btn primary" data-qd-action="fix-all">一键全部修复</button>
+            </div>
+            <div id="qd-results-list" class="qd-results-list">
               <div style="text-align:center;padding:48px;color:var(--text-secondary);font-size:13px;">
-                运行检测后，报告将在此显示
+                运行检测后，结果将在此显示，每个问题旁边会有一键修复按钮
               </div>
             </div>
           </div>
@@ -439,17 +456,34 @@ export class EmergencyRenderer {
             </div>
           </div>
 
-          <!-- Tab: 检测历史 -->
-          <div id="qd-tab-history" class="qd-tab-panel" style="display:none;padding:var(--spacing-md);">
+          <!-- Tab: 修复历史 -->
+          <div id="qd-tab-fix-history" class="qd-tab-panel" style="display:none;padding:var(--spacing-md);">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-              <span style="font-size:14px;font-weight:600;color:var(--text-primary);">
-                ${icon(History, '16')} 检测历史
-              </span>
-              <button class="modern-btn secondary sm" onclick="window.quickDetection?.clearHistory()">清空</button>
+              <span style="font-size:14px;font-weight:600;color:var(--text-primary);">修复历史</span>
+              <div style="display:flex;gap:8px;">
+                <button class="qd-action-btn" data-qd-action="export-fix-history">导出</button>
+                <button class="qd-action-btn danger" data-qd-action="clear-fix-history">清空</button>
+              </div>
             </div>
-            <div id="detection-history-list" style="display:flex;flex-direction:column;gap:8px;">
-              <div style="text-align:center;padding:32px;color:var(--text-secondary);font-size:13px;border:1px dashed var(--border-color);border-radius:var(--border-radius);">
-                暂无历史记录
+            <div id="qd-fix-history-list" class="qd-fix-history-list">
+              <div style="text-align:center;padding:32px;color:var(--text-secondary);font-size:13px;">
+                暂无修复记录
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: 快速加固 -->
+          <div id="qd-tab-hardening" class="qd-tab-panel" style="display:none;padding:var(--spacing-md);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <span style="font-size:14px;font-weight:600;color:var(--text-primary);">比赛开局加固</span>
+              <div style="display:flex;gap:8px;">
+                <button class="qd-action-btn" data-qd-action="check-all-hardening">检查状态</button>
+                <button class="qd-action-btn primary" data-qd-action="harden-all">一键全部加固</button>
+              </div>
+            </div>
+            <div id="qd-hardening-list" class="qd-hardening-groups">
+              <div style="text-align:center;padding:32px;color:var(--text-secondary);font-size:13px;">
+                点击"检查状态"查看当前加固情况
               </div>
             </div>
           </div>

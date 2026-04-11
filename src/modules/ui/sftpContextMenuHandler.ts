@@ -47,7 +47,8 @@ function adjustSubmenuPosition(menu: HTMLElement): void {
 
     parent.addEventListener('mouseenter', () => {
       setTimeout(() => {
-        if (submenuEl.style.display === 'none') return;
+        const computed = window.getComputedStyle(submenuEl);
+        if (computed.display === 'none') return;
         const submenuRect = submenuEl.getBoundingClientRect();
         const vw = window.innerWidth;
         const vh = window.innerHeight;
@@ -106,7 +107,7 @@ function showSftpContextMenu(ev: MouseEvent, index: number): void {
   const vh = window.innerHeight;
   const vw = window.innerWidth;
   menu.style.maxHeight = (vh - padding * 2) + 'px';
-  menu.style.overflowY = 'auto';
+  menu.style.overflowY = 'visible'; // 不能用 auto/hidden，否则子菜单被裁剪
 
   // 显示菜单以获取尺寸
   menu.style.display = 'block';
@@ -339,12 +340,20 @@ export function initSftpContextMenuHandler(): void {
   });
 
   (window as any).sftpFileDetailsSelected = () => withFileAction(async (file) => {
+    // 懒加载 FileDetailsModal
+    if (!(window as any).fileDetailsModal) {
+      try {
+        const { FileDetailsModal } = await import('./fileDetailsModal');
+        (window as any).fileDetailsModal = new FileDetailsModal();
+      } catch (e) {
+        console.error('加载文件详情模块失败:', e);
+      }
+    }
     const fileDetailsModal = (window as any).fileDetailsModal;
     if (fileDetailsModal) {
       await fileDetailsModal.show(file.path);
     } else {
-      console.error('文件详情模态框未找到');
-      (window as any).showNotification && (window as any).showNotification('文件详情功能暂不可用', 'warning');
+      (window as any).showNotification?.('文件详情功能暂不可用', 'warning');
     }
   });
 

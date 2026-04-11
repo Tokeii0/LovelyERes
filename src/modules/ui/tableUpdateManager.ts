@@ -609,6 +609,48 @@ function updateRecentFilesTable(recentFiles: any[]): void {
   });
 }
 
+// ──── Docker Table ────
+function updateDockerTable(containers: any[]): void {
+  const tbody = document.getElementById('docker-table-body');
+  if (!tbody) return;
+  if (!containers?.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-secondary);">未检测到 Docker 容器（Docker 可能未运行）</td></tr>';
+    return;
+  }
+  tbody.innerHTML = containers.map((c: any) => {
+    const isUp = (c.status || '').toLowerCase().includes('up');
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px;">${c.id || ''}</td>
+      <td><strong>${c.name || ''}</strong></td>
+      <td style="font-size:11px;color:var(--text-secondary);">${c.image || ''}</td>
+      <td><span class="status-badge ${isUp ? 'running' : 'stopped'}">${c.status || ''}</span></td>
+      <td style="font-size:11px;">${c.ports || ''}</td>
+      <td style="font-size:11px;color:var(--text-secondary);">${c.created || ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ──── Kubernetes Table ────
+function updateKubernetesTable(pods: any[]): void {
+  const tbody = document.getElementById('kubernetes-table-body');
+  if (!tbody) return;
+  if (!pods?.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-secondary);">未检测到 K8s Pods（kubectl 可能不可用）</td></tr>';
+    return;
+  }
+  tbody.innerHTML = pods.map((p: any) => {
+    const isRunning = (p.status || '').toLowerCase() === 'running';
+    return `<tr>
+      <td style="font-size:11px;">${p.namespace || ''}</td>
+      <td><strong>${p.name || ''}</strong></td>
+      <td>${p.ready || ''}</td>
+      <td><span class="status-badge ${isRunning ? 'running' : p.status?.toLowerCase() === 'completed' ? 'inactive' : 'failed'}">${p.status || ''}</span></td>
+      <td>${p.restarts || ''}</td>
+      <td style="font-size:11px;color:var(--text-secondary);">${p.age || ''}</td>
+    </tr>`;
+  }).join('');
+}
+
 /**
  * 初始化表格更新管理器
  */
@@ -630,4 +672,34 @@ export function initTableUpdateManager(): void {
   (window as any).updateSystemdTimersTable = updateSystemdTimersTable;
   (window as any).updateKernelModulesTable = updateKernelModulesTable;
   (window as any).updateRecentFilesTable = updateRecentFilesTable;
+  (window as any).updateDockerTable = updateDockerTable;
+  (window as any).updateKubernetesTable = updateKubernetesTable;
+
+  // 通用表格更新器 — 将 any[] 的每个对象的 values 渲染为 tr/td
+  const genericUpdate = (id: string) => (data: any[]) => {
+    const tbody = document.getElementById(`${id}-table-body`);
+    if (!tbody) return;
+    if (!data?.length) {
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text-secondary);">无数据</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map((row: any) => {
+      const vals = Object.values(row) as string[];
+      return `<tr>${vals.map((v: string) => {
+        const s = String(v || '');
+        // 高亮可疑项
+        const isSus = /suspicious|backdoor|hack/i.test(s);
+        const isClean = s === 'clean' || s === 'enabled';
+        const cls = isSus ? ' style="color:#ef4444;font-weight:500;"' : isClean ? ' style="color:#22c55e;"' : '';
+        return `<td${cls}>${s.replace(/</g, '&lt;')}</td>`;
+      }).join('')}</tr>`;
+    }).join('');
+  };
+
+  (window as any).updateGenericTable_webapps = genericUpdate('webapps');
+  (window as any).updateGenericTable_openports = genericUpdate('openports');
+  (window as any).updateGenericTable_established = genericUpdate('established');
+  (window as any).updateGenericTable_autoruns = genericUpdate('autoruns');
+  (window as any).updateGenericTable_rootcheck = genericUpdate('rootcheck');
+  (window as any).updateGenericTable_sensitive = genericUpdate('sensitive');
 }

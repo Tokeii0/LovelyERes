@@ -19,6 +19,8 @@ export abstract class BaseContextMenu {
   protected accounts: any[] = []
   /** 右键时捕获的行文本内容，用于 AI 解释 */
   protected lastRowText: string = ''
+  /** 右键时捕获的完整行 DOM 文本 */
+  protected lastRowFullText: string = ''
 
   /** 唯一前缀，用于生成不冲突的 DOM ID */
   protected readonly prefix: string
@@ -52,8 +54,12 @@ export abstract class BaseContextMenu {
     if (!this.contextMenu) return
 
     this.onShowContextMenu(...entityArgs)
-    // 捕获条目信息用于 AI 解释
+    // 捕获条目信息用于 AI 解释: entity 参数 + DOM 行文本
     this.lastRowText = entityArgs.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' | ')
+    // 通过坐标找到右键点击的那一行，抓取完整文本
+    const el = document.elementFromPoint(x, y)
+    const row = el?.closest('tr') || el?.closest('[data-pid]') || el?.closest('.table-row') || el?.parentElement
+    this.lastRowFullText = row?.textContent?.replace(/\s+/g, ' ').trim() || this.lastRowText
     await this.loadAccountList()
 
     this.contextMenu.style.left = `${x}px`
@@ -542,9 +548,37 @@ export abstract class BaseContextMenu {
 
   // ===== AI 解释该条目（右键直接调用） =====
 
+  /** 子类可覆盖，返回产生该条目的原始命令 */
+  protected getSourceCommand(): string {
+    // 根据 prefix 推断来源命令
+    const cmdMap: Record<string, string> = {
+      'process': 'ps aux',
+      'network': 'ss -antlp / netstat -antlp',
+      'service': 'systemctl list-units --type=service',
+      'user': 'cat /etc/passwd + id',
+      'cron': 'crontab -l',
+      'startup': 'systemctl list-unit-files --type=service --state=enabled',
+      'firewall': 'iptables -L -n / firewalld',
+      'suid-file': 'find / -perm -4000 -type f',
+      'ssh-key': 'find / -name authorized_keys',
+      'kernel-module': 'lsmod',
+      'env-var': 'env / printenv',
+      'log': '日志文件内容',
+      'login-history': 'last / lastlog',
+      'package': 'dpkg -l / rpm -qa',
+      'recent-file': 'find / -mmin -60 -type f',
+      'shell-config': 'cat ~/.bashrc ~/.profile',
+      'sudoers': 'cat /etc/sudoers',
+      'timer': 'systemctl list-timers',
+    }
+    return cmdMap[this.prefix] || '系统信息查询'
+  }
+
   protected async aiExplainRow() {
-    const rowData = this.lastRowText || '(无条目数据)'
-    const menuTitle = this.prefix.replace(/-/g, ' ')
+    const rowFullText = this.lastRowFullText || this.lastRowText || '(无条目数据)'
+    const entityInfo = this.lastRowText || ''
+    const sourceCmd = this.getSourceCommand()
+    const category = this.prefix.replace(/-/g, ' ')
 
     this.showModal('AI 分析', '正在分析...')
 
@@ -558,7 +592,8 @@ export abstract class BaseContextMenu {
       const contentEl = document.getElementById(`${this.prefix}-modal-content`)
       if (contentEl) contentEl.textContent = ''
 
-      const prompt = `你是 Linux 安全应急响应专家。请分析以下系统条目信息:\n\n类型: ${menuTitle}\n条目数据: ${rowData}\n\n请简要说明:\n1. 该条目的含义\n2. 是否存在安全风险\n3. 如果有风险，给出处置建议`
+      const question = `[${category}] ${sourceCmd}\n${rowFullText}`
+      const prompt = `你是 Linux 安全应急响应专家。以下是通过 "${sourceCmd}" 命令获取到的一条系统信息:\n\n分类: ${category}\n完整内容: ${rowFullText}${entityInfo !== rowFullText ? `\n标识: ${entityInfo}` : ''}\n\n请分析:\n1. 这条信息的具体含义（每个字段解释）\n2. 是否存在安全风险或异常\n3. 如果有风险，给出具体的处置命令`
 
       await aiService.explainLogStream(
         prompt,
@@ -567,10 +602,9 @@ export abstract class BaseContextMenu {
           if (contentEl) contentEl.textContent += chunk
         },
         (fullText: string) => {
-          // 记录到 AI 历史
           import('../../ai/aiHistoryManager').then(({ aiHistoryManager }) => {
             aiHistoryManager.addRecord({
-              question: `[${menuTitle}] ${rowData}`,
+              question,
               answer: fullText,
               source: 'context-menu',
             })

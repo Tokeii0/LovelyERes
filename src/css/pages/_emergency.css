@@ -166,6 +166,22 @@
 
 .em-group-header:hover { color: var(--text-primary); }
 
+.em-group-run-all {
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transition: all 0.15s;
+}
+.em-group-header:hover .em-group-run-all { opacity: 1; }
+.em-group-run-all:hover { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+
 .em-group-header .em-chevron {
   display: flex;
   transition: transform 0.15s;

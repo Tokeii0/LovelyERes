@@ -1,12 +1,81 @@
-/* Status Bar — matches activity bar depth */
+/* Status Bar — Modern Redesign */
 .status-bar {
-  height: 28px;
+  height: 26px;
   background: var(--statusbar-bg, var(--bg-secondary));
   border-top: 1px solid var(--statusbar-border, var(--border-color));
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--spacing-md);
+  padding: 0 10px;
   font-size: 11px;
   color: var(--statusbar-text, var(--text-secondary));
+  gap: 6px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.status-left,
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  height: 26px;
+  font-size: 11px;
+  color: var(--statusbar-text, var(--text-secondary));
+  cursor: default;
+  transition: background 0.12s;
+  white-space: nowrap;
+  border: none;
+  background: none;
+}
+
+.status-item:hover {
+  background: var(--hover-bg);
+}
+
+.status-item.clickable {
+  cursor: pointer;
+}
+
+.status-item svg {
+  flex-shrink: 0;
+}
+
+/* Connection status dot in status bar */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #94a3b8;
+  flex-shrink: 0;
+}
+
+.status-dot.connected { background: #22c55e; }
+.status-dot.disconnected { background: #ef4444; }
+
+/* Terminal button in status bar */
+.status-terminal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  height: 26px;
+  font-size: 11px;
+  color: var(--statusbar-text, var(--text-secondary));
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.status-terminal-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
 }

@@ -16,7 +16,7 @@ import { remoteOperationsManager } from '../remote/remoteOperationsManager';
 import { dockerPageManager } from '../docker/dockerPageManager';
 import { emergencyPageManager } from '../emergency/emergencyPageManager';
 import { KubernetesPageManager } from '../kubernetes/kubernetesPageManager';
-import { quickDetectionManager } from '../detection/quickDetectionManager';
+// quickDetectionManager removed
 import { sshTerminalManager } from '../ssh/sshTerminalManager';
 import type { SettingsPageManager } from '../settings/settingsPageManager';
 
@@ -182,23 +182,13 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
   (window as any).sshConnectionManager = sshConnectionManager;
   (window as any).sftpManager = sftpManager;
   (window as any).sshTerminalManager = sshTerminalManager;
-  (window as any).quickDetection = quickDetectionManager;
+  // quickDetection removed
   (window as any).sshConnectionDialog = sshConnectionDialog;
 
-  // Quick Detection tab switching (event delegation) — bind only once
+  // (快速检测事件委托已移除)
   if (!globalEventsBound) {
-    document.addEventListener('click', (e) => {
-      const tabBtn = (e.target as HTMLElement).closest('[data-qd-tab]') as HTMLElement;
-      if (!tabBtn) return;
-      const tabId = tabBtn.getAttribute('data-qd-tab');
-      if (!tabId) return;
-      document.querySelectorAll('.qd-tab-btn').forEach(btn => btn.classList.remove('active'));
-      tabBtn.classList.add('active');
-      document.querySelectorAll('.qd-tab-panel').forEach(panel => {
-        (panel as HTMLElement).style.display = panel.id === `qd-tab-${tabId}` ? '' : 'none';
-      });
-    });
-  } // end QD tab delegation guard
+    // 预留给其他全局事件
+  }
 
   // ──── 工作区/侧边栏刷新 ────
   (window as any).refreshDashboard = () => {
@@ -247,10 +237,7 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
     console.log('🔄 切换页面:', pageId);
 
     // 取消前一个页面的异步操作
-    const quickDetection = (window as any).quickDetectionManager;
-    if (pageId !== 'quick-detection' && quickDetection?.cancelScan) {
-      quickDetection.cancelScan();
-    }
+    // quickDetection cancelScan removed
 
     // SFTP: 切走时标记需要重新绑定DOM事件，但不丢弃数据
     if (pageId !== 'remote-operations') {
@@ -358,6 +345,13 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
           console.error('加载Check审计模块失败:', e);
           window.showNotification?.('加载Check审计模块失败', 'error');
         });
+      } else if (pageId === 'ai-history') {
+        import('../ai/aiHistoryManager').then(({ aiHistoryManager }) => {
+          aiHistoryManager.initialize();
+        }).catch((e) => {
+          console.error('加载AI历史模块失败:', e);
+          window.showNotification?.('加载AI历史模块失败', 'error');
+        });
       }
 
       // 离开 Docker/K8s/PacketCapture 页面时停止后台操作
@@ -408,24 +402,15 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
   // ──── 用户头像下拉菜单 ────
   (window as any).toggleUserDropdown = () => {
     const dropdown = document.getElementById('user-dropdown-menu');
-    const userAvatarBtn = document.querySelector('.user-avatar-btn');
-    if (dropdown && userAvatarBtn) {
-      const isVisible = dropdown.style.display === 'block';
-      if (isVisible) {
-        dropdown.style.display = 'none';
-      } else {
-        const rect = userAvatarBtn.getBoundingClientRect();
-        dropdown.style.top = `${rect.bottom + 5}px`;
-        dropdown.style.right = `${window.innerWidth - rect.right}px`;
-        dropdown.style.display = 'block';
-      }
+    if (dropdown) {
+      dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
     }
   };
 
   if (!globalEventsBound) {
     document.addEventListener('click', (event) => {
       const dropdown = document.getElementById('user-dropdown-menu');
-      const userAvatarContainer = document.querySelector('.user-avatar-container');
+      const userAvatarContainer = document.querySelector('.user-panel');
       if (dropdown && userAvatarContainer) {
         const clickedInsideDropdown = dropdown.contains(event.target as Node);
         const clickedOnAvatar = userAvatarContainer.contains(event.target as Node);
@@ -543,4 +528,6 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
       setTimeout(() => { dropdown.style.display = 'none'; }, 200);
     }
   };
+
 }
+

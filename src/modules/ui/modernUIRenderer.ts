@@ -18,13 +18,11 @@ import { ServerModalRenderer } from './renderers/serverModalRenderer';
 import { EmergencyRenderer } from './renderers/emergencyRenderer';
 import { BaselineRenderer } from './renderers/baselineRenderer';
 import {
-  Rocket,
   SettingTwo,
   ApplicationMenu,
   FolderOpen,
   Whale,
   CheckOne,
-  CloseOne,
   Code,
   Plus,
   LinkInterrupt,
@@ -186,37 +184,19 @@ export class ModernUIRenderer {
    * 重新渲染连接面板
    */
   private rerenderConnectionPanel(): void {
-    console.log('🔄 开始重新渲染连接面板，当前主题:', this.state.theme);
-
+    // 更新用户面板 (左下角)
     const sidebar = document.querySelector('.modern-sidebar');
-    if (!sidebar) {
-      console.warn('⚠️ 未找到 .modern-sidebar');
-      return;
-    }
-
-    // 查找连接卡片包装器
-    let targetElement = sidebar.querySelector('.connection-card-wrapper');
-    
-    // 如果没找到 wrapper，尝试查找 card (兼容旧结构)
-    if (!targetElement) {
-        targetElement = sidebar.querySelector('.connection-card');
-    }
-
-    console.log('📍 找到连接卡片元素:', !!targetElement);
-
-    if (targetElement) {
-      // 创建临时容器
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = this.renderConnectionPanel();
-      const newElement = tempDiv.firstElementChild;
-
-      if (newElement) {
-        console.log('✅ 替换连接卡片');
-        // 替换旧元素
-        targetElement.replaceWith(newElement);
-      } else {
-        console.warn('⚠️ 未能创建新卡片');
+    if (sidebar) {
+      const wrapper = sidebar.querySelector('.connection-card-wrapper');
+      if (wrapper) {
+        wrapper.innerHTML = this.renderConnectionPanel();
       }
+    }
+
+    // 同时更新设置下拉菜单中的连接状态
+    const settingsMenu = document.getElementById('settings-dropdown-menu');
+    if (settingsMenu) {
+      settingsMenu.outerHTML = this.renderSettingsMenu();
     }
   }
 
@@ -325,9 +305,6 @@ export class ModernUIRenderer {
         </div>
 
         <div class="title-bar-right">
-          <!-- SSH终端按钮 -->
-          ${this.renderSSHTerminalTitleButton()}
-
           ${!isMac ? `
           <div class="window-controls">
             <button class="control-button minimize-btn" title="最小化">
@@ -477,28 +454,38 @@ export class ModernUIRenderer {
    */
   private renderConnectionPanel(): string {
     const isConnected = this.state.isConnected;
-
-    let tooltipText = '连接服务器';
-    if (isConnected && this.state.serverInfo) {
-      tooltipText = this.state.serverInfo.name || this.state.serverInfo.host;
-    }
+    const serverName = isConnected && this.state.serverInfo
+      ? (this.state.serverInfo.name || this.state.serverInfo.host)
+      : '';
 
     return `
-      <!-- 连接下拉菜单 -->
-      <div id="connection-dropdown-menu" class="connection-dropdown-menu">
-        ${this.renderConnectionDropdownContent()}
+      <!-- 用户面板 -->
+      <div class="user-panel" onclick="window.toggleUserDropdown?.()">
+        <img class="user-panel-avatar" src="/logo.png" alt="avatar" />
+        <div class="user-panel-info">
+          <span class="user-panel-name">DevUser</span>
+          <span class="user-panel-status">${isConnected ? serverName : '未连接'}</span>
+        </div>
+        ${isConnected ? '<span class="user-panel-dot connected"></span>' : '<span class="user-panel-dot"></span>'}
       </div>
 
-      <!-- 连接状态图标 -->
-      <div class="activity-bar-connection ${isConnected ? 'connected' : ''}" onclick="window.toggleConnectionDropdown()" data-tooltip="${tooltipText}">
-        <span class="nav-item-icon">
-          ${isConnected
-            ? Connection({ theme: 'filled', size: '22', fill: 'currentColor' })
-            : Plus({ theme: 'outline', size: '22', fill: 'currentColor' })
-          }
-        </span>
-        <span class="nav-item-label">${isConnected ? tooltipText : '连接服务器'}</span>
-        ${isConnected ? `<span class="connection-status-dot"></span>` : ''}
+      <!-- 用户下拉菜单 -->
+      <div id="user-dropdown-menu" class="user-dropdown-menu" style="display:none;">
+        ${isConnected ? `
+          <div class="user-dropdown-item" onclick="window.confirmDisconnect?.(); document.getElementById('user-dropdown-menu').style.display='none';">
+            ${LinkInterrupt({ theme: 'outline', size: '14', fill: 'currentColor' })}
+            <span>断开连接</span>
+          </div>
+        ` : `
+          <div class="user-dropdown-item" onclick="window.switchPage?.('system-info'); document.getElementById('user-dropdown-menu').style.display='none';">
+            ${Connection({ theme: 'outline', size: '14', fill: 'currentColor' })}
+            <span>连接服务器</span>
+          </div>
+        `}
+        <div class="user-dropdown-item" onclick="window.showSettingsOverlay?.(); document.getElementById('user-dropdown-menu').style.display='none';">
+          ${SettingTwo({ theme: 'outline', size: '14', fill: 'currentColor' })}
+          <span>设置</span>
+        </div>
       </div>
     `;
   }
@@ -556,12 +543,6 @@ export class ModernUIRenderer {
         icon: NetworkTree({ theme: 'outline', size: '18', fill: 'currentColor' }),
         title: '网络抓包',
         active: currentPage === 'packet-capture'
-      },
-      {
-        id: 'quick-detection',
-        icon: Rocket({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: '快速检测',
-        active: currentPage === 'quick-detection'
       },
       {
         id: 'baseline-quick-edit',
@@ -753,8 +734,6 @@ export class ModernUIRenderer {
         return this.renderDockerPage();
       case 'emergency-commands':
         return this.renderEmergencyCommandsPage();
-      case 'quick-detection':
-        return this.renderQuickDetectionPage();
       case 'kubernetes':
         return this.renderKubernetesPage();
       case 'database':
@@ -850,6 +829,10 @@ export class ModernUIRenderer {
    */
   renderServerList(): string {
     return this.serverModalRenderer.renderServerList();
+  }
+
+  renderStepForm(editData?: any): string {
+    return this.serverModalRenderer.renderStepForm(editData);
   }
 
   /**
@@ -1131,11 +1114,7 @@ export class ModernUIRenderer {
   }
 
   /**
-   * 渲染快速检测页面
-   */
-  private renderQuickDetectionPage(): string {
-    return this.emergencyRenderer.renderQuickDetectionPage();
-  }
+
 
   /**
    * 渲染快速检测报告模态框
@@ -1148,24 +1127,28 @@ export class ModernUIRenderer {
    * 渲染状态栏
    */
   renderStatusBar(): string {
-    const connectedIcon = CheckOne({ theme: 'filled', size: '12', fill: '#22c55e' });
-    const disconnectedIcon = CloseOne({ theme: 'filled', size: '12', fill: '#ef4444' });
-
-    let statusText: string;
-    if (this.state.isConnected) {
-      const server = this.state.serverInfo?.name || this.state.currentServer || '';
-      statusText = `${connectedIcon} 已连接${server ? ` — ${server}` : ''}`;
-    } else {
-      statusText = `${disconnectedIcon} 未连接`;
-    }
+    const isConn = this.state.isConnected;
+    const server = isConn ? (this.state.serverInfo?.name || this.state.currentServer || '') : '';
 
     return `
       <div class="status-bar">
         <div class="status-left">
-          <span style="margin-left: var(--spacing-md); display: flex; align-items: center; gap: 4px;">${statusText}</span>
+          <span class="status-item">
+            <span class="status-dot ${isConn ? 'connected' : 'disconnected'}"></span>
+            ${isConn ? server : '未连接'}
+          </span>
+          ${isConn ? `
+            <button class="status-terminal-btn" onclick="window.switchPage?.('ssh-terminal')" title="打开 SSH 终端">
+              <svg width="12" height="12" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="8" width="40" height="32" rx="2" fill="none"/>
+                <path d="M12 18L19 24L12 30"/><path d="M23 32H36"/>
+              </svg>
+              终端
+            </button>
+          ` : ''}
         </div>
         <div class="status-right">
-          <span>LovelyRes v${APP_VERSION}</span>
+          <span class="status-item">v${APP_VERSION}</span>
         </div>
       </div>
     `;

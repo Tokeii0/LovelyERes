@@ -343,6 +343,67 @@ class EmergencyPageManager {
     (window as any).showNotification?.('命令已复制', 'success');
   }
 
+  // ──── 一键执行分组 ────
+
+  async runGroup(groupId: string): Promise<void> {
+    const cat = this.categories.find(c => c.id === groupId);
+    if (!cat || cat.items.length === 0) return;
+
+    const tauriInvoke = (window as any).__TAURI__?.core?.invoke;
+    const sshMgr = (window as any).sshConnectionManager;
+    if (!tauriInvoke && !sshMgr?.isConnected?.()) {
+      window.showNotification?.('未连接到服务器', 'warning');
+      return;
+    }
+
+    const outputPanel = document.getElementById('em-output-panel');
+    const outputContent = document.getElementById('em-output-content');
+    const scrollEl = document.getElementById('em-output-scroll');
+    if (outputPanel) outputPanel.style.display = '';
+
+    const accountSelect = document.getElementById('emergency-account-select') as HTMLSelectElement;
+    const username = accountSelect?.value || '';
+
+    let fullOutput = '';
+    const total = cat.items.length;
+
+    for (let i = 0; i < total; i++) {
+      const item = cat.items[i];
+      let command: string;
+      try { command = CommandAdapter.getAdaptedCommand(item, this.systemInfo || { type: 'generic', name: 'Linux', version: '', prettyName: 'Linux', packageManager: 'unknown', initSystem: 'unknown' }); }
+      catch { command = item.cmd || ''; }
+      if (!command) continue;
+
+      const header = `\n${'═'.repeat(60)}\n[${i + 1}/${total}] ${item.name}\n$ ${command}\n${'─'.repeat(60)}\n`;
+      fullOutput += header;
+
+      if (outputContent) {
+        outputContent.innerHTML = this.applyHighlight(fullOutput + '(执行中...)');
+        if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+      }
+
+      try {
+        const params: any = { command };
+        if (username) params.username = username;
+        const result = await tauriInvoke('ssh_execute_emergency_command_direct', params) as any;
+        const output = result?.output || result?.command?.output || '(无输出)';
+        fullOutput += output + '\n';
+        CommandHistoryManager.saveCommand(command, item.name, output);
+      } catch (e) {
+        fullOutput += `执行失败: ${e}\n`;
+      }
+    }
+
+    fullOutput += `\n${'═'.repeat(60)}\n分组 [${cat.title}] 全部执行完成 (${total} 项)\n`;
+    this.lastOutput = fullOutput;
+    if (outputContent) {
+      outputContent.innerHTML = this.applyHighlight(fullOutput);
+      if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+    }
+
+    window.showNotification?.(`${cat.title}: ${total} 项命令执行完成`, 'success');
+  }
+
   // ──── Execute ────
 
   private async executeSelectedCommand(): Promise<void> {
@@ -485,34 +546,66 @@ class EmergencyPageManager {
 
   private async explainWithAI(): Promise<void> {
     if (!this.lastOutput || !this.selectedCmd) {
-      (window as any).showNotification?.('请先执行命令', 'info');
+      window.showNotification?.('请先执行命令', 'info');
       return;
     }
 
-    const aiBox = document.getElementById('em-ai-box');
-    const aiContent = document.getElementById('em-ai-content');
-    if (!aiBox || !aiContent) return;
+    // 创建/复用模态框
+    let overlay = document.getElementById('em-ai-modal-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'em-ai-modal-overlay';
+      overlay.className = 'out-ctx-modal-overlay';
+      overlay.innerHTML = `
+        <div class="out-ctx-modal" style="max-width:800px;">
+          <div class="out-ctx-modal-header">
+            <span>AI 分析</span>
+            <button class="out-ctx-modal-close" id="em-ai-modal-close">&times;</button>
+          </div>
+          <pre class="out-ctx-modal-body" id="em-ai-modal-body" style="min-height:200px;">正在分析...</pre>
+          <div class="out-ctx-modal-footer">
+            <button class="out-ctx-modal-btn" id="em-ai-modal-copy">复制</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay!.style.display = 'none'; });
+      overlay.querySelector('#em-ai-modal-close')?.addEventListener('click', () => { overlay!.style.display = 'none'; });
+      overlay.querySelector('#em-ai-modal-copy')?.addEventListener('click', () => {
+        const body = document.getElementById('em-ai-modal-body');
+        if (body) { navigator.clipboard.writeText(body.textContent || '').catch(() => {}); window.showNotification?.('已复制', 'success'); }
+      });
+    }
 
-    aiBox.style.display = '';
-    aiContent.textContent = '正在分析...';
+    const body = document.getElementById('em-ai-modal-body');
+    if (!body) return;
+    overlay.style.display = '';
+    body.textContent = '正在分析...';
 
     try {
       const codeEl = document.getElementById('em-detail-code');
       const command = codeEl?.textContent || '';
-      const prompt = `请分析以下 Linux 命令的输出结果，用中文简要说明发现了什么，有哪些需要注意的安全问题：\n\n命令: ${command}\n\n输出:\n${this.lastOutput.substring(0, 8000)}`;
+      const question = `命令: ${command}\n\n输出:\n${this.lastOutput.substring(0, 8000)}`;
+      const prompt = `请分析以下 Linux 命令的输出结果，用中文简要说明发现了什么，有哪些需要注意的安全问题：\n\n${question}`;
 
+      body.textContent = '';
+      let fullText = '';
       await aiService.generateConciseSolutionStream(
         this.selectedCmd.name,
         prompt,
         'info',
         undefined,
-        (chunk: string) => { aiContent.textContent = chunk; }
+        (chunk: string) => { fullText = chunk; body.textContent = chunk; },
+        (final: string) => {
+          // 记录到 AI 历史
+          import('../ai/aiHistoryManager').then(({ aiHistoryManager }) => {
+            aiHistoryManager.addRecord({ question: `[${this.selectedCmd?.name}] ${command}`, answer: final, source: 'emergency' });
+          }).catch(() => {});
+        }
       );
-      if (!aiContent.textContent || aiContent.textContent === '正在分析...') {
-        aiContent.textContent = '分析完成';
-      }
+      if (!body.textContent) body.textContent = fullText || '分析完成';
     } catch (e) {
-      aiContent.textContent = `AI 分析失败: ${e}`;
+      body.textContent = `AI 分析失败: ${e}`;
     }
   }
 }

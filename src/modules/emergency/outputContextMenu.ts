@@ -392,7 +392,6 @@ async function executeAction(action: string): Promise<void> {
     }
 
     case 'ai-analyze': {
-      // 触发AI分析
       const aiBox = document.getElementById('em-ai-box');
       const aiContent = document.getElementById('em-ai-content');
       if (aiBox && aiContent) {
@@ -400,12 +399,18 @@ async function executeAction(action: string): Promise<void> {
         aiContent.textContent = '正在分析选中内容...';
         try {
           const { aiService } = await import('../ai/aiService');
+          const question = selectedText.substring(0, 3000);
           const result = await aiService.generateSolution(
             '应急响应分析',
-            `请分析以下命令输出，指出其中的安全风险、可疑项和建议操作:\n\n${selectedText.substring(0, 3000)}`,
+            `请分析以下命令输出，指出其中的安全风险、可疑项和建议操作:\n\n${question}`,
             'medium'
           );
-          aiContent.textContent = result?.solution || '分析完成，未发现明显风险';
+          const answer = result?.solution || '分析完成，未发现明显风险';
+          aiContent.textContent = answer;
+          // 记录到 AI 历史
+          import('../ai/aiHistoryManager').then(({ aiHistoryManager }) => {
+            aiHistoryManager.addRecord({ question, answer, source: 'emergency' });
+          }).catch(() => {});
         } catch (e) {
           aiContent.textContent = `AI 分析失败: ${e}`;
         }

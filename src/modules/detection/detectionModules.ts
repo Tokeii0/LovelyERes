@@ -17,6 +17,54 @@ const SCORING_RULES = {
 export class DetectionModules {
 
   /**
+   * 按 ID 执行单项检测 (公开方法，供 fixExecutor 验证用)
+   */
+  public async runSingleDetection(itemId: string): Promise<DetectionResult> {
+    const map: Record<string, () => Promise<DetectionResult>> = {
+      'port-scan': () => this.runPortScan(),
+      'user-audit': () => this.runUserAudit(),
+      'backdoor-scan': () => this.runBackdoorScan(),
+      'process-analysis': () => this.runProcessAnalysis(),
+      'file-permission': () => this.runFilePermissionCheck(),
+      'ssh-audit': () => this.runSSHAudit(),
+      'log-analysis': () => this.runLogAnalysis(),
+      'firewall-check': () => this.runFirewallCheck(),
+      'password-policy': () => this.runPasswordPolicyCheck(),
+      'sudo-audit': () => this.runSudoAudit(),
+      'pam-config': () => this.runPAMConfigCheck(),
+      'account-lockout': () => this.runAccountLockoutCheck(),
+      'selinux-status': () => this.runSELinuxStatusCheck(),
+      'kernel-params': () => this.runKernelParamsCheck(),
+      'system-updates': () => this.runSystemUpdatesCheck(),
+      'unnecessary-services': () => this.runUnnecessaryServicesCheck(),
+      'auto-start-services': () => this.runAutoStartServicesCheck(),
+      'audit-config': () => this.runAuditConfigCheck(),
+      'history-audit': () => this.runHistoryAudit(),
+      'ntp-config': () => this.runNTPConfigCheck(),
+      'dns-config': () => this.runDNSConfigCheck(),
+      'webshell-scan': () => this.runWebshellScan(),
+      'rootkit-scan': () => this.runRootkitScan(),
+      'persistence-scan': () => this.runPersistenceScan(),
+      'log-tamper': () => this.runLogTamperCheck(),
+      'network-backdoor': () => this.runNetworkBackdoorScan(),
+      'enhanced-user': () => this.runEnhancedUserAudit(),
+      'hidden-cron': () => this.runHiddenCronCheck(),
+      'ssh-key-audit': () => this.runSSHKeyAudit(),
+      'timestomp-check': () => this.runTimestompCheck(),
+      'enhanced-process': () => this.runEnhancedProcessAnalysis(),
+      'bin-tamper': () => this.runBinTamperScan(),
+      'immutable-files': () => this.runImmutableFilesScan(),
+    };
+    const fn = map[itemId];
+    if (!fn) return this.createErrorResult(`未知检测项: ${itemId}`);
+    const start = Date.now();
+    const result = await fn();
+    result.duration = Date.now() - start;
+    result.timestamp = new Date();
+    return result;
+  }
+
+  /**
    * 端口扫描
    */
   public async runPortScan(): Promise<DetectionResult> {
