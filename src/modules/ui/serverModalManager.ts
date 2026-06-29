@@ -4,7 +4,7 @@
  */
 
 import { sshConnectionManager } from '../remote/sshConnectionManager';
-import { showConfirm } from './confirmDialog';
+import { showConfirm, showPrompt } from './confirmDialog';
 import { busyboxManager } from '../core/busyboxManager';
 
 function getApp(): any { return (window as any).app; }
@@ -139,6 +139,7 @@ async function connectServer(serverId: string): Promise<void> {
 
     stateManager?.setLoadingStep?.(`正在连接 ${connection.host}:${connection.port}...`);
     await sshConnectionManager.connect(connection.host, connection.port, connection.username, password, authType, connection.keyPath, connection.keyPassphrase);
+    recordLastConnected(serverId);
 
     stateManager?.setLoadingStep?.('连接成功，正在初始化...');
 
@@ -271,10 +272,17 @@ async function deleteServer(serverId: string): Promise<void> {
   const confirmed = await showConfirm({ title: '删除服务器', message: '确定删除？', dangerous: true });
   if (!confirmed) return;
   const sshManager = getApp()?.sshManager;
-  if (sshManager) {
+  if (!sshManager) {
+    window.showNotification?.('SSH管理器未初始化，无法删除服务器', 'error');
+    return;
+  }
+  try {
     await sshManager.deleteConnection(serverId);
     (window as any).refreshServerList?.();
     (window as any).refreshDashboard?.();
+    window.showNotification?.('服务器配置已删除', 'success');
+  } catch (e) {
+    window.showNotification?.(`删除服务器失败: ${e}`, 'error');
   }
 }
 
@@ -293,7 +301,6 @@ async function scQuickConnect(): Promise<void> {
   const port = parseInt(match[3] || '22');
 
   // 弹出密码输入
-  const { showPrompt } = await import('./confirmDialog');
   const password = await showPrompt({ title: '快速连接', message: `${username}@${host}:${port} 的密码:`, defaultValue: '' });
   if (password === null) return;
 
@@ -320,6 +327,160 @@ async function scQuickConnect(): Promise<void> {
   } finally {
     stateManager?.setLoading(false);
     requestAnimationFrame(() => (window as any).refreshDashboard?.());
+  }
+}
+
+// ──── 欢迎页快速连接表单 (scw-*) ────
+
+function scwVal(id: string): string {
+  return (document.getElementById(id) as HTMLInputElement)?.value?.trim() || '';
+}
+
+function recordLastConnected(key: string): void {
+  if (!key) return;
+  try {
+    const raw = localStorage.getItem('sc-last-connected');
+    const map = raw ? JSON.parse(raw) : {};
+    map[key] = Date.now();
+    localStorage.setItem('sc-last-connected', JSON.stringify(map));
+  } catch { /* ignore */ }
+}
+
+function scwSetAuthType(type: string): void {
+  const hidden = document.getElementById('scw-auth-type') as HTMLInputElement;
+  if (hidden) hidden.value = type;
+  document.querySelectorAll('.sc-seg-opt').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-auth') === type);
+  });
+  const pw = document.getElementById('scw-auth-password');
+  const key = document.getElementById('scw-auth-key');
+  if (pw) (pw as HTMLElement).style.display = type === 'password' ? '' : 'none';
+  if (key) (key as HTMLElement).style.display = type === 'key' ? '' : 'none';
+}
+
+function scwTogglePassword(btn: HTMLElement): void {
+  const input = document.getElementById('scw-password') as HTMLInputElement;
+  if (!input) return;
+  const reveal = input.type === 'password';
+  input.type = reveal ? 'text' : 'password';
+  btn.classList.toggle('revealed', reveal);
+}
+
+function scClearSelection(): void {
+  const hidden = document.getElementById('scw-selected-id') as HTMLInputElement;
+  if (hidden) hidden.value = '';
+  document.querySelectorAll('.sc-hist-item.active').forEach(el => el.classList.remove('active'));
+}
+
+function scSelectServer(id: string): void {
+  const conn = getApp()?.sshManager?.getConnection(id);
+  if (!conn) return;
+  const set = (eid: string, v: string) => { const el = document.getElementById(eid) as HTMLInputElement; if (el) el.value = v; };
+  set('scw-host', conn.host || '');
+  set('scw-username', conn.username || 'root');
+  set('scw-port', String(conn.port || 22));
+  set('scw-selected-id', id);
+  if (conn.keyPath) set('scw-keypath', conn.keyPath);
+  scwSetAuthType(conn.authType || 'password');
+  document.querySelectorAll('.sc-hist-item').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('data-server-id') === id);
+  });
+  (document.getElementById('scw-password') as HTMLInputElement)?.focus();
+}
+
+async function scConnectForm(): Promise<void> {
+  const host = scwVal('scw-host');
+  const username = scwVal('scw-username') || 'root';
+  const port = parseInt(scwVal('scw-port') || '22');
+  const authType = scwVal('scw-auth-type') || 'password';
+  const password = (document.getElementById('scw-password') as HTMLInputElement)?.value || '';
+  const keyPath = scwVal('scw-keypath');
+  const keyPassphrase = (document.getElementById('scw-keypass') as HTMLInputElement)?.value || '';
+  const remember = (document.getElementById('scw-remember') as HTMLInputElement)?.checked ?? false;
+  const selectedId = scwVal('scw-selected-id');
+
+  if (!host) { window.showNotification?.('请输入服务器地址', 'warning'); return; }
+  if (authType === 'key' && !keyPath && !selectedId) { window.showNotification?.('请选择私钥文件', 'warning'); return; }
+  if (authType === 'password' && !password && !selectedId) { window.showNotification?.('请输入密码', 'warning'); return; }
+
+  // 选中了已保存的服务器且未输入新密码 → 走保存记录（可解密已存密码）
+  if (selectedId && !password && authType === 'password') {
+    return connectServer(selectedId);
+  }
+
+  const stateManager = getApp()?.getStateManager?.();
+  stateManager?.setLoading(true, `正在连接 ${host}:${port}...`);
+  (window as any).refreshDashboard?.();
+
+  try {
+    await sshConnectionManager.connect(host, port, username, password, authType, keyPath, keyPassphrase);
+
+    // 记住此连接 → 保存（仅新连接）
+    if (remember && !selectedId) {
+      try {
+        await getApp()?.sshManager?.addConnection({
+          name: `${username}@${host}`, host, port, username, authType,
+          password: authType === 'password' ? password : undefined,
+          keyPath: authType === 'key' ? keyPath : undefined,
+          keyPassphrase: authType === 'key' ? keyPassphrase : undefined,
+        });
+      } catch { /* 保存失败不阻断连接 */ }
+    }
+
+    recordLastConnected(selectedId || `${username}@${host}:${port}`);
+
+    if (getApp()?.getStateManager) {
+      getApp().getStateManager().setConnected(true, `${username}@${host}`, { name: `${username}@${host}`, host, port, username });
+    }
+    try { await getApp()?.sshManager?.fetchSystemInfo(); } catch { /* ok */ }
+    requestAnimationFrame(() => {
+      (window as any).refreshSidebar?.();
+      (window as any).refreshDashboard?.();
+    });
+    (window as any).switchPage?.('system-info');
+    setTimeout(() => (window as any).loadSystemDetailedInfo?.(true), 200);
+    window.showNotification?.(`已连接到 ${host}`, 'success');
+    promptBusyboxMode();
+  } catch (e) {
+    window.showNotification?.(`连接失败: ${e}`, 'error');
+  } finally {
+    stateManager?.setLoading(false);
+    requestAnimationFrame(() => (window as any).refreshDashboard?.());
+  }
+}
+
+// ──── 管理记录浮层 ────
+
+function scManageServers(): void {
+  const existing = document.getElementById('sc-manage-overlay');
+  if (existing) { existing.remove(); return; }
+  const app = getApp();
+  const renderer = app?.stateManager?.getUIRenderer?.() ?? app?.getStateManager?.()?.getUIRenderer?.();
+  const html = renderer?.renderManageOverlay?.();
+  if (!html) return;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function scCloseManage(): void {
+  document.getElementById('sc-manage-overlay')?.remove();
+}
+
+// ──── Web 终端（新窗口打开） ────
+
+async function scOpenWebTerminal(): Promise<void> {
+  const input = (document.getElementById('sc-web-term-input') as HTMLInputElement)?.value?.trim();
+  if (!input) { window.showNotification?.('请输入 Web 终端 URL', 'warning'); return; }
+
+  let url = input;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'http://' + url;
+  }
+
+  try {
+    const { webTerminalManager } = await import('../remote/webTerminalManager');
+    await webTerminalManager.openUrl(url);
+  } catch (e) {
+    window.showNotification?.(`打开 Web 终端失败: ${e}`, 'error');
   }
 }
 
@@ -350,7 +511,6 @@ function scExportConfig(): void {
 }
 
 async function scImportConfig(): Promise<void> {
-  const { showPrompt } = await import('./confirmDialog');
   const json = await showPrompt({ title: '导入配置', message: '粘贴 JSON 配置:', defaultValue: '' });
   if (!json) return;
   try {
@@ -400,12 +560,12 @@ async function testConnection(): Promise<void> {
 
 // ──── 密钥文件选择 ────
 
-async function selectPrivateKeyFile(): Promise<void> {
+async function selectPrivateKeyFile(targetId: string = 'sc-keypath'): Promise<void> {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
     const selected = await open({ title: '选择 SSH 私钥文件', multiple: false });
     if (typeof selected === 'string') {
-      const input = document.getElementById('sc-keypath') as HTMLInputElement;
+      const input = document.getElementById(targetId) as HTMLInputElement;
       if (input) input.value = selected;
     }
   } catch { window.showNotification?.('文件选择不可用', 'warning'); }
@@ -438,10 +598,19 @@ export function initServerModalManager(): void {
   (window as any).selectPrivateKeyFile = selectPrivateKeyFile;
   (window as any).refreshServerList = refreshServerList;
   (window as any).scQuickConnect = scQuickConnect;
+  (window as any).scOpenWebTerminal = scOpenWebTerminal;
   (window as any).scFilterServers = scFilterServers;
   (window as any).scImportConfig = scImportConfig;
   (window as any).scExportConfig = scExportConfig;
   (window as any).scSetAuthType = scSetAuthType;
   (window as any).handleServerFormSubmit = saveServer;
   (window as any).filterServerList = scFilterServers;
+  // 欢迎页快速连接表单 + 管理浮层
+  (window as any).scConnectForm = scConnectForm;
+  (window as any).scSelectServer = scSelectServer;
+  (window as any).scClearSelection = scClearSelection;
+  (window as any).scwSetAuthType = scwSetAuthType;
+  (window as any).scwTogglePassword = scwTogglePassword;
+  (window as any).scManageServers = scManageServers;
+  (window as any).scCloseManage = scCloseManage;
 }

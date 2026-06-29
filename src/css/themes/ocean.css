@@ -16,23 +16,53 @@
   --bg-secondary: #111c32;
   --bg-tertiary: #182642;
   --bg-dark: #1e3050;
-  --bg-glass: rgba(11, 17, 32, 0.8);
-  --bg-hover: rgba(6, 182, 212, 0.06);
+  --bg-glass: rgba(11, 17, 32, 0.85);
+  --bg-hover: rgba(6, 182, 212, 0.08);
+  --hover-bg: rgba(6, 182, 212, 0.08);
+  --active-bg: rgba(6, 182, 212, 0.16);
 
   /* 文字颜色 */
   --text-primary: #e2e8f0;
   --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
   --text-light: #64748b;
   --text-white: #ffffff;
 
-  /* 边框和阴影 - 海洋感 */
-  --border-color: rgba(6, 182, 212, 0.12);
+  /* 边框和阴影 */
+  --border-color: rgba(6, 182, 212, 0.16);
+  --border-color-hover: rgba(6, 182, 212, 0.32);
   --border-light: rgba(6, 182, 212, 0.06);
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.6);
-  --shadow-glass: 0 8px 32px rgba(6, 182, 212, 0.06);
-  --glow-primary: rgba(6, 182, 212, 0.5);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.6);
+  --shadow-glass: 0 8px 32px rgba(6, 182, 212, 0.08);
+  --glow-primary: rgba(6, 182, 212, 0.45);
+
+  /* Extended design tokens */
+  --surface-primary: #0b1120;
+  --surface-secondary: #111c32;
+  --surface-tertiary: #182642;
+  --primary-glow: rgba(6, 182, 212, 0.28);
+  --accent-contrast: #ffffff;
+  --gradient-accent: linear-gradient(135deg, #06b6d4, #0891b2);
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.30);
+  --card-shadow-hover: 0 8px 24px rgba(6, 182, 212, 0.18), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --modal-backdrop: rgba(0, 0, 0, 0.65);
+  --modal-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  --glass-bg: rgba(11, 17, 32, 0.85);
+  --glass-border: rgba(6, 182, 212, 0.10);
+  --glass-blur: 16px;
+
+  /* Brand sparkle palette (ocean variant) */
+  --brand-glow-amber: rgba(56, 189, 248, 0.22);
+  --brand-spark-soft: #67e8f9;
+  --brand-spark-soft-inner: #a5f3fc;
+  --brand-spark-core: #06b6d4;
+  --brand-spark-accent: #38bdf8;
+  --brand-spark-neutral: #94a3b8;
+  --brand-wordmark-gradient: linear-gradient(135deg, #e2e8f0 0%, #06b6d4 50%, #38bdf8 100%);
+  --brand-dot-color: #22d3ee;
 
   /* Semantic Colors */
   --status-running: #2dd4bf;
@@ -44,34 +74,73 @@
   --accent-orange: #fbbf24;
 
   /* Scrollbar */
-  --scrollbar-thumb: rgba(6, 182, 212, 0.25);
-  --scrollbar-thumb-hover: rgba(6, 182, 212, 0.5);
+  --scrollbar-thumb: rgba(6, 182, 212, 0.30);
+  --scrollbar-thumb-hover: rgba(6, 182, 212, 0.55);
   --scrollbar-track: transparent;
 
   /* Focus */
   --focus-ring-color: var(--primary-color);
-  --focus-ring-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+  --focus-ring-shadow: 0 0 0 3px rgba(6, 182, 212, 0.20);
 
   /* Selection */
   --selection-bg: var(--primary-color);
-  --selection-text: #ffffff;
+  --selection-text: #0b1120;
 
   /* Activity Bar */
   --activitybar-bg: #070c18;
-  --activitybar-border: rgba(6, 182, 212, 0.06);
+  --activitybar-border: rgba(6, 182, 212, 0.08);
   --activitybar-icon-active: #e2e8f0;
-  --activitybar-icon-inactive: rgba(148, 163, 184, 0.7);
-  --activitybar-indicator: #06b6d4;
+  --activitybar-icon-inactive: rgba(148, 163, 184, 0.75);
+  --activitybar-indicator: var(--primary-color);
 
   /* Status Bar */
-  --statusbar-bg: #070c18;
-  --statusbar-text: #64748b;
-  --statusbar-border: rgba(6, 182, 212, 0.06);
+  --statusbar-bg: linear-gradient(135deg, #0b1828, #122436);
+  --statusbar-text: #94a3b8;
+  --statusbar-border: transparent;
+  --statusbar-border-top: rgba(6, 182, 212, 0.08);
 
   /* Tooltip */
   --tooltip-bg: #111c32;
   --tooltip-text: #e2e8f0;
-  --tooltip-border: rgba(6, 182, 212, 0.12);
+  --tooltip-border: rgba(6, 182, 212, 0.16);
+
+  /* Sidebar tokens */
+  --sidebar-bg: #070c18;
+  --sidebar-hover-bg: rgba(6, 182, 212, 0.06);
+  --sidebar-active-bg: rgba(6, 182, 212, 0.14);
+
+  /* Severity (ocean: pastel fg on dark surface) */
+  --sev-critical-fg: #fda4af;
+  --sev-critical-bg: rgba(251, 113, 133, 0.10);
+  --sev-critical-bg-hover: rgba(251, 113, 133, 0.20);
+  --sev-critical-border: rgba(251, 113, 133, 0.45);
+  --sev-critical-border-strong: #fb7185;
+  --sev-critical-tag-fg: #ffe4e6;
+  --sev-critical-tag-bg: rgba(251, 113, 133, 0.30);
+
+  --sev-warn-fg: #fde68a;
+  --sev-warn-bg: rgba(251, 191, 36, 0.10);
+  --sev-warn-bg-hover: rgba(251, 191, 36, 0.20);
+  --sev-warn-border: rgba(251, 191, 36, 0.45);
+  --sev-warn-tag-fg: #fef9c3;
+  --sev-warn-tag-bg: rgba(251, 191, 36, 0.30);
+
+  --sev-success-fg: #5eead4;
+  --sev-success-bg: rgba(45, 212, 191, 0.10);
+  --sev-success-bg-hover: rgba(45, 212, 191, 0.20);
+  --sev-success-border: rgba(45, 212, 191, 0.45);
+  --sev-success-tag-fg: #ccfbf1;
+  --sev-success-tag-bg: rgba(45, 212, 191, 0.30);
+
+  --sev-info-fg: #7dd3fc;
+  --sev-info-bg: rgba(56, 189, 248, 0.08);
+  --sev-info-bg-hover: rgba(56, 189, 248, 0.20);
+  --sev-info-border: rgba(56, 189, 248, 0.45);
+  --sev-info-selected-bg: rgba(56, 189, 248, 0.30);
+  --sev-info-selected-fg: #e0f2fe;
+  --sev-info-selected-border: #38bdf8;
+
+  --chip-count-bg: rgba(226, 232, 240, 0.10);
 }
 
 /* Ocean decorative effects */
@@ -87,24 +156,26 @@
 /* Ocean deep-sea buttons */
 [data-theme="ocean"] .modern-btn.primary {
   background: linear-gradient(135deg, #06b6d4, #0891b2);
-  box-shadow: 0 0 12px rgba(6, 182, 212, 0.3);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.32);
 }
 [data-theme="ocean"] .modern-btn.primary:hover {
   box-shadow: 0 0 20px rgba(6, 182, 212, 0.5), 0 0 40px rgba(6, 182, 212, 0.15);
 }
 
 /* Ocean sidebar & workspace borders */
-[data-theme="ocean"] .activity-bar { border-color: rgba(6, 182, 212, 0.08); }
+[data-theme="ocean"] .sidebar-nav { border-color: rgba(6, 182, 212, 0.08); }
 [data-theme="ocean"] .main-workspace { border-color: rgba(6, 182, 212, 0.05); }
 
 /* Nav hover effects */
-[data-theme="ocean"] .activity-bar-item.active { color: #22d3ee; }
-[data-theme="ocean"] .activity-bar-item:hover { color: #22d3ee; }
+[data-theme="ocean"] .sidebar-item.active,
+[data-theme="ocean"] .sidebar-group-row.active { color: #22d3ee; }
+[data-theme="ocean"] .sidebar-item:hover,
+[data-theme="ocean"] .sidebar-group-row:hover { color: #22d3ee; }
 
 /* Connected card ocean pulse */
 [data-theme="ocean"] .connection-card.connected {
-  border-color: rgba(45, 212, 191, 0.3);
-  box-shadow: 0 0 10px rgba(45, 212, 191, 0.08);
+  border-color: rgba(45, 212, 191, 0.32);
+  box-shadow: 0 0 10px rgba(45, 212, 191, 0.10);
 }
 
 /* Ocean wave effect on logo */

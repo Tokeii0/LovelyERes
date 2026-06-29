@@ -20,7 +20,7 @@ export class PackageContextMenu extends BaseContextMenu {
     if (action === 'copy-name') {
       try {
         await navigator.clipboard.writeText(this.currentPkg.name || '')
-        ;(window as any).showNotification?.('包名已复制', 'success')
+        ;window.showNotification?.('包名已复制', 'success')
       } catch { /* ignore */ }
       return true
     }

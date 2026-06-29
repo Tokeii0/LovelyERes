@@ -321,7 +321,9 @@ export class FileViewerModal {
       // 如果是目录错误，也显示通知
       const errorStr = String(error);
       if (errorStr.includes('不能读取目录') || errorStr.includes('is a directory')) {
-        (window as any).showNotification && (window as any).showNotification('无法查看目录，请选择文件', 'warning');
+        window.showNotification && window.showNotification('无法查看目录，请选择文件', 'warning');
+      } else {
+        window.showNotification && window.showNotification(`加载文件失败: ${error}`, 'error');
       }
     }
   }
@@ -405,6 +407,11 @@ export class FileViewerModal {
     const newContent = editorEl.value;
     const saveBtn = document.getElementById('file-viewer-save-btn');
 
+    if (!this.isModified && newContent === this.currentFileContent) {
+      window.showNotification && window.showNotification('文件未修改，无需保存', 'info');
+      return;
+    }
+
     // 显示保存中状态
     if (saveBtn) {
       saveBtn.textContent = '保存中...';
@@ -419,7 +426,7 @@ export class FileViewerModal {
       });
 
       console.log('文件保存成功:', this.currentFilePath);
-      (window as any).showNotification && (window as any).showNotification('文件保存成功', 'success');
+      window.showNotification && window.showNotification(`文件保存成功: ${this.currentFilePath}`, 'success');
 
       this.currentFileContent = newContent;
       this.displayContent(newContent);
@@ -430,7 +437,7 @@ export class FileViewerModal {
 
     } catch (error) {
       console.error('保存文件失败:', error);
-      (window as any).showNotification && (window as any).showNotification(`保存文件失败: ${error}`, 'error');
+      window.showNotification && window.showNotification(`保存文件失败: ${error}`, 'error');
     } finally {
       // 恢复保存按钮状态
       if (saveBtn) {

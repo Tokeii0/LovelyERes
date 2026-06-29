@@ -480,12 +480,12 @@ export class UploadModal {
           
         } catch (error) {
           console.error(`上传文件失败: ${file.name}`, error);
-          (window as any).showNotification && (window as any).showNotification(`上传文件失败: ${file.name} - ${error}`, 'error');
+          window.showNotification && window.showNotification(`上传文件失败: ${file.name} - ${error}`, 'error');
         }
       }
 
       if (completedFiles > 0) {
-        (window as any).showNotification && (window as any).showNotification(`成功上传 ${completedFiles} 个文件`, 'success');
+        window.showNotification && window.showNotification(`成功上传 ${completedFiles} 个文件`, 'success');
         
         // 刷新文件列表
         if ((window as any).sftpManager && (window as any).sftpManager.refreshCurrentDirectory) {
@@ -497,7 +497,7 @@ export class UploadModal {
 
     } catch (error) {
       console.error('上传过程中发生错误:', error);
-      (window as any).showNotification && (window as any).showNotification(`上传失败: ${error}`, 'error');
+      window.showNotification && window.showNotification(`上传失败: ${error}`, 'error');
     } finally {
       // 恢复按钮状态
       confirmBtn.disabled = false;

@@ -89,27 +89,18 @@ function showTableLoadingState(tabId: string): void {
  * 获取当前活跃标签页的tabId
  */
 function getActiveTabId(): string | null {
-  const activeTab = document.querySelector('.tab-btn.active');
+  const activeTab = document.querySelector('.sidebar-item[data-tab].active');
   return activeTab ? activeTab.getAttribute('data-tab') : null;
 }
 
 function switchSystemInfoTab(tabId: string): void {
   console.log('🔄 切换系统信息标签页:', tabId);
 
-  // 更新标签按钮状态
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    const htmlBtn = btn as HTMLElement;
-    htmlBtn.classList.remove('active');
-    const btnTabId = htmlBtn.getAttribute('data-tab');
-    if (btnTabId === tabId) {
-      htmlBtn.classList.add('active');
-      htmlBtn.style.color = 'var(--primary-color)';
-      htmlBtn.style.borderBottom = '2px solid var(--primary-color)';
-    } else {
-      htmlBtn.style.color = 'var(--text-secondary)';
-      htmlBtn.style.borderBottom = '2px solid transparent';
-    }
+  // 更新主侧边栏中系统信息 tab 叶子的 active 状态，并同步分组高亮
+  document.querySelectorAll('.sidebar-item[data-tab]').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
   });
+  (window as any).syncSidebarActiveGroup && (window as any).syncSidebarActiveGroup();
 
   // 更新标签页内容
   const contentContainer = document.getElementById('system-info-content');
@@ -147,9 +138,16 @@ function switchSystemInfoTab(tabId: string): void {
         // 正在渐进式加载中，显示加载状态
         showTableLoadingState(tabId);
       } else {
-        // 无数据且未加载，触发加载
+        // 缓存里没有该 tab 的数据（或为空，例如冷连接首批并行采集返回空）：
+        // 定向重新拉取该项自愈，避免被"有效但为空"的全量缓存卡住、非要手动刷新才出数据。
         showTableLoadingState(tabId);
-        (window as any).loadSystemDetailedInfo();
+        fetchSingleTabData(tabId).then(data => {
+          if (!cache.detailedInfo) cache.detailedInfo = {};
+          cache.detailedInfo[dataKey] = data;
+          loadSystemInfoTabData(tabId, cache.detailedInfo);
+        }).catch(() => {
+          (window as any).loadSystemDetailedInfo();
+        });
       }
     }
   }
@@ -275,6 +273,15 @@ function loadSystemInfoTabData(tabId: string, detailedInfo?: any): void {
   if (funcName && typeof (window as any)[funcName] === 'function') {
     (window as any)[funcName](detailedInfo[dataKey] || []);
   }
+  // 填充该 tab 的标题计数与功能特色统计卡片（进程页有独立逻辑，updateSysTabChips 跳过）
+  (window as any).updateSysTabChips?.(tabId, detailedInfo[dataKey] || []);
+
+  // 行点击 → 右侧详情侧栏（仅对启用了详情侧栏的 tab）
+  const sideTabs = (window as any).__sysDetailTabs;
+  if (sideTabs && typeof sideTabs.has === 'function' && sideTabs.has(tabId)) {
+    const tbody = document.getElementById(`${tabId}-table-body`);
+    if (tbody) (window as any).bindSysDetailRows?.(tbody, tabId, detailedInfo[dataKey] || []);
+  }
 }
 
 async function refreshAllSystemInfo(): Promise<void> {
@@ -320,9 +327,10 @@ async function refreshAllSystemInfo(): Promise<void> {
       app.stateManager.setState(state);
     }
 
-    (window as any).showNotification?.('系统信息已刷新', 'success');
+    window.showNotification?.('系统信息已刷新', 'success');
   } catch (error) {
     console.error('❌ 刷新系统信息失败:', error);
+    window.showNotification?.(`系统信息刷新失败: ${error}`, 'error');
     const content = document.getElementById('system-info-content');
     if (content) {
       content.innerHTML = `
@@ -382,6 +390,16 @@ function injectLoadingStyles(): void {
 /**
  * Docker/K8s 数据获取 (通过 SSH 直接获取)
  */
+/** 定向重新拉取单个常规 tab 的数据（自愈用，不重跑全量采集） */
+async function fetchSingleTabData(tabId: string): Promise<any[]> {
+  const key = dataKeyMap[tabId];
+  const mgr = (window as any).app?.systemInfoManager;
+  if (!key || typeof mgr?.fetchSingleKey !== 'function') {
+    throw new Error('无单项采集能力，回退全量加载');
+  }
+  return await mgr.fetchSingleKey(key);
+}
+
 async function fetchExtraTabData(tabId: string): Promise<any[]> {
   const { invoke } = await import('@tauri-apps/api/core');
   const exec = async (cmd: string) => {

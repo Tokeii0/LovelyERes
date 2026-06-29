@@ -497,6 +497,8 @@ pub fn detect_log_analysis(manager: &SSHManagerRussh) -> Result<LogAnalysisResul
             output: "0".to_string(),
             exit_code: Some(0),
             timestamp: chrono::Utc::now(),
+            duration_ms: 0,
+            timed_out: false,
         });
 
     let brute_force_count = brute_force_count_result.output;

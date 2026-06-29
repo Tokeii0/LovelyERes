@@ -1,6 +1,30 @@
 // LovelyRes - Linux Emergency Response Tool
 // Rust Backend Implementation
 
+#![allow(
+    clippy::bool_comparison,
+    clippy::collapsible_else_if,
+    clippy::derivable_impls,
+    clippy::double_ended_iterator_last,
+    clippy::empty_line_after_doc_comments,
+    clippy::explicit_auto_deref,
+    clippy::get_first,
+    clippy::if_same_then_else,
+    clippy::len_zero,
+    clippy::let_and_return,
+    clippy::manual_flatten,
+    clippy::manual_range_contains,
+    clippy::manual_strip,
+    clippy::needless_borrows_for_generic_args,
+    clippy::new_without_default,
+    clippy::redundant_closure,
+    clippy::single_match,
+    clippy::too_many_arguments,
+    clippy::unwrap_or_default,
+    clippy::useless_format,
+    clippy::vec_init_then_push
+)]
+
 // 模块声明
 pub mod crypto_keys;
 pub mod detection_manager;
@@ -32,6 +56,30 @@ pub struct AppState {
     /// No outer Mutex needed, allowing concurrent command execution.
     pub ssh_manager: ssh_manager_russh::SSHManagerRussh,
     pub ssh_terminal_creation_lock: Mutex<()>,
+}
+
+/// 打开 Web 终端窗口（ttyd/wetty/shellinabox 等）
+#[tauri::command]
+async fn open_web_terminal(app: tauri::AppHandle, url: String, title: String) -> Result<String, String> {
+    let parsed = url.parse::<tauri::Url>()
+        .map_err(|e| format!("无效的 Web 终端 URL: {}", e))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("Web 终端只允许 http/https URL".to_string());
+    }
+    if parsed.host_str().is_none() {
+        return Err("Web 终端 URL 必须包含主机名".to_string());
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("Web 终端 URL 不允许内嵌用户名或密码".to_string());
+    }
+
+    let label = format!("web-term-{}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());
+
+    window_manager::WindowManager::create_external_window(
+        &app, &label, &title, &url, 900.0, 600.0,
+    )?;
+    Ok(label)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -180,6 +228,8 @@ pub fn run() {
             commands::db_commands::db_get_stats,
             // 设备信息
             device_info::get_device_uuid,
+            // Web 终端
+            open_web_terminal,
         ])
         .setup(|app| {
             // 应用初始化逻辑

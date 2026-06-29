@@ -79,18 +79,6 @@ fn shell_escape(s: &str) -> String {
     s.replace('\'', "'\\''")
 }
 
-/// Build a DbConnection from individual parameters (convenience).
-fn make_conn(db_type: &str, host: &str, port: u16, username: &str, password: &str, database: Option<&str>) -> DbConnection {
-    DbConnection {
-        db_type: db_type.to_string(),
-        host: host.to_string(),
-        port,
-        username: username.to_string(),
-        password: password.to_string(),
-        database: database.map(|s| s.to_string()),
-    }
-}
-
 // ==================== detect_databases ====================
 
 /// Detect installed databases on the remote server via SSH.

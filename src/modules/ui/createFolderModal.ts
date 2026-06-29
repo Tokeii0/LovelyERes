@@ -355,7 +355,7 @@ export class CreateFolderModal {
         remotePath: fullPath
       });
 
-      (window as any).showNotification && (window as any).showNotification(`文件夹创建成功: ${folderName}`, 'success');
+      window.showNotification && window.showNotification(`文件夹创建成功: ${folderName}`, 'success');
       
       // 刷新文件列表
       if ((window as any).sftpManager && (window as any).sftpManager.refreshCurrentDirectory) {
@@ -366,7 +366,7 @@ export class CreateFolderModal {
 
     } catch (error) {
       console.error('创建文件夹失败:', error);
-      (window as any).showNotification && (window as any).showNotification(`创建文件夹失败: ${error}`, 'error');
+      window.showNotification && window.showNotification(`创建文件夹失败: ${error}`, 'error');
       this.showError(`创建失败: ${error}`);
     } finally {
       // 恢复按钮状态

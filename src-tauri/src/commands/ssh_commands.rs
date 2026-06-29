@@ -6,6 +6,21 @@ use crate::ssh_manager_russh;
 use crate::types;
 use crate::packet_capture;
 
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn command_timeout(timeout_sec: Option<u64>) -> std::time::Duration {
+    std::time::Duration::from_secs(timeout_sec.unwrap_or(60).clamp(5, 600))
+}
+
+fn command_with_cwd(command: &str, cwd: Option<&str>) -> String {
+    match cwd.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(path) => format!("cd {} && {}", shell_quote(path), command),
+        None => command.to_string(),
+    }
+}
+
 // SSH 连接管理命令
 #[tauri::command]
 pub async fn load_ssh_connections(
@@ -251,13 +266,21 @@ pub async fn ssh_execute_batch_commands(
 pub async fn ssh_execute_emergency_command_direct(
     command: String,
     username: Option<String>,
+    timeout_sec: Option<u64>,
+    cwd: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<ssh_manager_russh::TerminalOutput, String> {
     let manager = &state.ssh_manager;
+    let timeout = command_timeout(timeout_sec);
+    let effective_command = command_with_cwd(&command, cwd.as_deref());
     let result = if username.is_some() {
-        manager.execute_dashboard_command_as_user(&command, username.as_deref()).map_err(|e| e.to_string())
+        manager
+            .execute_dashboard_command_as_user_with_timeout(&effective_command, username.as_deref(), timeout)
+            .map_err(|e| e.to_string())
     } else {
-        manager.execute_dashboard_command(&command).map_err(|e| e.to_string())
+        manager
+            .execute_dashboard_command_with_timeout(&effective_command, timeout)
+            .map_err(|e| e.to_string())
     };
 
     result

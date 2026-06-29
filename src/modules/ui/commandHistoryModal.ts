@@ -132,7 +132,7 @@ export class CommandHistoryModal {
       if (await showConfirm({ title: '清空历史', message: '确定要清空所有命令历史吗？此操作不可恢复。', dangerous: true })) {
         CommandHistoryManager.clearHistory();
         this.renderHistory();
-        (window as any).showNotification?.('命令历史已清空', 'success');
+        window.showNotification?.('命令历史已清空', 'success');
       }
     });
   }
@@ -262,6 +262,8 @@ export class CommandHistoryModal {
     if (emergencyModal) {
       emergencyModal.show(item.title, item.command, item.output);
       this.hide();
+    } else {
+      window.showNotification?.('命令详情窗口未初始化', 'error');
     }
   }
 
@@ -285,6 +287,8 @@ export class CommandHistoryModal {
           executeBtn.click();
         }
       }, 100);
+    } else {
+      window.showNotification?.('命令执行窗口未初始化，无法重新执行', 'error');
     }
   }
 
@@ -292,7 +296,7 @@ export class CommandHistoryModal {
     if (await showConfirm({ title: '删除记录', message: '确定要删除这条历史记录吗？' })) {
       CommandHistoryManager.deleteById(id);
       this.renderHistory();
-      (window as any).showNotification?.('历史记录已删除', 'success');
+      window.showNotification?.('历史记录已删除', 'success');
     }
   }
 

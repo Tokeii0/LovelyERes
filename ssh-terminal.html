@@ -6,10 +6,12 @@
     <title>SSH Terminal - LovelyRes</title>
     <link rel="stylesheet" href="/src/css/base.css">
     <style>
+        /* 终端窗口始终为 LovelySpark 深色（与 xterm 画布一致），
+           不随应用浅色主题变化；仅主色强调跟随当前主题。 */
         body {
             margin: 0;
             padding: 0;
-            background: var(--bg-primary);
+            background: #0c1222;
             font-family: var(--font-family);
             overflow: hidden;
         }
@@ -17,6 +19,15 @@
         #app {
             width: 100vw;
             height: 100vh;
+        }
+
+        /* 自定义标题栏（始终深色） */
+        .modern-title-bar {
+            background: #0f1729;
+            border-bottom: 1px solid #283548;
+        }
+        .modern-title-bar .app-name {
+            color: #f8fafc;
         }
 
         /* 控制按钮样式 */
@@ -28,30 +39,30 @@
             height: 32px;
             background: transparent;
             border: none;
-            color: var(--text-secondary);
+            color: #94a3b8;
             cursor: pointer;
-            border-radius: 4px;
+            border-radius: 6px;
             transition: all 0.2s ease;
             -webkit-app-region: no-drag;
         }
 
         .control-button:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.08);
+            color: #f8fafc;
         }
 
         .control-button.minimize-btn:hover {
-            background: #f39c12;
+            background: #f59e0b;
             color: white;
         }
 
         .control-button.maximize-btn:hover {
-            background: #27ae60;
+            background: #22c55e;
             color: white;
         }
 
         .control-button.close-btn:hover {
-            background: #e74c3c;
+            background: #ef4444;
             color: white;
         }
 
@@ -97,7 +108,7 @@
                     </div>
                     <div class="app-info">
                         <div class="app-name" style="font-size: 14px;">SSH Terminal</div>
-                        <div style="font-size: 9px; color: var(--text-secondary);">LovelyRes</div>
+                        <div style="font-size: 9px; color: #94a3b8;">LovelyRes</div>
                     </div>
                 </div>
             </div>

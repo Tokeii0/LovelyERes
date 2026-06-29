@@ -55,11 +55,6 @@ export type AppEvents = {
   // 主题
   'theme:changed': { theme: 'light' | 'dark' | 'sakura' | 'midnight' | 'ocean' };
 
-  // 用户
-  'user:login': void;
-  'user:logout': void;
-  'user:showLogin': void;
-
   // 服务器
   'server:listRefresh': void;
 
@@ -79,7 +74,7 @@ export type AppEvents = {
 export const eventBus = mitt<AppEvents>();
 
 /**
- * 便捷函数：显示通知（可直接调用替代 (window as any).showNotification）
+ * 便捷函数：显示通知（可直接调用替代 window.showNotification）
  */
 export function showNotification(message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info'): void {
   eventBus.emit('notification', { message, type });

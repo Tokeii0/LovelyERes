@@ -22,6 +22,7 @@ export const commandPalettePages: CommandPalettePage[] = [
   { id: 'packet-capture', title: '网络抓包', desc: '流量分析', shortcut: 'Ctrl+6' },
   { id: 'quick-detection', title: '快速检测', desc: '安全检测', shortcut: 'Ctrl+7' },
   { id: 'log-analysis', title: '日志审计', desc: '日志分析', shortcut: 'Ctrl+8' },
+  { id: 'web-terminal', title: 'Web 终端', desc: '连接 ttyd/wetty 等 Web 终端', shortcut: '' },
 ];
 
 function renderPaletteResults(query: string): void {

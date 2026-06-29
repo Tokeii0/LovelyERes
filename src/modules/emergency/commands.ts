@@ -29,6 +29,12 @@ export type EmergencyCategory = {
   items: EmergencyCommand[];
 };
 
+const SERVICE_LIST_COMMAND = '(systemctl list-unit-files --type=service --no-pager 2>/dev/null || rc-status -a 2>/dev/null || service --status-all 2>/dev/null || find /etc/init.d -maxdepth 1 -type f -exec basename {} \\; 2>/dev/null || echo "service manager not available") | sed -n "1,300p"';
+const RUNNING_SERVICE_COMMAND = '(systemctl list-units --type=service --state=running --no-pager 2>/dev/null || rc-status 2>/dev/null || service --status-all 2>/dev/null || ps -eo pid,comm,args 2>/dev/null | sed -n "1,120p" || echo "service manager not available") | sed -n "1,300p"';
+const AUDITD_STATUS_COMMAND = 'systemctl status auditd 2>/dev/null || service auditd status 2>/dev/null || rc-service auditd status 2>/dev/null || echo "auditd not available"';
+const LISTEN_PORTS_COMMAND = `(ss -tulpen 2>/dev/null || netstat -tulpen 2>/dev/null || netstat -tuln 2>/dev/null || echo 'ss/netstat 不可用')`;
+const ESTABLISHED_CONNECTIONS_COMMAND = `(ss -tanp 2>/dev/null || netstat -tanp 2>/dev/null || netstat -tan 2>/dev/null || echo 'ss/netstat 不可用')`;
+
 // 常用应急命令清单（按类别组织）
 export const emergencyCategories: EmergencyCategory[] = [
   {
@@ -58,20 +64,8 @@ export const emergencyCategories: EmergencyCategory[] = [
         name: '已启用服务列表',
         desc: '查看系统中已启用的服务',
         commands: {
-          default: 'systemctl list-unit-files --type=service --no-pager 2>/dev/null | sed -n "1,300p"',
-          ubuntu: 'systemctl list-unit-files --type=service --no-pager | sed -n "1,300p"',
-          debian: 'systemctl list-unit-files --type=service --no-pager | sed -n "1,300p"',
-          centos: 'systemctl list-unit-files --type=service --no-pager | sed -n "1,300p"',
-          rhel: 'systemctl list-unit-files --type=service --no-pager | sed -n "1,300p"',
-          fedora: 'systemctl list-unit-files --type=service --no-pager | sed -n "1,300p"',
-          kylin: 'systemctl list-unit-files --type=service --no-pager | sed -n "1,300p"',
-          uos: 'systemctl list-unit-files --type=service --no-pager | sed -n "1,300p"',
-          deepin: 'systemctl list-unit-files --type=service --no-pager | sed -n "1,300p"',
-          openeuler: 'systemctl list-unit-files --type=service --no-pager | sed -n "1,300p"',
-          anolis: 'systemctl list-unit-files --type=service --no-pager | sed -n "1,300p"',
-          arch: 'systemctl list-unit-files --type=service --no-pager | sed -n "1,300p"',
-          opensuse: 'systemctl list-unit-files --type=service --no-pager | sed -n "1,300p"',
-          alpine: 'rc-status -a 2>/dev/null || service --status-all 2>/dev/null | head -n 300'
+          default: SERVICE_LIST_COMMAND,
+          alpine: SERVICE_LIST_COMMAND,
         }
       },
       {
@@ -79,20 +73,8 @@ export const emergencyCategories: EmergencyCategory[] = [
         name: '运行中的服务',
         desc: '查看当前正在运行的服务',
         commands: {
-          default: 'systemctl list-units --type=service --state=running --no-pager 2>/dev/null | sed -n "1,300p"',
-          ubuntu: 'systemctl list-units --type=service --state=running --no-pager | sed -n "1,300p"',
-          debian: 'systemctl list-units --type=service --state=running --no-pager | sed -n "1,300p"',
-          centos: 'systemctl list-units --type=service --state=running --no-pager | sed -n "1,300p"',
-          rhel: 'systemctl list-units --type=service --state=running --no-pager | sed -n "1,300p"',
-          fedora: 'systemctl list-units --type=service --state=running --no-pager | sed -n "1,300p"',
-          kylin: 'systemctl list-units --type=service --state=running --no-pager | sed -n "1,300p"',
-          uos: 'systemctl list-units --type=service --state=running --no-pager | sed -n "1,300p"',
-          deepin: 'systemctl list-units --type=service --state=running --no-pager | sed -n "1,300p"',
-          openeuler: 'systemctl list-units --type=service --state=running --no-pager | sed -n "1,300p"',
-          anolis: 'systemctl list-units --type=service --state=running --no-pager | sed -n "1,300p"',
-          arch: 'systemctl list-units --type=service --state=running --no-pager | sed -n "1,300p"',
-          opensuse: 'systemctl list-units --type=service --state=running --no-pager | sed -n "1,300p"',
-          alpine: 'rc-status 2>/dev/null | grep started || ps aux | head -n 100'
+          default: RUNNING_SERVICE_COMMAND,
+          alpine: RUNNING_SERVICE_COMMAND,
         }
       },
       { id: 'base-cron', name: 'cron 任务总览', cmd: 'for u in $(cut -f1 -d: /etc/passwd); do echo "===== $u ====="; crontab -u "$u" -l 2>/dev/null; done; echo "===== system ====="; ls -l /etc/cron.* /etc/cron.d 2>/dev/null', desc: '用户/系统定时任务' },
@@ -179,8 +161,8 @@ export const emergencyCategories: EmergencyCategory[] = [
     title: '网络安全排查',
     hint: '端口、连接、路由、防火墙与DNS',
     items: [
-      { id: 'net-listen', name: 'ss 监听端口', cmd: `ss -tulpen 2>/dev/null | sed -n '1,300p'`, desc: 'TCP/UDP 监听' },
-      { id: 'net-established', name: 'ss 活动连接', cmd: `ss -tanp 2>/dev/null | sed -n '1,500p'`, desc: '活动 TCP 连接' },
+      { id: 'net-listen', name: '监听端口', cmd: `${LISTEN_PORTS_COMMAND} | sed -n '1,300p'`, desc: 'TCP/UDP 监听' },
+      { id: 'net-established', name: '活动连接', cmd: `${ESTABLISHED_CONNECTIONS_COMMAND} | sed -n '1,500p'`, desc: '活动 TCP 连接' },
       { id: 'net-route', name: '路由表 ip route', cmd: `ip route 2>/dev/null || route -n 2>/dev/null`, desc: '网络路由' },
       { id: 'net-dns', name: '/etc/resolv.conf', cmd: `cat /etc/resolv.conf 2>/dev/null`, desc: 'nameserver/搜索域' },
       {
@@ -220,13 +202,13 @@ export const emergencyCategories: EmergencyCategory[] = [
         id: 'net-open-ports',
         name: '开放端口统计',
         desc: '统计所有监听端口',
-        cmd: 'ss -tuln 2>/dev/null | grep LISTEN | awk \'{print $5}\' | awk -F: \'{print $NF}\' | sort -n | uniq -c | sort -rn'
+        cmd: `${LISTEN_PORTS_COMMAND} | grep -E 'LISTEN|tcp|udp' | awk '{print $5}' | awk -F: '{print $NF}' | sort -n | uniq -c | sort -rn`
       },
       {
         id: 'net-suspicious-connections',
         name: '可疑外部连接',
         desc: '检查非常见端口的外部连接',
-        cmd: 'ss -tanp 2>/dev/null | grep ESTAB | grep -vE ":(80|443|22|3306|6379|27017|5432|9200|8080)" | head -n 100'
+        cmd: `${ESTABLISHED_CONNECTIONS_COMMAND} | grep -E 'ESTAB|ESTABLISHED' | grep -vE ":(80|443|22|3306|6379|27017|5432|9200|8080)" | head -n 100`
       },
       {
         id: 'net-interfaces',
@@ -334,8 +316,8 @@ export const emergencyCategories: EmergencyCategory[] = [
       {
         id: 'sys-systemd-units',
         name: 'systemd 单元文件',
-        desc: '列出所有systemd单元文件',
-        cmd: 'systemctl list-unit-files --no-pager 2>/dev/null | head -n 200'
+        desc: '列出systemd/OpenRC/init服务文件',
+        cmd: `${SERVICE_LIST_COMMAND} | head -n 200`
       },
       {
         id: 'sys-environment-vars',
@@ -371,7 +353,7 @@ export const emergencyCategories: EmergencyCategory[] = [
         id: 'sys-unusual-files',
         name: '异常文件名检测',
         desc: '检测包含特殊字符的文件名',
-        cmd: 'find / -xdev -type f -name "*[[:space:]]*" -o -name ".*[[:space:]]*" 2>/dev/null | head -n 100'
+        cmd: 'find / -xdev -type f \\( -name "*[[:space:]]*" -o -name ".*[[:space:]]*" \\) 2>/dev/null | head -n 100'
       },
       {
         id: 'sys-large-files',
@@ -421,20 +403,8 @@ export const emergencyCategories: EmergencyCategory[] = [
         name: 'auditd 审计状态',
         desc: '检查auditd审计服务状态',
         commands: {
-          default: 'systemctl status auditd 2>/dev/null || service auditd status 2>/dev/null',
-          ubuntu: 'systemctl status auditd 2>/dev/null || echo "auditd not installed"',
-          debian: 'systemctl status auditd 2>/dev/null || echo "auditd not installed"',
-          centos: 'systemctl status auditd 2>/dev/null',
-          rhel: 'systemctl status auditd 2>/dev/null',
-          fedora: 'systemctl status auditd 2>/dev/null',
-          kylin: 'systemctl status auditd 2>/dev/null',
-          uos: 'systemctl status auditd 2>/dev/null || echo "auditd not installed"',
-          deepin: 'systemctl status auditd 2>/dev/null || echo "auditd not installed"',
-          openeuler: 'systemctl status auditd 2>/dev/null',
-          anolis: 'systemctl status auditd 2>/dev/null',
-          arch: 'systemctl status auditd 2>/dev/null || echo "auditd not installed"',
-          opensuse: 'systemctl status auditd 2>/dev/null',
-          alpine: 'rc-service auditd status 2>/dev/null || echo "auditd not available"'
+          default: AUDITD_STATUS_COMMAND,
+          alpine: AUDITD_STATUS_COMMAND,
         }
       },
       {
@@ -459,7 +429,7 @@ export const emergencyCategories: EmergencyCategory[] = [
         id: 'audit-rsyslog-config',
         name: 'rsyslog 配置',
         desc: '检查rsyslog配置',
-        cmd: 'systemctl status rsyslog 2>/dev/null; echo "---"; cat /etc/rsyslog.conf 2>/dev/null | grep -v "^#" | grep -v "^$" | head -n 50'
+        cmd: '(systemctl status rsyslog 2>/dev/null || service rsyslog status 2>/dev/null || rc-service rsyslog status 2>/dev/null || echo "rsyslog service status not available"); echo "---"; cat /etc/rsyslog.conf 2>/dev/null | grep -v "^#" | grep -v "^$" | head -n 50'
       },
       {
         id: 'audit-ssh-logins',
@@ -509,6 +479,11 @@ export const emergencyCategories: EmergencyCategory[] = [
       { id: 'ctn-k8s-pods', name: 'K8s Pod 概览', cmd: `kubectl get pods -A -o wide 2>/dev/null | head -n 100 || echo 'kubectl 不可用'`, desc: '所有命名空间的 Pod' },
       { id: 'ctn-k8s-privileged', name: 'K8s 特权 Pod', cmd: `kubectl get pods -A -o json 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);[print(f'{i[\"metadata\"][\"namespace\"]}/{i[\"metadata\"][\"name\"]}') for i in d.get('items',[]) for c in i.get('spec',{}).get('containers',[]) if c.get('securityContext',{}).get('privileged')]" 2>/dev/null || echo 'kubectl/python3 不可用'`, desc: '检测特权 Pod' },
       { id: 'ctn-container-detect', name: '容器环境检测', cmd: `echo "=== cgroup ==="; head -n5 /proc/1/cgroup 2>/dev/null; echo "=== dockerenv ==="; ls -la /.dockerenv 2>/dev/null; echo "=== k8s ==="; ls /var/run/secrets/kubernetes.io 2>/dev/null; echo "=== hostname ==="; hostname; echo "=== overlay ==="; mount | grep overlay | head -n5`, desc: '判断当前是否在容器内' },
+      { id: 'ctn-k8s-reverse-shell', name: 'K8s 反弹Shell Pod', cmd: `kubectl get pods -A -o json 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);[print(f'[CRITICAL] {p[\"metadata\"][\"namespace\"]}/{p[\"metadata\"][\"name\"]} -> {\" \".join(c.get(\"command\",[]))} {\" \".join(c.get(\"args\",[]))}') for p in d.get('items',[]) for c in p.get('spec',{}).get('containers',[]) if any(k in ' '.join(c.get('command',[])+c.get('args',[])) for k in ['/dev/tcp/','bash -i >&','nc -e','ncat '])]" 2>/dev/null || echo 'kubectl/python3 不可用'`, desc: '检测包含反弹Shell命令的Pod' },
+      { id: 'ctn-k8s-cronjob-check', name: 'K8s CronJob 安全检查', cmd: `kubectl get cronjobs -A -o json 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);[print(f'{cj[\"metadata\"][\"namespace\"]}/{cj[\"metadata\"][\"name\"]} schedule={cj[\"spec\"][\"schedule\"]} cmd={\" \".join(c.get(\"command\",[])+c.get(\"args\",[]))}') for cj in d.get('items',[]) for c in cj.get('spec',{}).get('jobTemplate',{}).get('spec',{}).get('template',{}).get('spec',{}).get('containers',[])]" 2>/dev/null || echo 'kubectl/python3 不可用'`, desc: '列出所有CronJob及命令，排查恶意定时任务' },
+      { id: 'ctn-k8s-sa-highrisk', name: 'K8s 高权限SA检测', cmd: `kubectl get clusterrolebindings -o json 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);[print(f'[{b[\"roleRef\"][\"name\"]}] SA={s[\"name\"]} NS={s.get(\"namespace\",\"cluster\")} via CRB={b[\"metadata\"][\"name\"]}') for b in d.get('items',[]) if b['roleRef']['name'] in ['cluster-admin','admin'] for s in b.get('subjects',[]) if s.get('kind')=='ServiceAccount' and not s.get('name','').startswith('system:')]" 2>/dev/null || echo 'kubectl/python3 不可用'`, desc: '检测绑定cluster-admin的非系统ServiceAccount' },
+      { id: 'ctn-k8s-etcd-pods', name: 'K8s etcd Pod键检查', cmd: `echo "需要在控制面节点执行:"; echo "ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 --cacert=<ca> --cert=<cert> --key=<key> get /registry/pods/ --prefix --keys-only"`, desc: '检查etcd中Pod键名是否被篡改（与metadata.name不匹配）' },
+      { id: 'ctn-k8s-node-persistence', name: 'K8s节点持久化检查', cmd: `echo "=== 非标准服务 ==="; ${SERVICE_LIST_COMMAND} | grep -vE 'snap|systemd|network|docker|containerd|ssh|cron|rsyslog|apparmor|udev|dbus|accounts-daemon|getty|grub|polkit|irqbalance|fstrim|logrotate|lvm|multipathd|open-vm|blk-availability' | head -20; echo "=== 可疑二进制 ==="; find /usr/bin /usr/local/bin /usr/sbin -newer /etc/hostname -type f -executable 2>/dev/null | head -10; echo "=== 静态Pod清单 ==="; ls -la /etc/kubernetes/manifests/ 2>/dev/null; echo "=== crontab ==="; crontab -l 2>/dev/null || echo "无crontab"`, desc: '检查宿主机持久化：systemd服务、可疑二进制、静态Pod、crontab' },
     ],
   },
   {
@@ -517,22 +492,22 @@ export const emergencyCategories: EmergencyCategory[] = [
     hint: '快速定位异常进程/端口/账号/取证',
     items: [
       { id: 'is-hot-proc', name: 'Top CPU/内存 25', cmd: `ps -eo pid,ppid,user,%cpu,%mem,etime,cmd --sort=-%cpu | head -n 25`, desc: '排查高负载或异常进程' },
-      { id: 'is-susp-listen', name: 'LISTEN 非标准端口', cmd: `ss -tulpen 2>/dev/null | awk 'NR==1 || ($5 !~ /:(22|80|443|3306|5432|6379)$/)'`, desc: '监听非常见端口的后门服务' },
+      { id: 'is-susp-listen', name: 'LISTEN 非标准端口', cmd: `${LISTEN_PORTS_COMMAND} | awk 'NR==1 || ($5 !~ /:(22|80|443|3306|5432|6379)$/)'`, desc: '监听非常见端口的后门服务' },
       { id: 'is-recent-suid', name: '3天内新 SUID', cmd: `find / -xdev -type f -perm -4000 -mtime -3 2>/dev/null`, desc: '最近被赋予 SUID 的二进制' },
-      { id: 'is-home-recent', name: '/home 7日内新目录', cmd: `find /home -mindepth 1 -maxdepth 1 -type d -mtime -7 -printf '%TY-%Tm-%Td %TH:%TM %p\n' 2>/dev/null`, desc: '发现新增或可疑用户目录' },
-      { id: 'is-failed-service', name: 'systemd Failed Units', cmd: `systemctl list-units --state=failed --no-pager 2>/dev/null`, desc: '失败服务排查潜在破坏行为' },
+      { id: 'is-home-recent', name: '/home 7日内新目录', cmd: `find /home -mindepth 1 -maxdepth 1 -type d -mtime -7 -exec ls -ld {} \\; 2>/dev/null`, desc: '发现新增或可疑用户目录' },
+      { id: 'is-failed-service', name: 'Failed Units/Services', cmd: `systemctl list-units --state=failed --no-pager 2>/dev/null || rc-status -a 2>/dev/null | grep -Ei 'crashed|stopped|failed' || echo 'failed service query not available'`, desc: '失败服务排查潜在破坏行为' },
       { id: 'is-reboots', name: '近期重启记录', cmd: `last reboot -n 10 2>/dev/null`, desc: '定位异常重启时间线' },
       { id: 'fx-bash-history', name: '普通用户 bash_history', cmd: `for u in $(getent passwd | awk -F: '$3>=1000 && $3!=65534 {print $1}'); do hist=~$u/.bash_history; [ -f "$hist" ] && { echo "===== $u ====="; tail -n 40 "$hist"; echo; }; done`, desc: '抽取普通账号最近的命令历史' },
       { id: 'fx-root-history', name: 'root bash_history', cmd: `tail -n 80 /root/.bash_history 2>/dev/null`, desc: '快速查看管理员历史命令' },
-      { id: 'fx-tmp-recent', name: '/tmp 近期文件', cmd: `find /tmp /var/tmp -maxdepth 2 -type f -mtime -1 -size -5M -printf '%TY-%Tm-%Td %TH:%TM %p\n' 2>/dev/null`, desc: '木马常驻的临时文件' },
-      { id: 'is-new-users-7d', name: '7天内新建用户', cmd: `awk -F: '{if($3>=1000)print $1,$3}' /etc/passwd | while read u uid; do find /home/"$u" -maxdepth 0 -mtime -7 -printf "$u (UID=$uid) created %TY-%Tm-%Td\\n" 2>/dev/null; done; awk -F: '$3>=1000 && $3!=65534{print $1,$3}' /etc/passwd | while read u uid; do chage -l "$u" 2>/dev/null | grep "Last password change" | sed "s/^/$u: /"; done | head -n 30`, desc: '近期新增账号排查' },
+      { id: 'fx-tmp-recent', name: '/tmp 近期文件', cmd: `find /tmp /var/tmp -maxdepth 2 -type f -mtime -1 -size -5M -exec ls -lh {} \\; 2>/dev/null`, desc: '木马常驻的临时文件' },
+      { id: 'is-new-users-7d', name: '7天内新建用户', cmd: `awk -F: '$3>=1000 && $3!=65534{print $1,$3}' /etc/passwd | while read u uid; do [ -d "/home/$u" ] && find "/home/$u" -maxdepth 0 -mtime -7 -exec echo "$u (UID=$uid) home changed recently" \\; 2>/dev/null; chage -l "$u" 2>/dev/null | grep "Last password change" | sed "s/^/$u: /"; done | head -n 30`, desc: '近期新增账号排查' },
       { id: 'is-passwd-shadow-diff', name: 'passwd/shadow 一致性', cmd: `echo "=== passwd 用户数 ==="; wc -l /etc/passwd; echo "=== shadow 用户数 ==="; wc -l /etc/shadow 2>/dev/null; echo "=== 仅在passwd中 ==="; diff <(cut -d: -f1 /etc/passwd | sort) <(cut -d: -f1 /etc/shadow 2>/dev/null | sort) 2>/dev/null | head -n 20`, desc: 'passwd 与 shadow 不一致可能被篡改' },
-      { id: 'is-open-fd', name: '异常打开文件描述符', cmd: `lsof -nP 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -rn | head -n 20`, desc: '排查文件描述符泄漏或恶意打开' },
+      { id: 'is-open-fd', name: '异常打开文件描述符', cmd: `lsof -nP 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -rn | head -n 20 || echo 'lsof not available'`, desc: '排查文件描述符泄漏或恶意打开' },
       { id: 'is-proc-tree', name: '进程父子关系树', cmd: `ps -ef --forest 2>/dev/null | head -n 100 || pstree -pa 2>/dev/null | head -n 100`, desc: '进程树，发现异常父子关系' },
       { id: 'is-login-ips', name: '登录 IP 统计 Top20', cmd: `grep "Accepted" /var/log/auth.log 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="from") print $(i+1)}' | sort | uniq -c | sort -rn | head -n 20 || grep "Accepted" /var/log/secure 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="from") print $(i+1)}' | sort | uniq -c | sort -rn | head -n 20`, desc: '登录来源 IP 频率统计' },
       { id: 'is-bruteforce-ips', name: '暴力破解 IP Top20', cmd: `grep "Failed password" /var/log/auth.log 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="from") print $(i+1)}' | sort | uniq -c | sort -rn | head -n 20 || grep "Failed password" /var/log/secure 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="from") print $(i+1)}' | sort | uniq -c | sort -rn | head -n 20`, desc: '暴力破解来源 IP 统计' },
       { id: 'is-disk-usage', name: '磁盘占用异常', cmd: `df -hT 2>/dev/null; echo "---"; du -sh /var/log /tmp /var/tmp /root /home 2>/dev/null | sort -rh`, desc: '磁盘空间和关键目录占用' },
-      { id: 'is-network-connections-by-proc', name: '各进程网络连接数', cmd: `ss -tanp 2>/dev/null | grep ESTAB | awk '{print $NF}' | sort | uniq -c | sort -rn | head -n 20`, desc: '哪些进程建立了最多连接' },
+      { id: 'is-network-connections-by-proc', name: '各进程网络连接数', cmd: `${ESTABLISHED_CONNECTIONS_COMMAND} | grep -E 'ESTAB|ESTABLISHED' | awk '{print $NF}' | sort | uniq -c | sort -rn | head -n 20`, desc: '哪些进程建立了最多连接' },
     ],
   },
   {
@@ -540,7 +515,7 @@ export const emergencyCategories: EmergencyCategory[] = [
     title: '提权检测',
     hint: '提权线索枚举 · SUID/Capabilities/PATH/凭据',
     items: [
-      { id: 'ctf-sudo-l', name: 'sudo -l 调查', cmd: `sudo -l 2>/dev/null || echo '需要交互式口令或无sudo权限'`, desc: '可无密码执行的命令' },
+      { id: 'ctf-sudo-l', name: 'sudo -l 调查', cmd: `sudo -n -l 2>/dev/null || echo '需要交互式口令或无sudo权限'`, desc: '可无密码执行的命令' },
       { id: 'ctf-suid-interesting', name: 'SUID 可提权组件', cmd: `find / -xdev -perm -4000 -type f 2>/dev/null | xargs -r ls -la 2>/dev/null | egrep 'bash|sh|nmap|find|python|perl|ruby|vim|nano|less|more|cp|mv|tar|rsync' || true`, desc: '常见可滥用的 SUID 二进制' },
       { id: 'ctf-cap-interesting', name: 'Capabilities 提权', cmd: `command -v getcap >/dev/null 2>&1 && getcap -r / 2>/dev/null | egrep 'cap_setuid|cap_setgid|cap_dac_read_search' || echo 'getcap 未安装'`, desc: '可提权的 capabilities' },
       { id: 'ctf-path-writable', name: 'PATH 可写路径', cmd: `echo $PATH | tr ':' '\n' | while read d; do [ -w "$d" ] && echo "$d"; done 2>/dev/null`, desc: '路径投毒风险' },
@@ -575,7 +550,7 @@ export const emergencyCategories: EmergencyCategory[] = [
         id: 'threat-reverse-shells',
         name: '反向Shell检测',
         desc: '检测可能的反向shell连接',
-        cmd: 'netstat -antp 2>/dev/null | grep -E "ESTABLISHED|SYN_SENT" | grep -vE ":(80|443|22|3306|53)" | head -n 100 || ss -antp 2>/dev/null | grep -E "ESTAB|SYN-SENT" | head -n 100'
+        cmd: `${ESTABLISHED_CONNECTIONS_COMMAND} | grep -E "ESTAB|ESTABLISHED|SYN_SENT|SYN-SENT" | grep -vE ":(80|443|22|3306|53)" | head -n 100`
       },
       {
         id: 'threat-webshell-scan',
@@ -593,19 +568,19 @@ export const emergencyCategories: EmergencyCategory[] = [
         id: 'threat-malware-signatures',
         name: '恶意软件特征',
         desc: '检测常见恶意软件特征',
-        cmd: 'ps aux | grep -E "(miner|xmrig|cryptonight|stratum)" | grep -v grep; echo "---"; find / -xdev -name "*miner*" -o -name "*xmrig*" 2>/dev/null | head -n 50'
+        cmd: 'ps aux | grep -E "(miner|xmrig|cryptonight|stratum)" | grep -v grep; echo "---"; find / -xdev \\( -name "*miner*" -o -name "*xmrig*" \\) 2>/dev/null | head -n 50'
       },
       {
         id: 'threat-suspicious-network',
         name: '可疑网络活动',
         desc: '检测异常网络连接',
-        cmd: 'ss -antp 2>/dev/null | awk \'$1=="ESTAB" {print $5}\' | cut -d: -f1 | sort | uniq -c | sort -rn | head -n 30'
+        cmd: `${ESTABLISHED_CONNECTIONS_COMMAND} | awk '$1=="ESTAB" || $1=="ESTABLISHED" {print $5}' | cut -d: -f1 | sort | uniq -c | sort -rn | head -n 30`
       },
       {
         id: 'threat-dns-tunneling',
         name: 'DNS隧道检测',
         desc: '检测可能的DNS隧道',
-        cmd: 'ss -anup 2>/dev/null | grep ":53" | head -n 50; echo "---"; lsof -i :53 2>/dev/null | head -n 30'
+        cmd: '(ss -anup 2>/dev/null || netstat -anup 2>/dev/null || netstat -anu 2>/dev/null || echo "ss/netstat not available") | grep ":53" | head -n 50; echo "---"; lsof -i :53 2>/dev/null | head -n 30 || echo "lsof not available"'
       },
       {
         id: 'threat-privilege-escalation',
@@ -625,11 +600,11 @@ export const emergencyCategories: EmergencyCategory[] = [
         desc: '检查内核版本和已知漏洞',
         cmd: 'uname -a; echo "---"; cat /proc/version; echo "---"; dmesg | grep -i "exploit\\|vulnerability" | tail -n 20'
       },
-      { id: 'threat-icmp-backdoor', name: 'ICMP 后门检测', cmd: `ss -anp 2>/dev/null | grep -i icmp | head -n 20; echo "---"; lsof -i | grep -i icmp 2>/dev/null | head -n 20`, desc: 'ICMP 隧道/后门进程' },
-      { id: 'threat-bind-shell', name: 'Bind Shell 检测', cmd: `ss -tulpn 2>/dev/null | grep -E "0\\.0\\.0\\.0:(4444|5555|6666|7777|8888|9999|1234|31337|12345)" | head -n 20; echo "---"; lsof -i -P 2>/dev/null | grep -E "(LISTEN)" | grep -vE ":(22|80|443|3306|8080|8443)" | head -n 30`, desc: '常见 bind shell 端口' },
-      { id: 'threat-crypto-mining', name: '挖矿进程检测', cmd: `ps aux | grep -iE "(miner|xmrig|xmr-stak|cpuminer|cgminer|bfgminer|minerd|cryptonight|stratum)" | grep -v grep; echo "---"; find /tmp /var/tmp /dev/shm /opt -name "*miner*" -o -name "*xmrig*" -o -name "*xmr*" 2>/dev/null | head -n 30; echo "---"; top -bn1 | awk '$9>80{print}' | head -n 10`, desc: '挖矿特征进程和文件' },
+      { id: 'threat-icmp-backdoor', name: 'ICMP 后门检测', cmd: `(ss -anp 2>/dev/null || netstat -anp 2>/dev/null || echo 'ss/netstat not available') | grep -i icmp | head -n 20; echo "---"; lsof -i 2>/dev/null | grep -i icmp | head -n 20 || echo "lsof not available"`, desc: 'ICMP 隧道/后门进程' },
+      { id: 'threat-bind-shell', name: 'Bind Shell 检测', cmd: `${LISTEN_PORTS_COMMAND} | grep -E "0\\.0\\.0\\.0:(4444|5555|6666|7777|8888|9999|1234|31337|12345)" | head -n 20; echo "---"; lsof -i -P 2>/dev/null | grep -E "(LISTEN)" | grep -vE ":(22|80|443|3306|8080|8443)" | head -n 30 || echo "lsof not available"`, desc: '常见 bind shell 端口' },
+      { id: 'threat-crypto-mining', name: '挖矿进程检测', cmd: `ps aux | grep -iE "(miner|xmrig|xmr-stak|cpuminer|cgminer|bfgminer|minerd|cryptonight|stratum)" | grep -v grep; echo "---"; find /tmp /var/tmp /dev/shm /opt \\( -name "*miner*" -o -name "*xmrig*" -o -name "*xmr*" \\) 2>/dev/null | head -n 30; echo "---"; top -bn1 | awk '$9>80{print}' | head -n 10`, desc: '挖矿特征进程和文件' },
       { id: 'threat-proc-injection', name: '进程注入检测', cmd: `find /proc/*/maps -exec grep -l "\\[vdso\\]" {} 2>/dev/null | head -n 5; echo "---"; grep -c "deleted" /proc/*/maps 2>/dev/null | awk -F: '$2>0{print}' | sort -t: -k2 -rn | head -n 20`, desc: '内存映射中的可疑删除文件' },
-      { id: 'threat-ioc-ip-check', name: '外连 IP 地理分布', cmd: `ss -tanp 2>/dev/null | grep ESTAB | awk '{print $5}' | cut -d: -f1 | grep -vE "^(127\\.|10\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|::1|0\\.0\\.0\\.0)" | sort | uniq -c | sort -rn | head -n 30`, desc: '外部连接 IP 频率（排除内网）' },
+      { id: 'threat-ioc-ip-check', name: '外连 IP 地理分布', cmd: `${ESTABLISHED_CONNECTIONS_COMMAND} | grep -E 'ESTAB|ESTABLISHED' | awk '{print $5}' | cut -d: -f1 | grep -vE "^(127\\.|10\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|::1|0\\.0\\.0\\.0)" | sort | uniq -c | sort -rn | head -n 30`, desc: '外部连接 IP 频率（排除内网）' },
       { id: 'threat-suspicious-cron', name: '可疑 crontab 下载', cmd: `crontab -l 2>/dev/null | grep -iE "(wget|curl|python|bash|sh|nc|/dev/tcp)"; echo "---"; for u in $(cut -d: -f1 /etc/passwd); do c=$(crontab -u "$u" -l 2>/dev/null | grep -iE "(wget|curl|python|bash|nc)"); [ -n "$c" ] && echo "=== $u ===" && echo "$c"; done | head -n 50`, desc: '排查 crontab 中的下载/执行命令' },
       { id: 'threat-so-preload', name: '动态库劫持全检', cmd: `echo "=== ld.so.preload ==="; cat /etc/ld.so.preload 2>/dev/null || echo "(empty)"; echo "=== LD_PRELOAD env ==="; env | grep LD_PRELOAD; echo "=== /etc/ld.so.conf.d ==="; ls -la /etc/ld.so.conf.d/ 2>/dev/null; echo "=== 近期修改的 .so ==="; find /lib /lib64 /usr/lib /usr/lib64 -name "*.so*" -mtime -7 2>/dev/null | head -n 30`, desc: '全面检测 so 劫持' }
     ],
@@ -639,10 +614,10 @@ export const emergencyCategories: EmergencyCategory[] = [
     title: '持久化 & Backdoor',
     hint: '持久化后门/定时任务排查',
     items: [
-      { id: 'ps-systemd-timers', name: 'systemd Timers', cmd: `systemctl list-timers --all --no-pager 2>/dev/null`, desc: '查看自定义定时任务或后门执行' },
+      { id: 'ps-systemd-timers', name: 'Timers / Scheduled Jobs', cmd: `systemctl list-timers --all --no-pager 2>/dev/null || ls -la /etc/periodic /var/spool/cron /var/spool/cron/crontabs 2>/dev/null || echo 'systemd timers not available'`, desc: '查看自定义定时任务或后门执行' },
       { id: 'ps-cron-susp', name: 'cron 恶意关键字', cmd: `grep -R -n -E '(wget|curl|bash|python|perl|nc|sh)' /etc/cron* 2>/dev/null | head -n 120`, desc: '匹配 cron 中的可疑命令' },
       { id: 'ps-ld-preload', name: '/etc/ld.so.preload', cmd: `cat /etc/ld.so.preload 2>/dev/null`, desc: '排查动态库劫持后门' },
-      { id: 'ps-systemd-fresh', name: '48h 内新 service', cmd: `find /etc/systemd/system -maxdepth 2 -type f -name '*.service' -mtime -2 -printf '%TY-%Tm-%Td %TH:%TM %p\n' 2>/dev/null`, desc: '发现最近被投放的 systemd 服务' },
+      { id: 'ps-systemd-fresh', name: '48h 内新 service', cmd: `find /etc/systemd/system -maxdepth 2 -type f -name '*.service' -mtime -2 -exec ls -l {} \\; 2>/dev/null`, desc: '发现最近被投放的 systemd 服务' },
       { id: 'ps-ssh-keys', name: 'authorized_keys 巡检', cmd: `grep -R -n '' /root/.ssh/authorized_keys /home/*/.ssh/authorized_keys 2>/dev/null`, desc: '查找未授权的 SSH 公钥植入' },
       {
         id: 'ps-bashrc-profile',
@@ -688,7 +663,7 @@ export const emergencyCategories: EmergencyCategory[] = [
       },
       { id: 'ps-rc-local', name: 'rc.local 后门', cmd: `cat /etc/rc.local 2>/dev/null | grep -v "^#" | grep -v "^$"; echo "---"; cat /etc/rc.d/rc.local 2>/dev/null | grep -v "^#" | grep -v "^$"`, desc: '排查 rc.local 启动后门' },
       { id: 'ps-prelib-hijack', name: '预加载库劫持', cmd: `echo "=== /etc/ld.so.preload ==="; cat /etc/ld.so.preload 2>/dev/null; echo "=== LD_PRELOAD ==="; grep -r "LD_PRELOAD" /etc/profile /etc/profile.d/ /etc/environment /etc/bash.bashrc /home/*/.bashrc 2>/dev/null | head -n 20; echo "=== 近7天新增.so ==="; find /usr/lib /usr/lib64 /lib /lib64 -name "*.so*" -mtime -7 2>/dev/null | head -n 20`, desc: '全面检测预加载劫持' },
-      { id: 'ps-socket-backdoor', name: 'Unix Socket 后门', cmd: `ss -xlp 2>/dev/null | head -n 50; echo "---"; find /tmp /var/tmp /dev/shm -type s 2>/dev/null | head -n 20`, desc: '隐蔽的 Unix Socket 通信' },
+      { id: 'ps-socket-backdoor', name: 'Unix Socket 后门', cmd: `(ss -xlp 2>/dev/null || netstat -xlp 2>/dev/null || echo 'ss/netstat not available') | head -n 50; echo "---"; find /tmp /var/tmp /dev/shm -type s 2>/dev/null | head -n 20`, desc: '隐蔽的 Unix Socket 通信' },
       { id: 'ps-alias-backdoor', name: 'alias 命令劫持', cmd: `alias 2>/dev/null; echo "---"; for f in /etc/profile /etc/bashrc /etc/bash.bashrc /root/.bashrc /root/.bash_profile /home/*/.bashrc /home/*/.bash_aliases; do [ -f "$f" ] && grep "alias " "$f" 2>/dev/null | grep -v "^#" && echo "--- $f ---"; done | head -n 50`, desc: '排查恶意 alias 覆盖' },
     ],
   },
@@ -716,14 +691,14 @@ export const emergencyCategories: EmergencyCategory[] = [
     title: '凭据与敏感信息',
     hint: '密码、密钥、Token、数据库凭据采集',
     items: [
-      { id: 'cred-ssh-private-keys', name: 'SSH 私钥搜索', cmd: `find / -xdev -name "id_rsa" -o -name "id_ed25519" -o -name "id_ecdsa" -o -name "id_dsa" -o -name "*.pem" -o -name "*.key" 2>/dev/null | head -n 50`, desc: '全盘搜索 SSH 私钥' },
+      { id: 'cred-ssh-private-keys', name: 'SSH 私钥搜索', cmd: `find / -xdev \\( -name "id_rsa" -o -name "id_ed25519" -o -name "id_ecdsa" -o -name "id_dsa" -o -name "*.pem" -o -name "*.key" \\) 2>/dev/null | head -n 50`, desc: '全盘搜索 SSH 私钥' },
       { id: 'cred-passwords-in-files', name: '文件中的密码', cmd: `grep -rn --include="*.conf" --include="*.cfg" --include="*.ini" --include="*.env" --include="*.yml" --include="*.yaml" --include="*.xml" --include="*.properties" -iE "(password|passwd|pwd|secret|token|api_key|apikey)\\s*[=:]" /etc /opt /srv /var/www 2>/dev/null | grep -v "^Binary" | head -n 80`, desc: '配置文件中的硬编码凭据' },
       { id: 'cred-env-secrets', name: '环境变量敏感信息', cmd: `env | grep -iE "(pass|secret|token|key|api|credential|auth)" 2>/dev/null | head -n 30; echo "---"; cat /etc/environment 2>/dev/null | grep -iE "(pass|secret|token|key)" | head -n 20`, desc: '环境变量中的密码和密钥' },
       { id: 'cred-mysql-config', name: 'MySQL 凭据', cmd: `cat /etc/mysql/debian.cnf 2>/dev/null; echo "---"; cat /root/.my.cnf 2>/dev/null; echo "---"; grep -rn "password" /etc/mysql/ 2>/dev/null | head -n 20`, desc: 'MySQL 配置中的密码' },
       { id: 'cred-docker-secrets', name: 'Docker 敏感信息', cmd: `docker ps --format '{{.Names}}' 2>/dev/null | while read c; do echo "=== $c ==="; docker inspect "$c" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -iE "(pass|secret|token|key|api)" | head -n 5; done | head -n 80`, desc: '容器环境变量中的密码' },
       { id: 'cred-git-secrets', name: 'Git 仓库密钥', cmd: `find / -xdev -name ".git" -type d 2>/dev/null | while read d; do echo "=== $d ==="; git -C "$(dirname $d)" log --diff-filter=A --name-only --format="" 2>/dev/null | grep -iE "(password|secret|key|credential|token)" | head -n 5; done | head -n 50`, desc: 'Git 仓库中的敏感文件提交' },
       { id: 'cred-history-secrets', name: '历史命令敏感信息', cmd: `cat /root/.bash_history /home/*/.bash_history 2>/dev/null | grep -iE "(pass|mysql.*-p|curl.*token|wget.*auth|ssh.*-i|scp|rsync.*:)" | head -n 40`, desc: '命令历史中泄露的密码和密钥' },
-      { id: 'cred-cloud-tokens', name: '云平台凭据', cmd: `ls -la /root/.aws /root/.azure /root/.config/gcloud /home/*/.aws /home/*/.azure 2>/dev/null; echo "---"; cat /root/.aws/credentials 2>/dev/null | head -n 20; echo "---"; find / -xdev -name "credentials" -o -name "cloud.cfg" 2>/dev/null | head -n 20`, desc: 'AWS/Azure/GCP 凭据文件' },
+      { id: 'cred-cloud-tokens', name: '云平台凭据', cmd: `ls -la /root/.aws /root/.azure /root/.config/gcloud /home/*/.aws /home/*/.azure 2>/dev/null; echo "---"; cat /root/.aws/credentials 2>/dev/null | head -n 20; echo "---"; find / -xdev \\( -name "credentials" -o -name "cloud.cfg" \\) 2>/dev/null | head -n 20`, desc: 'AWS/Azure/GCP 凭据文件' },
       { id: 'cred-redis-config', name: 'Redis 配置密码', cmd: `cat /etc/redis/redis.conf /etc/redis.conf 2>/dev/null | grep -E "^requirepass|^masterauth" | head -n 10; echo "---"; redis-cli CONFIG GET requirepass 2>/dev/null`, desc: 'Redis 认证配置' },
       { id: 'cred-ssl-certs', name: 'SSL 证书检查', cmd: `find /etc/ssl /etc/pki /etc/nginx/ssl /etc/letsencrypt -type f \\( -name "*.pem" -o -name "*.crt" -o -name "*.key" \\) -exec ls -la {} \\; 2>/dev/null | head -n 30; echo "---"; find /etc -name "*.key" -exec ls -la {} \\; 2>/dev/null | head -n 20`, desc: 'SSL 证书和私钥文件' },
     ],
@@ -742,8 +717,8 @@ export const emergencyCategories: EmergencyCategory[] = [
       { id: 'hard-tcp-hardening', name: 'TCP/IP 安全参数', cmd: `sysctl net.ipv4.conf.all.accept_redirects net.ipv4.conf.all.send_redirects net.ipv4.conf.all.accept_source_route net.ipv4.conf.all.log_martians net.ipv4.tcp_syncookies net.ipv4.icmp_echo_ignore_broadcasts 2>/dev/null`, desc: 'TCP/IP 协议栈加固参数' },
       { id: 'hard-password-quality', name: '密码复杂度策略', cmd: `cat /etc/security/pwquality.conf 2>/dev/null | grep -v "^#" | grep -v "^$"; echo "---"; cat /etc/pam.d/common-password 2>/dev/null | grep -v "^#" | head -n 20 || cat /etc/pam.d/system-auth 2>/dev/null | grep -v "^#" | head -n 20`, desc: 'PAM 密码质量策略' },
       { id: 'hard-account-lockout', name: '账户锁定策略', cmd: `grep "pam_tally2\\|pam_faillock" /etc/pam.d/* 2>/dev/null | head -n 20; echo "---"; faillock 2>/dev/null | head -n 20`, desc: '登录失败锁定配置' },
-      { id: 'hard-unused-services', name: '不必要服务检测', cmd: `systemctl list-units --type=service --state=running --no-pager 2>/dev/null | grep -iE "(telnet|ftp|rsh|rlogin|rexec|talk|finger|tftp|xinetd|avahi|cups)" | head -n 20`, desc: '运行中的不安全/不必要服务' },
-      { id: 'hard-world-readable-keys', name: '密钥权限检查', cmd: `find / -xdev -name "*.key" -o -name "*.pem" -o -name "id_rsa" -o -name "id_ed25519" 2>/dev/null | xargs ls -la 2>/dev/null | grep -v "^total" | awk '{if(substr($1,5,1)=="r" || substr($1,8,1)=="r") print "[WARN] " $0; else print "[OK] " $0}' | head -n 30`, desc: '私钥文件权限过大检测' },
+      { id: 'hard-unused-services', name: '不必要服务检测', cmd: `${RUNNING_SERVICE_COMMAND} | grep -iE "(telnet|ftp|rsh|rlogin|rexec|talk|finger|tftp|xinetd|avahi|cups)" | head -n 20`, desc: '运行中的不安全/不必要服务' },
+      { id: 'hard-world-readable-keys', name: '密钥权限检查', cmd: `find / -xdev \\( -name "*.key" -o -name "*.pem" -o -name "id_rsa" -o -name "id_ed25519" \\) 2>/dev/null | xargs ls -la 2>/dev/null | grep -v "^total" | awk '{if(substr($1,5,1)=="r" || substr($1,8,1)=="r") print "[WARN] " $0; else print "[OK] " $0}' | head -n 30`, desc: '私钥文件权限过大检测' },
     ],
   },
 ];

@@ -20,14 +20,14 @@ export class EnvVarContextMenu extends BaseContextMenu {
     if (action === 'copy-name') {
       try {
         await navigator.clipboard.writeText(this.currentVar.name || '')
-        ;(window as any).showNotification?.('变量名已复制', 'success')
+        ;window.showNotification?.('变量名已复制', 'success')
       } catch { /* ignore */ }
       return true
     }
     if (action === 'copy-value') {
       try {
         await navigator.clipboard.writeText(this.currentVar.value || '')
-        ;(window as any).showNotification?.('变量值已复制', 'success')
+        ;window.showNotification?.('变量值已复制', 'success')
       } catch { /* ignore */ }
       return true
     }

@@ -276,7 +276,7 @@ export class CompressModal {
     const targetName = targetNameInput.value.trim();
     
     if (!targetName) {
-      (window as any).showNotification && (window as any).showNotification('请输入目标文件名', 'warning');
+      window.showNotification && window.showNotification('请输入目标文件名', 'warning');
       return;
     }
 
@@ -315,7 +315,7 @@ export class CompressModal {
       });
 
       console.log('文件打包成功:', targetPath);
-      (window as any).showNotification && (window as any).showNotification('文件打包成功', 'success');
+      window.showNotification && window.showNotification('文件打包成功', 'success');
 
       // 刷新文件列表
       if ((window as any).sftpManager && (window as any).sftpManager.refreshCurrentDirectory) {
@@ -326,7 +326,7 @@ export class CompressModal {
 
     } catch (error) {
       console.error('文件打包失败:', error);
-      (window as any).showNotification && (window as any).showNotification(`文件打包失败: ${error}`, 'error');
+      window.showNotification && window.showNotification(`文件打包失败: ${error}`, 'error');
     } finally {
       // 恢复按钮状态
       confirmBtn.textContent = '开始打包';

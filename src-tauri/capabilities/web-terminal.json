@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "web-terminal",
+  "description": "Capability for web terminal windows (ttyd/wetty/shellinabox)",
+  "windows": ["web-term-*"],
+  "permissions": [
+    "core:default"
+  ]
+}

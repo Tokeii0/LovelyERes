@@ -1,4 +1,13 @@
-/* App Layout */
+/* App Layout
+ *
+ * Layout model (decided during the LovelySpark redesign): OPTION A — flex.
+ * `.app-layout` is a vertical column (titlebar / main-container / statusbar);
+ * `.main-container` is a horizontal flex row holding the sidebar (a flex child
+ * whose width is driven by the `--sidebar-width` token, 268px ↔ 52px collapsed)
+ * and the workspace (`flex: 1`). Flexbox reflows the workspace on collapse, so
+ * no layout-sync JS is needed. Routing the sidebar width through the token keeps
+ * a later switch to a fixed-position sidebar (Option B) a localized change.
+ */
 .app-layout {
   display: flex;
   flex-direction: column;

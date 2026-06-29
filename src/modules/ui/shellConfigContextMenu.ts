@@ -20,7 +20,7 @@ export class ShellConfigContextMenu extends BaseContextMenu {
     if (action === 'copy-content') {
       try {
         await navigator.clipboard.writeText(this.currentConfig.content || '')
-        ;(window as any).showNotification?.('内容已复制', 'success')
+        ;window.showNotification?.('内容已复制', 'success')
       } catch { /* ignore */ }
       return true
     }

@@ -1,12 +1,16 @@
-/* Status Bar — Modern Redesign */
+/* Status Bar — Modern Redesign (LovelySpark parity)
+ * Light themes paint a gradient brand bar; dark themes use a deep
+ * blue→indigo gradient with a hairline top border. Tokens come from
+ * each theme's --statusbar-bg / --statusbar-text / --statusbar-border-top.
+ */
 .status-bar {
-  height: 26px;
+  height: 24px;
   background: var(--statusbar-bg, var(--bg-secondary));
-  border-top: 1px solid var(--statusbar-border, var(--border-color));
+  border-top: 1px solid var(--statusbar-border-top, var(--statusbar-border, var(--border-color)));
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px;
+  padding: 0 12px;
   font-size: 11px;
   color: var(--statusbar-text, var(--text-secondary));
   gap: 6px;
@@ -26,18 +30,18 @@
   align-items: center;
   gap: 4px;
   padding: 0 8px;
-  height: 26px;
+  height: 24px;
   font-size: 11px;
-  color: var(--statusbar-text, var(--text-secondary));
+  color: inherit;
   cursor: default;
-  transition: background 0.12s;
+  transition: background var(--transition-fast);
   white-space: nowrap;
   border: none;
   background: none;
 }
 
 .status-item:hover {
-  background: var(--hover-bg);
+  background: rgba(255, 255, 255, 0.10);
 }
 
 .status-item.clickable {
@@ -66,16 +70,15 @@
   align-items: center;
   gap: 4px;
   padding: 0 8px;
-  height: 26px;
+  height: 24px;
   font-size: 11px;
-  color: var(--statusbar-text, var(--text-secondary));
+  color: inherit;
   background: none;
   border: none;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition: background var(--transition-fast);
 }
 
 .status-terminal-btn:hover {
-  background: var(--hover-bg);
-  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.10);
 }

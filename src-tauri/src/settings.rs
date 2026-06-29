@@ -252,7 +252,7 @@ pub fn validate_settings(settings: &AppSettings) -> Result<(), String> {
     }
 
     // 验证端口范围
-    if settings.default_ssh_port == 0 || settings.default_ssh_port > 65535 {
+    if settings.default_ssh_port == 0 {
         return Err("无效的SSH端口设置".to_string());
     }
 

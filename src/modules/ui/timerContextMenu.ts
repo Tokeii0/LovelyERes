@@ -20,7 +20,7 @@ export class TimerContextMenu extends BaseContextMenu {
     if (action === 'copy-name') {
       try {
         await navigator.clipboard.writeText(this.currentTimer.timer || '')
-        ;(window as any).showNotification?.('定时器名已复制', 'success')
+        ;window.showNotification?.('定时器名已复制', 'success')
       } catch { /* ignore */ }
       return true
     }

@@ -202,7 +202,7 @@ export class SftpManager {
 
     } catch (error) {
       console.error('获取SFTP文件列表失败:', error);
-      (window as any).showNotification && (window as any).showNotification(`获取文件列表失败: ${error}`, 'error');
+      window.showNotification && window.showNotification(`获取文件列表失败: ${error}`, 'error');
     }
   }
 
@@ -298,11 +298,25 @@ export class SftpManager {
     return '';
   }
 
-  /**
-   * 获取风险标签 HTML — 仅用颜色高亮，不加图标
-   */
-  private getFileRiskBadge(_riskClass: string): string {
-    return '';
+  /** 风险列徽章 */
+  private riskBadgeHtml(riskClass: string): string {
+    if (riskClass === 'risk-critical') return '<span class="sftp-risk-tag high">可疑</span>';
+    if (riskClass === 'risk-warning') return '<span class="sftp-risk-tag warn">敏感</span>';
+    if (riskClass === 'risk-info') return '<span class="sftp-risk-tag info">隐藏</span>';
+    return '<span class="sftp-risk-none">-</span>';
+  }
+
+  /** 文件类型标签 */
+  private getFileTypeLabel(file: SftpFileInfo): string {
+    if (file.file_type === 'directory') return '文件夹';
+    if (file.file_type === 'symlink') return '链接';
+    const n = file.name.toLowerCase();
+    if (/\.pub$/.test(n)) return '公钥';
+    if (/\.(pem|key)$/.test(n) || /^id_(rsa|dsa|ecdsa|ed25519)$/.test(n)) return '私钥';
+    if (/\.(conf|cfg|ini|yaml|yml|toml)$/.test(n) || n === 'config') return '配置';
+    if (/\.log$/.test(n)) return '日志';
+    if (/\.(sh|bash|zsh|py|pl|rb|js|ts|php)$/.test(n)) return '脚本';
+    return '文件';
   }
 
   /**
@@ -352,7 +366,7 @@ export class SftpManager {
     if (!sshConnectionManager.isConnected()) {
       return `
         <tr>
-          <td colspan="5" style="padding: 40px; text-align: center; color: var(--text-secondary); font-size: 13px;">
+          <td colspan="8" style="padding: 40px; text-align: center; color: var(--text-secondary); font-size: 13px;">
             <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
               <div style="font-size: 24px; opacity: 0.5;">📡</div>
               <span>SSH未连接 — 请先建立连接</span>
@@ -366,7 +380,7 @@ export class SftpManager {
     if (this.fileList.length === 0) {
       return `
         <tr>
-          <td colspan="5" style="padding: 40px; text-align: center; color: var(--text-secondary); font-size: 13px;">
+          <td colspan="8" style="padding: 40px; text-align: center; color: var(--text-secondary); font-size: 13px;">
             <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
               <div style="font-size: 24px; opacity: 0.5;">📁</div>
               <span>目录为空</span>
@@ -383,14 +397,17 @@ export class SftpManager {
     if (this.currentPath !== '/') {
       html += `
         <tr class="sftp-file-row parent-dir-item" data-action="parent" oncontextmenu="return false;" onclick="sftpManager.navigateToParent()">
+          <td class="sftp-td-check"></td>
           <td class="file-icon-cell">
             <div class="file-icon">📁</div>
             <span class="file-name">..</span>
           </td>
-          <td>-</td>
-          <td>-</td>
-          <td>-</td>
-          <td>上级目录</td>
+          <td class="sftp-td-type">-</td>
+          <td class="sftp-td-size">-</td>
+          <td class="perms-cell">-</td>
+          <td class="owner-cell">-</td>
+          <td class="sftp-td-time">上级目录</td>
+          <td class="sftp-td-risk">-</td>
         </tr>
       `;
     }
@@ -408,7 +425,8 @@ export class SftpManager {
 
       // Risk detection
       const riskClass = this.getFileRiskClass(file);
-      const riskBadge = this.getFileRiskBadge(riskClass);
+      const typeLabel = this.getFileTypeLabel(file);
+      const riskTag = this.riskBadgeHtml(riskClass);
       if (riskClass === 'risk-critical' || riskClass === 'risk-warning') riskCount++;
 
       // Root owner highlight
@@ -417,18 +435,22 @@ export class SftpManager {
       const style = `--row-index: ${index}`;
 
       html += `
-        <tr class="sftp-file-row ${riskClass}" data-file-index="${index}" 
-            oncontextmenu="window.showSftpContextMenu(event, ${index}); return false;" 
+        <tr class="sftp-file-row ${riskClass}" data-file-index="${index}"
+            oncontextmenu="window.showSftpContextMenu(event, ${index}); return false;"
+            onclick="window.openSftpDetail && window.openSftpDetail(${index})"
             ondblclick="sftpManager.handleFileClickByIndex(${index})"
             style="${style}">
+          <td class="sftp-td-check"><input type="checkbox" class="sftp-row-check" onclick="event.stopPropagation()"></td>
           <td class="file-icon-cell">
             <div class="file-icon">${icon}</div>
-            <span class="file-name" title="${file.name}">${riskBadge}${file.name}</span>
+            <span class="file-name" title="${file.name}">${file.name}</span>
           </td>
-          <td style="font-size: 12px; color: var(--text-secondary);">${sizeText}</td>
-          <td class="perms-cell" style="font-family: monospace; font-size: 11px;">${perms}</td>
-          <td class="owner-cell ${ownerClass}" style="font-size: 12px;">${ownerDisplay}</td>
-          <td style="font-size: 12px; color: var(--text-secondary);">${modified}</td>
+          <td class="sftp-td-type">${typeLabel}</td>
+          <td class="sftp-td-size">${sizeText}</td>
+          <td class="perms-cell">${perms}</td>
+          <td class="owner-cell ${ownerClass}">${ownerDisplay}</td>
+          <td class="sftp-td-time">${modified}</td>
+          <td class="sftp-td-risk">${riskTag}</td>
         </tr>
       `;
     });
@@ -457,6 +479,14 @@ export class SftpManager {
       // Update path in status bar
       const pathEl = document.getElementById('sftp-status-path');
       if (pathEl) pathEl.innerHTML = `<span>${this.currentPath}</span>`;
+
+      // 敏感目录审计横幅：在敏感目录（或其子目录）时显示
+      const banner = document.getElementById('sftp-audit-banner');
+      if (banner) {
+        const sens = ['/root/.ssh', '/etc/cron.d', '/var/spool/cron', '/etc/init.d', '/dev/shm', '/tmp', '/var/tmp', '/run'];
+        const inSens = sens.some(d => this.currentPath === d || this.currentPath.startsWith(d + '/'));
+        banner.style.display = inSens ? '' : 'none';
+      }
 
       // Update sort indicators
       this.updateSortIndicators();

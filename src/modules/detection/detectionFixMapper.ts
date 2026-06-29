@@ -306,6 +306,68 @@ const FIX_MAPPINGS: FixMapping[] = [
       priority: 1,
     }],
   },
+
+  // ──── K8s 安全修复 ────
+  {
+    detectionItemId: 'k8s-privileged-pod',
+    findingPattern: /特权容器/i,
+    actions: [{
+      type: 'command', title: '缩容包含特权容器的 Deployment',
+      description: '将相关 Deployment 副本数设为 0，阻止特权容器运行',
+      command: 'echo "请在 K8s 页面中右键对应的 Deployment → 缩容至 0"',
+      priority: 1,
+    }],
+  },
+  {
+    detectionItemId: 'k8s-reverse-shell',
+    findingPattern: /反弹Shell/i,
+    actions: [{
+      type: 'command', title: '强制删除反弹Shell Pod',
+      description: '立即强制删除包含反弹Shell命令的 Pod',
+      command: 'echo "请在 K8s 页面中右键目标 Pod → 强制删除，或使用: kubectl delete pod <name> -n <namespace> --force --grace-period=0"',
+      priority: 1,
+    }],
+  },
+  {
+    detectionItemId: 'k8s-suspicious-cronjob',
+    findingPattern: /恶意CronJob/i,
+    actions: [{
+      type: 'command', title: '暂停并删除恶意 CronJob',
+      description: '暂停 CronJob 防止新 Job 创建，然后删除',
+      command: 'echo "请在 K8s 页面中右键目标 CronJob → 暂停/删除"',
+      priority: 1,
+    }],
+  },
+  {
+    detectionItemId: 'k8s-sa-audit',
+    findingPattern: /高权限SA|通配符权限SA/i,
+    actions: [{
+      type: 'command', title: '删除可疑 ServiceAccount 及绑定',
+      description: '删除攻击者创建的高权限 ServiceAccount 和关联的 RoleBinding/ClusterRoleBinding',
+      command: 'echo "请在 K8s 页面中右键目标 ServiceAccount → 删除"',
+      priority: 1,
+    }],
+  },
+  {
+    detectionItemId: 'k8s-network-policy',
+    findingPattern: /无NetworkPolicy/i,
+    actions: [{
+      type: 'command', title: '创建默认拒绝 NetworkPolicy',
+      description: '为命名空间创建 deny-all 入站/出站策略',
+      command: 'echo "请在 K8s 页面中使用应急功能 → 隔离命名空间"',
+      priority: 1,
+    }],
+  },
+  {
+    detectionItemId: 'k8s-container-escape',
+    findingPattern: /hostPID|hostIPC|危险Capabilities/i,
+    actions: [{
+      type: 'command', title: '删除容器逃逸风险 Pod',
+      description: '具有 hostPID/hostIPC/危险Capabilities 的 Pod 存在宿主机逃逸风险',
+      command: 'echo "请在 K8s 页面中右键目标 Pod → 强制删除"',
+      priority: 1,
+    }],
+  },
 ];
 
 // ════════════════════════════════════════════════════

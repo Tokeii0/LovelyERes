@@ -137,10 +137,10 @@ export class EmergencyResultModal {
     document.addEventListener('keydown', this.keydownHandler);
     document.getElementById('em-modal-copy')?.addEventListener('click', () => {
       navigator.clipboard.writeText(this.originalOutput).then(() => {
-        (window as any).showNotification?.('命令输出已复制', 'success');
+        window.showNotification?.('命令输出已复制', 'success');
       }).catch((error) => {
         console.error('复制失败', error);
-        (window as any).showNotification?.('复制失败', 'error');
+        window.showNotification?.('复制失败', 'error');
       });
     });
 
@@ -300,7 +300,7 @@ export class EmergencyResultModal {
       editBtn.classList.remove('primary');
       editBtn.classList.add('secondary');
 
-      (window as any).showNotification?.('命令已更新', 'success');
+      window.showNotification?.('命令已更新', 'success');
     }
   }
 
@@ -319,7 +319,7 @@ export class EmergencyResultModal {
 
     const command = commandEl.textContent?.trim() || '';
     if (!command) {
-      (window as any).showNotification?.('命令不能为空', 'warning');
+      window.showNotification?.('命令不能为空', 'warning');
       return;
     }
 
@@ -346,6 +346,8 @@ export class EmergencyResultModal {
 
       let output = '';
       let displayedCommand = command;
+      let exitCode: number | null | undefined;
+      let timedOut = false;
 
       if (hasCoordinatorConn && sshManager?.executeCommand) {
         output = await sshManager.executeCommand(command);
@@ -355,6 +357,8 @@ export class EmergencyResultModal {
           if (typeof result.command === 'string' && result.command.length > 0) {
             displayedCommand = result.command;
           }
+          exitCode = typeof result.exit_code === 'number' ? result.exit_code : result.exit_code ?? undefined;
+          timedOut = result.timed_out === true;
           if (typeof result.output === 'string') {
             output = result.output;
           } else if (typeof result.stdout === 'string') {
@@ -384,10 +388,16 @@ export class EmergencyResultModal {
       // 保存到命令历史
       CommandHistoryManager.saveCommand(displayedCommand, this.currentTitle, output);
 
-      (window as any).showNotification?.('命令执行完成', 'success');
+      if (timedOut) {
+        window.showNotification?.('命令执行超时，输出已更新', 'warning');
+      } else if (typeof exitCode === 'number' && exitCode !== 0) {
+        window.showNotification?.(`命令执行完成，但退出码为 ${exitCode}`, output ? 'warning' : 'error');
+      } else {
+        window.showNotification?.('命令执行成功', 'success');
+      }
     } catch (error) {
       console.error('执行命令失败:', error);
-      (window as any).showNotification?.(`执行失败: ${error}`, 'error');
+      window.showNotification?.(`执行失败: ${error}`, 'error');
     } finally {
       // 恢复按钮状态
       if (executeBtn) {

@@ -1,20 +1,24 @@
-/* Buttons */
+/* Buttons — aligned with LovelySpark visual language */
+
 .modern-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   padding: var(--spacing-sm) var(--spacing-md);
   border: none;
   border-radius: var(--border-radius);
-  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-  color: var(--text-white);
+  background: var(--gradient-accent);
+  color: var(--accent-contrast);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), filter var(--transition-fast);
   box-shadow: var(--shadow-sm);
   position: relative;
   overflow: hidden;
+  letter-spacing: 0.01em;
 }
 
 .modern-btn::after {
@@ -22,14 +26,15 @@
   position: absolute;
   top: 0; left: 0;
   width: 100%; height: 100%;
-  background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+  background: linear-gradient(rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0));
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
 }
 
 .modern-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 20px var(--primary-glow);
 }
 
 .modern-btn:hover::after { opacity: 1; }
@@ -37,6 +42,15 @@
 .modern-btn:active {
   transform: translateY(0) scale(0.98);
   box-shadow: var(--shadow-sm);
+}
+
+.modern-btn:disabled,
+.modern-btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  filter: grayscale(0.2);
 }
 
 .modern-btn.secondary {
@@ -49,7 +63,7 @@
   background: var(--bg-tertiary);
   border-color: var(--primary-color);
   color: var(--text-primary);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 0 0 1px var(--primary-glow);
 }
 
 .modern-btn.icon-only {
@@ -66,13 +80,18 @@
 }
 
 .modern-btn.primary {
-  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  background: var(--gradient-accent);
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+.modern-btn.primary:hover {
+  box-shadow: 0 8px 20px var(--primary-glow);
 }
 
 .modern-btn[style*="--success-color"]:hover:not(:disabled) {
-  filter: brightness(1.1);
+  filter: brightness(1.08);
   transform: translateY(-1px);
-  box-shadow: 0 8px 15px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 8px 20px rgba(34, 197, 94, 0.22);
 }
 
 .modern-btn.compact {
@@ -94,13 +113,14 @@
   border-radius: 6px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .icon-btn:hover {
   background: var(--bg-hover);
-  color: var(--text-primary);
-  border-color: var(--border-color-hover);
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-glow);
 }
 
 /* System button */
@@ -112,12 +132,13 @@
   color: var(--text-primary);
   cursor: pointer;
   font-size: 13px;
-  transition: all 0.2s;
+  transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .system-btn:hover {
   background: var(--bg-hover);
   border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-glow);
 }
 
 /* Action buttons */
@@ -128,12 +149,15 @@
   padding: 6px;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s;
-  font-weight: 500;
+  transition: filter var(--transition-fast), transform var(--transition-fast);
+  font-weight: 600;
 }
 
-.action-btn.connect { background: var(--primary-color); color: white; }
-.action-btn.connect:hover { filter: brightness(1.1); }
+.action-btn.connect {
+  background: var(--gradient-accent);
+  color: var(--accent-contrast);
+}
+.action-btn.connect:hover { filter: brightness(1.08); transform: translateY(-1px); }
 .action-btn.settings {
   background: transparent;
   border: 1px solid var(--border-color);
@@ -143,7 +167,7 @@
   align-items: center;
   justify-content: center;
 }
-.action-btn.settings:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+.action-btn.settings:hover { border-color: var(--primary-color); color: var(--primary-color); }
 
 /* Segmented Control */
 .segmented-control {
@@ -163,7 +187,7 @@
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -172,7 +196,12 @@
 }
 
 .segmented-btn:hover { color: var(--text-primary); background: var(--bg-tertiary); }
-.segmented-btn.active { background: var(--bg-primary); color: var(--primary-color); font-weight: 600; box-shadow: var(--shadow-sm); }
+.segmented-btn.active {
+  background: var(--bg-primary);
+  color: var(--primary-color);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
 
 /* Refresh button */
 .refresh-btn { padding: 8px 16px; font-size: 13px; gap: 6px; border-radius: 10px; }

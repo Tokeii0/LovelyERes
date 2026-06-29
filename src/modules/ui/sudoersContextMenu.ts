@@ -21,7 +21,7 @@ export class SudoersContextMenu extends BaseContextMenu {
       try {
         const rule = `${this.currentEntry.user} ${this.currentEntry.host}=(ALL) ${this.currentEntry.nopasswd === 'YES' ? 'NOPASSWD:' : ''} ${this.currentEntry.command}`
         await navigator.clipboard.writeText(rule)
-        ;(window as any).showNotification?.('规则已复制', 'success')
+        ;window.showNotification?.('规则已复制', 'success')
       } catch { /* ignore */ }
       return true
     }

@@ -60,12 +60,6 @@ const messages: Record<LangKey, Record<string, string>> = {
     'detection.medium': '中',
     'detection.low': '低',
 
-    // 用户
-    'user.login': '登录',
-    'user.register': '注册',
-    'user.logout': '退出登录',
-    'user.profile': '个人信息',
-    'user.loginRequired': '请先登录后再进行此操作',
   },
 
   'en-US': {
@@ -121,12 +115,6 @@ const messages: Record<LangKey, Record<string, string>> = {
     'detection.medium': 'Medium',
     'detection.low': 'Low',
 
-    // User
-    'user.login': 'Login',
-    'user.register': 'Register',
-    'user.logout': 'Logout',
-    'user.profile': 'Profile',
-    'user.loginRequired': 'Please login to continue',
   },
 };
 

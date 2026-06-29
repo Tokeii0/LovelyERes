@@ -16,20 +16,17 @@ export class CommandAdapter {
       // 优先使用系统特定命令
       const systemSpecificCmd = command.commands[systemInfo.type as keyof typeof command.commands];
       if (systemSpecificCmd) {
-        console.log(`✅ 使用 ${systemInfo.type} 特定命令:`, systemSpecificCmd.substring(0, 50));
         return systemSpecificCmd;
       }
 
       // 尝试使用相似系统的命令（回退机制）
       const fallbackCmd = this.getFallbackCommand(command.commands, systemInfo.type);
       if (fallbackCmd) {
-        console.log(`⚠️ 使用回退命令 (${systemInfo.type}):`, fallbackCmd.substring(0, 50));
         return fallbackCmd;
       }
 
       // 使用默认命令
       if (command.commands.default) {
-        console.log(`📌 使用默认命令:`, command.commands.default.substring(0, 50));
         return command.commands.default;
       }
     }
@@ -143,4 +140,3 @@ export class CommandAdapter {
     return { supportedSystems, hasDefault };
   }
 }
-

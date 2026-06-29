@@ -20,14 +20,14 @@ export class SSHKeyContextMenu extends BaseContextMenu {
     if (action === 'copy-key') {
       try {
         await navigator.clipboard.writeText(this.currentKey.keyContent || '')
-        ;(window as any).showNotification?.('密钥内容已复制', 'success')
+        ;window.showNotification?.('密钥内容已复制', 'success')
       } catch { /* ignore */ }
       return true
     }
     if (action === 'copy-fingerprint') {
       try {
         await navigator.clipboard.writeText(`${this.currentKey.keyType} ${this.currentKey.keyContent}`)
-        ;(window as any).showNotification?.('密钥指纹已复制', 'success')
+        ;window.showNotification?.('密钥指纹已复制', 'success')
       } catch { /* ignore */ }
       return true
     }

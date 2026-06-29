@@ -20,7 +20,7 @@ export class RecentFileContextMenu extends BaseContextMenu {
     if (action === 'copy-path') {
       try {
         await navigator.clipboard.writeText(this.currentFile.path || '')
-        ;(window as any).showNotification?.('路径已复制', 'success')
+        ;window.showNotification?.('路径已复制', 'success')
       } catch { /* ignore */ }
       return true
     }

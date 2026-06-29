@@ -53,9 +53,12 @@ export interface SystemInfo {
   detailedInfo?: {
     processes: Array<{
       pid: string;
+      ppid: string;
       user: string;
+      stat: string;
       cpu: string;
       memory: string;
+      etimes: string;
       command: string;
     }>;
     networkDetails: Array<{
@@ -128,9 +131,9 @@ export interface SystemInfo {
     }>;
     shellConfigs: Array<{
       file: string;
-      lineNum: string;
-      content: string;
-      risk: string;
+      owner: string;
+      mtime: string;
+      lines: Array<{ num: number; content: string }>;
     }>;
     installedPackages: Array<{
       name: string;
@@ -576,17 +579,12 @@ export class SystemInfoManager {
    * 渐进式获取详细系统信息
    * 每个数据类别独立加载，完成后立即通过回调通知UI更新
    */
-  async fetchDetailedInfoProgressive(
-    onDataReady?: (key: string, data: any[]) => void
-  ): Promise<any> {
-    if (!this.detailedInfo) {
-      this.detailedInfo = this.getDefaultDetailedInfo();
-    }
-
-    const tasks: Array<{ key: string; fetch: () => Promise<string>; parse: (data: string) => any[] }> = [
+  /** 构建所有详细信息采集任务（key + fetch + parse） */
+  private buildDetailTasks(): Array<{ key: string; fetch: () => Promise<string>; parse: (data: string) => any[] }> {
+    return [
       {
         key: 'processes',
-        fetch: () => this.executeCommand('ps aux --no-headers | awk \'BEGIN{OFS=","} {cmd=""; for(i=11;i<=NF;i++) cmd=cmd $i" "; print $2,$1,$8,$3,$4,cmd}\''),
+        fetch: () => this.executeCommand('echo "EPOCH $(date +%s)"; ps -eo pid,ppid,user,stat,pcpu,pmem,etimes,args --no-headers 2>/dev/null | awk \'BEGIN{OFS=","} {cmd=""; for(i=8;i<=NF;i++) cmd=cmd $i" "; print $1,$2,$3,$4,$5,$6,$7,cmd}\''),
         parse: (d) => this.parseProcesses(d)
       },
       {
@@ -622,6 +620,31 @@ export class SystemInfoManager {
       { key: 'kernelModules', fetch: () => this.getKernelModules(), parse: (d) => this.parseKernelModules(d) },
       { key: 'recentFiles', fetch: () => this.getRecentFiles(), parse: (d) => this.parseRecentFiles(d) },
     ];
+  }
+
+  /** 定向重新拉取单个数据类别（某个 tab 缓存为空时的自愈刷新，不重跑全量） */
+  async fetchSingleKey(key: string): Promise<any[]> {
+    const task = this.buildDetailTasks().find(t => t.key === key);
+    if (!task) return [];
+    try {
+      const parsed = task.parse(await task.fetch());
+      if (!this.detailedInfo) this.detailedInfo = this.getDefaultDetailedInfo();
+      (this.detailedInfo as any)[key] = parsed;
+      return parsed;
+    } catch (e) {
+      console.error(`❌ 定向获取 ${key} 失败:`, e);
+      return [];
+    }
+  }
+
+  async fetchDetailedInfoProgressive(
+    onDataReady?: (key: string, data: any[]) => void
+  ): Promise<any> {
+    if (!this.detailedInfo) {
+      this.detailedInfo = this.getDefaultDetailedInfo();
+    }
+
+    const tasks = this.buildDetailTasks();
 
     // 将任务分为两类：可批量的（单命令）和需要单独处理的（多步/fallback）
     const batchableTasks: typeof tasks = [];
@@ -815,18 +838,30 @@ export class SystemInfoManager {
   /**
    * 解析进程信息
    */
-  private parseProcesses(data: string): Array<{ pid: string; user: string; stat: string; cpu: string; memory: string; command: string }> {
+  private parseProcesses(data: string): Array<{ pid: string; ppid: string; user: string; stat: string; cpu: string; memory: string; etimes: string; command: string }> {
     if (!data.trim()) return [];
 
-    return data.trim().split('\n').map(line => {
+    let lines = data.trim().split('\n');
+    // 首行可能是服务器时间（EPOCH <秒>）：用于精确换算启动时间，避免依赖本地时钟
+    if (lines[0] && lines[0].startsWith('EPOCH ')) {
+      const epoch = parseInt(lines[0].slice(6).trim(), 10);
+      if (epoch > 0) {
+        try { (window as any).__siServerSkewMs = epoch * 1000 - Date.now(); } catch { /* ignore */ }
+      }
+      lines = lines.slice(1);
+    }
+
+    return lines.map(line => {
       const parts = line.split(',');
       return {
         pid: parts[0] || '',
-        user: parts[1] || '',
-        stat: parts[2] || '',
-        cpu: parts[3] || '0',
-        memory: parts[4] || '0',
-        command: (parts[5] || '').trim()
+        ppid: parts[1] || '',
+        user: parts[2] || '',
+        stat: parts[3] || '',
+        cpu: parts[4] || '0',
+        memory: parts[5] || '0',
+        etimes: parts[6] || '0',
+        command: (parts.slice(7).join(',') || '').trim()
       };
     }).filter(p => p.pid);
   }
@@ -1068,7 +1103,7 @@ export class SystemInfoManager {
           [ -z "$line" ] && continue;
           echo "$line" | grep -q "^#" && continue;
           type=$(echo "$line" | awk '{print $1}');
-          content=$(echo "$line" | awk '{print substr($2,1,40)"..."}');
+          content=$(echo "$line" | awk '{print $2}');
           comment=$(echo "$line" | awk '{$1=$2=""; print $0}' | sed 's/^ *//');
           echo "$user,$type,$content,$comment,$f";
         done < "$f";
@@ -1104,13 +1139,16 @@ export class SystemInfoManager {
   }
 
   /** 检测 Shell 配置文件中的可疑内容 */
+  /** 采集 shell 配置文件全文（含行号），由前端逐行做后门分析 */
   private async getShellConfigs(): Promise<string> {
     return this.executeCommand(
-      `for f in /etc/profile /etc/bash.bashrc /etc/bashrc /root/.bashrc /root/.bash_profile /root/.profile /home/*/.bashrc /home/*/.bash_profile /home/*/.profile /etc/environment; do
-        [ -f "$f" ] && grep -n -E '(wget|curl|nc |ncat|/dev/tcp|/dev/udp|eval|base64|python.*-c|perl.*-e|ruby.*-e|LD_PRELOAD|LD_LIBRARY_PATH|export PATH=)' "$f" 2>/dev/null | while IFS=: read -r num content; do
-          echo "$f,$num,$content";
-        done;
-      done 2>/dev/null | head -200`
+      `for f in /etc/profile /etc/bash.bashrc /etc/bashrc /etc/zsh/zshrc /etc/zsh/zprofile /etc/zsh/zshenv /etc/profile.d/*.sh /root/.bashrc /root/.bash_profile /root/.bash_login /root/.profile /root/.zshrc /root/.zprofile /root/.zshenv /home/*/.bashrc /home/*/.bash_profile /home/*/.bash_login /home/*/.profile /home/*/.zshrc /home/*/.zshenv /etc/environment; do
+        [ -f "$f" ] || continue;
+        echo "===SHCFG===$f";
+        echo "===META===$(stat -c '%U|%y' "$f" 2>/dev/null)";
+        cat -n "$f" 2>/dev/null | head -n 600;
+        echo "===ENDSHCFG===";
+      done 2>/dev/null`
     );
   }
 
@@ -1251,20 +1289,32 @@ export class SystemInfoManager {
     }).filter(v => v.name);
   }
 
-  private parseShellConfigs(data: string): Array<{ file: string; lineNum: string; content: string; risk: string }> {
+  /** 解析 shell 配置全文输出（===SHCFG=== / ===META=== / cat -n 行 / ===ENDSHCFG===） */
+  private parseShellConfigs(data: string): Array<{ file: string; owner: string; mtime: string; lines: Array<{ num: number; content: string }> }> {
     if (!data || !data.trim()) return [];
-    const HIGH_RISK_PATTERNS = ['wget', 'curl', '/dev/tcp', '/dev/udp', 'nc ', 'ncat', 'base64', 'eval'];
-    return data.trim().split('\n').filter(l => l.includes(',')).map(line => {
-      const parts = line.split(',');
-      const content = parts.slice(2).join(',');
-      const isHighRisk = HIGH_RISK_PATTERNS.some(p => content.toLowerCase().includes(p));
-      return {
-        file: parts[0] || '',
-        lineNum: parts[1] || '',
-        content: content.trim(),
-        risk: isHighRisk ? 'high' : 'warning'
-      };
-    }).filter(c => c.file);
+    const files: Array<{ file: string; owner: string; mtime: string; lines: Array<{ num: number; content: string }> }> = [];
+    let cur: { file: string; owner: string; mtime: string; lines: Array<{ num: number; content: string }> } | null = null;
+    for (const raw of data.split('\n')) {
+      const line = raw.replace(/\r$/, '');
+      if (line.startsWith('===SHCFG===')) {
+        cur = { file: line.slice(11), owner: '', mtime: '', lines: [] };
+        files.push(cur);
+      } else if (line.startsWith('===META===')) {
+        if (cur) {
+          const [owner, mtime] = line.slice(10).split('|');
+          cur.owner = owner || '';
+          cur.mtime = (mtime || '').slice(0, 19);
+        }
+      } else if (line === '===ENDSHCFG===') {
+        cur = null;
+      } else if (cur) {
+        // cat -n 行：前导空白 + 行号 + Tab + 内容
+        const m = line.match(/^\s*(\d+)\t(.*)$/);
+        if (m) cur.lines.push({ num: parseInt(m[1], 10), content: m[2] });
+        else cur.lines.push({ num: cur.lines.length + 1, content: line });
+      }
+    }
+    return files.filter(f => f.file && f.lines.length > 0);
   }
 
   private parseInstalledPackages(data: string): Array<{ name: string; version: string; installTime: string; source: string }> {

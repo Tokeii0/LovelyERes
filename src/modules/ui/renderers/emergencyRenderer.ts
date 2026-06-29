@@ -6,6 +6,7 @@
 
 import type { AppState } from '../../core/app';
 import { emergencyCategories } from '../../emergency/commands';
+import { renderCatsColumn, renderChecksColumn, emptyDetail, renderFindingPanel } from '../../emergency/emergencyView';
 import {
   // Quick Detection icons
   User,
@@ -39,28 +40,7 @@ export class EmergencyRenderer {
    * Render the emergency commands page
    */
   renderEmergencyCommandsPage(): string {
-    // Build sidebar groups
-    const sidebarGroups = emergencyCategories.map((cat, idx) => {
-      const items = cat.items.map(item =>
-        `<div class="em-list-item" data-em-id="${item.id}" title="${item.desc || ''}">
-          <span class="em-item-name">${item.name}</span>
-        </div>`
-      ).join('');
-
-      const collapsed = idx > 0 ? ' collapsed' : '';
-      return `
-        <div class="em-group${collapsed}" data-group-id="${cat.id}">
-          <div class="em-group-header">
-            <svg class="em-chevron" width="12" height="12" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span>${cat.title}</span>
-            <span class="em-group-count">${cat.items.length}</span>
-            <button class="em-group-run-all" data-em-group="${cat.id}" title="一键执行该分组所有命令" onclick="event.stopPropagation(); window.emergencyPageManager?.runGroup('${cat.id}')">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-            </button>
-          </div>
-          <div class="em-group-items">${items}</div>
-        </div>`;
-    }).join('');
+    const activeCat = emergencyCategories[0]?.id || 'permissions';
 
     // Account options
     const sshManager = (window as any).app?.sshManager;
@@ -78,100 +58,38 @@ export class EmergencyRenderer {
     }
 
     return `
-      <div class="emergency-commands-page">
-        <!-- Toolbar -->
+      <div class="emergency-page">
         <div class="em-toolbar">
-          <div class="em-system-badge">
-            <span class="em-sys-icon">
-              <svg width="14" height="14" viewBox="0 0 48 48" fill="none"><rect x="6" y="6" width="36" height="36" rx="3" stroke="currentColor" stroke-width="4"/><path d="M14 16H34M14 24H34M14 32H34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
-            </span>
+          <button class="em-sys-btn" id="em-sys-btn" title="目标系统">
+            <span class="em-sys-dot"></span>
             <span id="detected-system-info" class="em-sys-name">检测中...</span>
-          </div>
-
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
           <div class="em-search-wrapper">
-            <svg width="14" height="14" viewBox="0 0 48 48" fill="none"><circle cx="21" cy="21" r="17" stroke="currentColor" stroke-width="4"/><path d="M33.2 33.2L41.7 41.7" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
-            <input type="text" class="em-search-input" placeholder="搜索命令..." oninput="window.emergencyPageManager?.handleSearch(this.value)">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input type="text" class="em-search-input" placeholder="搜索命令、用途或标签..." oninput="window.emergencyPageManager?.handleSearch(this.value)">
+            <kbd class="em-kbd">Ctrl K</kbd>
           </div>
-
           <div class="em-account-select-wrapper">
-            <span>账号:</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+            <span class="em-account-label">执行账户</span>
             <select id="emergency-account-select" class="em-account-select">${accountsOptions}</select>
           </div>
-
-          <button class="em-toolbar-btn" onclick="(window).commandHistoryModal?.show()">
-            ${History({ theme: 'outline', size: '14', fill: 'currentColor' })}
-            <span>命令历史</span>
-          </button>
-
+          <button class="em-toolbar-btn" onclick="window.commandHistoryModal?.show()">${History({ theme: 'outline', size: '14', fill: 'currentColor' })}<span>执行历史</span></button>
+          <button class="em-toolbar-btn" onclick="window.emergencyShowFavorites && window.emergencyShowFavorites()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.5 5.5 6 .5-4.5 4 1.4 6L12 16l-5.4 3 1.4-6L3.5 9l6-.5z"/></svg><span>我的收藏</span></button>
           <div class="em-busybox-toggle" id="em-busybox-toggle">
-            <button class="em-toolbar-btn" id="em-busybox-btn" onclick="window.__busyboxToggle?.()">
+            <button class="em-busybox-pill" id="em-busybox-btn" onclick="window.__busyboxToggle?.()">
               <span id="em-busybox-indicator" class="em-busybox-dot off"></span>
               <span id="em-busybox-label">Busybox</span>
             </button>
           </div>
         </div>
 
-        <!-- Panels -->
-        <div class="em-panels">
-          <!-- Left Sidebar -->
-          <div class="em-sidebar">
-            <div class="em-sidebar-scroll">
-              ${sidebarGroups}
-            </div>
-          </div>
-
-          <!-- Right Main -->
-          <div class="em-main" id="em-main-panel">
-            <!-- Empty state (default) -->
-            <div class="em-empty-state" id="em-empty-state">
-              <div class="em-empty-icon">
-                <svg width="56" height="56" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <linearGradient id="em-s" x1=".1" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#f9a8d4"/><stop offset="1" stop-color="#c4b5fd"/></linearGradient>
-                    <linearGradient id="em-h" x1=".36" y1="0" x2=".5" y2=".5"><stop offset="0" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
-                  </defs>
-                  <g transform="rotate(-15 64 62)">
-                    <path d="M64,16 L75.8,47.8 L109.2,48.8 L83.2,68.8 L93,101.2 L64,83.2 L35,101.2 L44.8,68.8 L18.8,48.8 L52.2,47.8 Z" fill="url(#em-s)" stroke="url(#em-s)" stroke-width="12" stroke-linejoin="round" paint-order="stroke fill"/>
-                    <path d="M64,16 L75.8,47.8 L109.2,48.8 L83.2,68.8 L93,101.2 L64,83.2 L35,101.2 L44.8,68.8 L18.8,48.8 L52.2,47.8 Z" fill="url(#em-h)" stroke="url(#em-h)" stroke-width="12" stroke-linejoin="round" paint-order="stroke fill"/>
-                  </g>
-                </svg>
-              </div>
-              <span>从左侧选择一个命令</span>
-            </div>
-
-            <!-- Detail panel (hidden by default) -->
-            <div class="em-detail-panel" id="em-detail-panel" style="display:none;">
-              <h3 class="em-detail-title" id="em-detail-title"></h3>
-              <p class="em-detail-desc" id="em-detail-desc"></p>
-              <div class="em-detail-command">
-                <code class="em-detail-code" id="em-detail-code" contenteditable="false"></code>
-              </div>
-              <div class="em-detail-actions">
-                <button class="em-action-btn primary" id="em-btn-execute">
-                  <svg width="14" height="14" viewBox="0 0 48 48" fill="none"><path d="M15 8l26 16-26 16V8z" fill="currentColor"/></svg>
-                  执行
-                </button>
-                <button class="em-action-btn" id="em-btn-edit">编辑命令</button>
-                <button class="em-action-btn" id="em-btn-copy">复制命令</button>
-                <button class="em-action-btn" id="em-btn-ai">AI 解释</button>
-              </div>
-            </div>
-
-            <!-- Output panel (hidden by default) -->
-            <div class="em-output-panel" id="em-output-panel" style="display:none;">
-              <div class="em-output-header">
-                <span class="em-output-title">输出</span>
-                <input type="text" class="em-output-search" id="em-output-search" placeholder="搜索输出...">
-              </div>
-              <div class="em-output-scroll" id="em-output-scroll">
-                <pre class="em-output-content" id="em-output-content"></pre>
-              </div>
-              <div class="em-ai-box" id="em-ai-box" style="display:none;">
-                <div class="em-ai-label">AI 分析</div>
-                <div id="em-ai-content"></div>
-              </div>
-            </div>
-          </div>
+        <div class="em-layout">
+          <aside class="em-cats" id="em-cats">${renderCatsColumn(activeCat)}</aside>
+          <aside class="em-checks" id="em-checks">${renderChecksColumn(activeCat, '')}</aside>
+          <section class="em-detail" id="em-detail">${emptyDetail()}</section>
+          <aside class="em-finding" id="em-finding">${renderFindingPanel(null)}</aside>
         </div>
       </div>
     `;
@@ -231,6 +149,15 @@ export class EmergencyRenderer {
       { id: 'ssh-key-audit', name: 'SSH 密钥审计', description: '审计所有 SSH 密钥和 sshd 配置', iconFunc: Key },
       { id: 'timestomp-check', name: '时间戳篡改检测', description: '检测 mtime 与 ctime 异常的文件', iconFunc: History },
       { id: 'enhanced-process', name: '增强进程分析', description: '扩大扫描范围，检测可疑二进制', iconFunc: Config },
+      // K8s 安全检测
+      { id: 'k8s-privileged-pod', name: 'K8s 特权容器', description: '检测以 privileged 模式运行的容器', iconFunc: Shield },
+      { id: 'k8s-reverse-shell', name: 'K8s 反弹Shell', description: '检测 Pod/CronJob 中的反弹 Shell 命令', iconFunc: Shield },
+      { id: 'k8s-rbac-audit', name: 'K8s RBAC 审计', description: '检测 cluster-admin 绑定和通配符权限', iconFunc: Shield },
+      { id: 'k8s-container-escape', name: 'K8s 容器逃逸', description: '检测 hostPID/hostIPC/危险 Capabilities', iconFunc: Shield },
+      { id: 'k8s-suspicious-cronjob', name: 'K8s 恶意CronJob', description: '检测可疑定时任务命令', iconFunc: Shield },
+      { id: 'k8s-network-policy', name: 'K8s 网络策略', description: '检测缺少 NetworkPolicy 的命名空间', iconFunc: Shield },
+      { id: 'k8s-sa-audit', name: 'K8s SA 审计', description: '检测高权限 ServiceAccount', iconFunc: Shield },
+      { id: 'k8s-node-persistence', name: 'K8s 节点持久化', description: '检测节点上的可疑服务和 crontab', iconFunc: Shield },
     ];
 
     // 性能检测项目

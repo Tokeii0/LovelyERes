@@ -9,6 +9,7 @@
 
 import type { LovelyResApp } from '../core/app';
 import { showConfirm, showPrompt } from './confirmDialog';
+import './sftpDetailPanel'; // 注册 SFTP 文件详情侧栏的 window 函数
 import { sftpManager } from '../remote/sftpManager';
 import { sshConnectionManager } from '../remote/sshConnectionManager';
 import { sshConnectionDialog } from '../ui/sshConnectionDialog';
@@ -35,42 +36,114 @@ let sftpListenerBound = false;
 export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
   const { app, settingsPageManager, openSSHTerminalWindow } = deps;
 
-  // ──── Activity Bar 展开/收缩 ────
-  (window as any).toggleActivityBar = () => {
-    const bar = document.querySelector('.activity-bar');
-    if (!bar) return;
-    bar.classList.toggle('expanded');
-    const isExpanded = bar.classList.contains('expanded');
-    localStorage.setItem('activitybar-expanded', isExpanded ? '1' : '0');
-    // 更新 toggle 按钮 tooltip
-    const toggle = bar.querySelector('.activity-bar-toggle');
-    if (toggle) {
-      toggle.setAttribute('data-tooltip', isExpanded ? '收起菜单' : '展开菜单');
-    }
+  // ──── 侧边栏：折叠/展开（52px 轨道模式）────
+  (window as any).toggleSidebar = () => {
+    const nav = document.querySelector('.sidebar-nav');
+    if (!nav) return;
+    nav.classList.toggle('collapsed');
+    localStorage.setItem('sidebar-collapsed', nav.classList.contains('collapsed') ? '1' : '0');
   };
 
-  // 恢复上次展开状态
-  if (localStorage.getItem('activitybar-expanded') === '1') {
-    requestAnimationFrame(() => {
-      const bar = document.querySelector('.activity-bar');
-      if (bar) {
-        bar.classList.add('expanded');
-        const toggle = bar.querySelector('.activity-bar-toggle');
-        if (toggle) toggle.setAttribute('data-tooltip', '收起菜单');
-      }
+  // ──── 侧边栏：分组折叠/展开 ────
+  (window as any).toggleSidebarGroup = (groupId: string) => {
+    const nav = document.querySelector('.sidebar-nav');
+    // 轨道（折叠）模式下点击分组：先展开整条侧边栏，再确保该组打开
+    if (nav && nav.classList.contains('collapsed')) {
+      nav.classList.remove('collapsed');
+      localStorage.setItem('sidebar-collapsed', '0');
+      document.querySelector(`.sidebar-group[data-group-id="${groupId}"]`)?.classList.add('open');
+      persistOpenGroups();
+      return;
+    }
+    const grp = document.querySelector(`.sidebar-group[data-group-id="${groupId}"]`);
+    if (!grp) return;
+    grp.classList.toggle('open');
+    persistOpenGroups();
+  };
+
+  // ──── 侧边栏：搜索过滤 ────
+  (window as any).filterSidebar = (query: string) => {
+    const q = (query || '').trim().toLowerCase();
+    document.querySelectorAll('.sidebar-group').forEach(group => {
+      const g = group as HTMLElement;
+      let anyVisible = false;
+      g.querySelectorAll('.sidebar-item').forEach(item => {
+        const el = item as HTMLElement;
+        const text = (el.querySelector('.sidebar-item-label')?.textContent || '').toLowerCase();
+        const match = q === '' || text.includes(q);
+        el.hidden = !match;
+        if (match) anyVisible = true;
+      });
+      g.hidden = q !== '' && !anyVisible;
+      if (q !== '') g.classList.toggle('open', anyVisible);
     });
+    if (q === '') applySidebarState();
+  };
+
+  // 持久化已展开的分组集合
+  function persistOpenGroups(): void {
+    const open: string[] = [];
+    document.querySelectorAll('.sidebar-group.open').forEach(g => {
+      const id = (g as HTMLElement).getAttribute('data-group-id');
+      if (id) open.push(id);
+    });
+    localStorage.setItem('sidebar-groups-open', JSON.stringify(open));
   }
 
+  // 同步活动分组行高亮（依据当前活动叶子；含活动叶子的组始终展开）
+  function syncSidebarActiveGroup(): void {
+    document.querySelectorAll('.sidebar-group').forEach(g => {
+      const el = g as HTMLElement;
+      const hasActive = !!el.querySelector('.sidebar-item.active');
+      el.querySelector('.sidebar-group-row')?.classList.toggle('active', hasActive);
+      if (hasActive) el.classList.add('open');
+    });
+  }
+  (window as any).syncSidebarActiveGroup = syncSidebarActiveGroup;
+
+  // 施加持久化的侧边栏状态（折叠 + 分组展开 + 活动组）；每次侧边栏渲染后调用
+  function applySidebarState(): void {
+    const nav = document.querySelector('.sidebar-nav');
+    if (!nav) return;
+    nav.classList.toggle('collapsed', localStorage.getItem('sidebar-collapsed') === '1');
+    let openGroups: string[] | null = null;
+    try { openGroups = JSON.parse(localStorage.getItem('sidebar-groups-open') || 'null'); } catch { openGroups = null; }
+    if (Array.isArray(openGroups)) {
+      document.querySelectorAll('.sidebar-group').forEach(g => {
+        const el = g as HTMLElement;
+        const id = el.getAttribute('data-group-id');
+        const hasActive = !!el.querySelector('.sidebar-item.active');
+        el.classList.toggle('open', hasActive || (id ? openGroups!.includes(id) : false));
+      });
+    }
+    syncSidebarActiveGroup();
+  }
+  (window as any).applySidebarState = applySidebarState;
+
+  // 首次渲染后恢复侧边栏状态
+  requestAnimationFrame(() => applySidebarState());
+
   // ──── SFTP 面板全局函数 ────
+  // SFTP 当前目录内的客户端过滤（按文件名）
+  (window as any).sftpFilterFiles = (query: string) => {
+    const q = (query || '').trim().toLowerCase();
+    document.querySelectorAll('#sftp-file-list .sftp-file-row').forEach(row => {
+      const el = row as HTMLElement;
+      const name = (el.querySelector('.file-name')?.textContent || '').toLowerCase();
+      const isParent = el.classList.contains('parent-dir-item');
+      el.style.display = (!q || isParent || name.includes(q)) ? '' : 'none';
+    });
+  };
+
   (window as any).sftpRefresh = () => {
     try {
       if (sftpManager && (sftpManager as any).refreshCurrentDirectory) {
         (sftpManager as any).refreshCurrentDirectory();
-        (window as any).showNotification && (window as any).showNotification('文件列表已刷新', 'success');
+        window.showNotification && window.showNotification('文件列表已刷新', 'success');
       }
     } catch (e) {
       console.error('刷新失败:', e);
-      (window as any).showNotification && (window as any).showNotification(`刷新失败: ${e}`, 'error');
+      window.showNotification && window.showNotification(`刷新失败: ${e}`, 'error');
     }
   };
 
@@ -78,9 +151,12 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
     try {
       if (sftpManager && (sftpManager as any).getCurrentPath && (window as any).uploadModal) {
         (window as any).uploadModal.show((sftpManager as any).getCurrentPath());
+      } else {
+        window.showNotification && window.showNotification('上传窗口未初始化', 'error');
       }
     } catch (e) {
       console.error('打开上传对话框失败:', e);
+      window.showNotification && window.showNotification(`打开上传对话框失败: ${e}`, 'error');
     }
   };
 
@@ -88,9 +164,12 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
     try {
       if (sftpManager && (sftpManager as any).getCurrentPath && (window as any).createFolderModal) {
         (window as any).createFolderModal.show((sftpManager as any).getCurrentPath());
+      } else {
+        window.showNotification && window.showNotification('新建文件夹窗口未初始化', 'error');
       }
     } catch (e) {
       console.error('打开新建文件夹对话框失败:', e);
+      window.showNotification && window.showNotification(`打开新建文件夹失败: ${e}`, 'error');
     }
   };
 
@@ -98,14 +177,22 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
     try {
       if ((window as any).fileContextMenu && (window as any).fileContextMenu.showHistoryModal) {
         (window as any).fileContextMenu.showHistoryModal();
+      } else {
+        window.showNotification && window.showNotification('文件分析历史窗口未初始化', 'error');
       }
     } catch (e) {
       console.error('显示历史记录失败:', e);
+      window.showNotification && window.showNotification(`显示历史记录失败: ${e}`, 'error');
     }
   };
 
   (window as any).setSftpSortMode = (mode: 'name-asc' | 'name-desc' | 'size-asc' | 'size-desc' | 'modified-asc' | 'modified-desc') => {
-    try { sftpManager.setSortMode(mode); } catch (e) { console.error('设置排序方式失败:', e); }
+    try {
+      sftpManager.setSortMode(mode);
+    } catch (e) {
+      console.error('设置排序方式失败:', e);
+      window.showNotification && window.showNotification(`设置排序方式失败: ${e}`, 'error');
+    }
   };
 
   // ──── SFTP 新建文件 ────
@@ -124,13 +211,14 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
         path: fullPath,
         content: ''
       }).then(() => {
-        (window as any).showNotification && (window as any).showNotification(`文件已创建: ${fileName}`, 'success');
+        window.showNotification && window.showNotification(`文件已创建: ${fileName}`, 'success');
         sftpManager.refreshCurrentDirectory();
       }).catch((e: any) => {
-        (window as any).showNotification && (window as any).showNotification(`创建文件失败: ${e}`, 'error');
+        window.showNotification && window.showNotification(`创建文件失败: ${e}`, 'error');
       });
     } catch (e) {
       console.error('创建文件失败:', e);
+      window.showNotification && window.showNotification(`创建文件失败: ${e}`, 'error');
     }
   };
 
@@ -140,12 +228,15 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
       const currentPath = sftpManager.getCurrentPath();
       if (!(await showConfirm({ title: '完整性快照', message: `将为 ${currentPath} 目录生成文件哈希清单（md5sum），是否继续？` }))) return;
 
-      (window as any).showNotification && (window as any).showNotification('正在生成完整性快照...', 'info');
+      window.showNotification && window.showNotification('正在生成完整性快照...', 'info');
 
       const cmd = `find "${currentPath}" -maxdepth 1 -type f -exec md5sum {} \\; 2>/dev/null | sort -k2`;
       (window as any).__TAURI__.core.invoke('ssh_execute_command_direct', { command: cmd })
         .then((result: any) => {
           const output = result?.output || '(空目录或无文件)';
+          if (typeof result?.exit_code === 'number' && result.exit_code !== 0) {
+            window.showNotification && window.showNotification(`生成快照命令返回退出码 ${result.exit_code}`, 'warning');
+          }
           // Show in modal
           const modal = document.createElement('div');
           modal.className = 'modal-overlay';
@@ -168,12 +259,14 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
           `;
           document.body.appendChild(modal);
           modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+          window.showNotification && window.showNotification('完整性快照已生成', 'success');
         })
         .catch((e: any) => {
-          (window as any).showNotification && (window as any).showNotification(`生成快照失败: ${e}`, 'error');
+          window.showNotification && window.showNotification(`生成快照失败: ${e}`, 'error');
         });
     } catch (e) {
       console.error('完整性快照失败:', e);
+      window.showNotification && window.showNotification(`完整性快照失败: ${e}`, 'error');
     }
   };
 
@@ -206,16 +299,15 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
 
   (window as any).refreshSidebar = () => {
     try {
-      if (app) {
-        const sidebar = document.querySelector('.modern-sidebar');
-        if (sidebar) {
-          const sidebarHTML = app.getStateManager().getUIRenderer().renderSidebar();
-          const tempDiv = document.createElement('div');
-          tempDiv.innerHTML = sidebarHTML;
-          const sidebarContent = tempDiv.querySelector('.modern-sidebar');
-          if (sidebarContent) sidebar.innerHTML = sidebarContent.innerHTML;
-        }
-      }
+      if (!app) return;
+      const sidebar = document.querySelector('.sidebar-nav');
+      if (!sidebar) return;
+      const sidebarHTML = app.getStateManager().getUIRenderer().renderSidebar();
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = sidebarHTML;
+      const fresh = tempDiv.querySelector('.sidebar-nav');
+      if (fresh) sidebar.replaceWith(fresh);
+      applySidebarState();
     } catch (error) {
       console.error('❌ 刷新侧边栏失败:', error);
     }
@@ -225,9 +317,9 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
   (window as any).toggleDevTools = async () => {
     try {
       await (window as any).__TAURI__.core.invoke('open_devtools');
-      (window as any).showNotification && (window as any).showNotification('开发者工具已打开', 'success');
+      window.showNotification && window.showNotification('开发者工具已打开', 'success');
     } catch (error) {
-      (window as any).showNotification && (window as any).showNotification(`打开开发者工具失败: ${error}`, 'error');
+      window.showNotification && window.showNotification(`打开开发者工具失败: ${error}`, 'error');
     }
   };
 
@@ -244,16 +336,23 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
       remoteOperationsPageInitialized = false;
     }
 
-    document.querySelectorAll('.activity-bar-item[data-nav-id], .nav-item[data-nav-id]').forEach(item => {
+    document.querySelectorAll('.sidebar-item[data-nav-id], .activity-bar-item[data-nav-id], .nav-item[data-nav-id]').forEach(item => {
       const htmlItem = item as HTMLElement;
       const navId = htmlItem.getAttribute('data-nav-id');
       htmlItem.classList.toggle('active', navId === pageId);
     });
+    syncSidebarActiveGroup();
 
     const sm = app.getStateManager();
     if (app && sm) {
+      const prevPage = sm.getState()?.currentPage;
       sm.setCurrentPage(pageId as any);
       app.render();
+      // 进出带「上下文分组」的页面时重渲主侧边栏，以并入/移除其上下文分组
+      const CTX_PAGES = ['system-info', 'remote-operations'];
+      if (prevPage !== pageId && (CTX_PAGES.includes(prevPage as string) || CTX_PAGES.includes(pageId))) {
+        (window as any).refreshSidebar && (window as any).refreshSidebar();
+      }
 
       if (pageId === 'docker') {
         // initialize is already called inside renderDockerPage()
@@ -265,6 +364,9 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
         setTimeout(() => { (window as any).refreshLogAnalysis(); }, 200);
       } else if (pageId === 'settings') {
         setTimeout(() => { settingsPageManager.initialize(); }, 100);
+      } else if (pageId === 'web-terminal') {
+        (window as any).openWebTerminal?.();
+        return;
       } else if (pageId === 'ssh-terminal') {
         openSSHTerminalWindow();
         setTimeout(() => {
@@ -399,7 +501,7 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
     settingsPageManager.resetEventBindings();
   };
 
-  // ──── 用户头像下拉菜单 ────
+  // ──── 连接面板下拉菜单 ────
   (window as any).toggleUserDropdown = () => {
     const dropdown = document.getElementById('user-dropdown-menu');
     if (dropdown) {
@@ -410,11 +512,11 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
   if (!globalEventsBound) {
     document.addEventListener('click', (event) => {
       const dropdown = document.getElementById('user-dropdown-menu');
-      const userAvatarContainer = document.querySelector('.user-panel');
-      if (dropdown && userAvatarContainer) {
+      const connectionPanel = document.querySelector('.user-panel');
+      if (dropdown && connectionPanel) {
         const clickedInsideDropdown = dropdown.contains(event.target as Node);
-        const clickedOnAvatar = userAvatarContainer.contains(event.target as Node);
-        if (!clickedInsideDropdown && !clickedOnAvatar && dropdown.style.display === 'block') {
+        const clickedOnPanel = connectionPanel.contains(event.target as Node);
+        if (!clickedInsideDropdown && !clickedOnPanel && dropdown.style.display === 'block') {
           dropdown.style.display = 'none';
         }
       }
@@ -527,6 +629,25 @@ export function initGlobalFunctions(deps: GlobalFunctionsDeps): void {
       dropdown.style.opacity = '0';
       setTimeout(() => { dropdown.style.display = 'none'; }, 200);
     }
+  };
+
+  // ──── Web 终端（新窗口打开） ────
+  (window as any).openWebTerminal = async (url?: string) => {
+    const { webTerminalManager } = await import('../remote/webTerminalManager');
+
+    if (url) {
+      await webTerminalManager.openUrl(url);
+      return;
+    }
+
+    const input = await showPrompt({
+      title: 'Web 终端',
+      message: '输入 Web 终端 URL（在新窗口中打开）:',
+      defaultValue: 'http://',
+    });
+    if (!input || input === 'http://') return;
+
+    await webTerminalManager.openUrl(input);
   };
 
 }

@@ -3,6 +3,237 @@
  * Modern, aesthetic, and theme-compatible
  */
 
+/* 文件调查侧边栏：敏感目录风险圆点 */
+.sftp-loc-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sev-warn-fg);
+}
+.sftp-loc-dot.high { background: var(--sev-critical-border-strong, #ef4444); }
+.sftp-loc-dot.warn { background: var(--sev-warn-fg); }
+
+/* ──── 新版头部 + 路径栏 ──── */
+.sftp-header { flex-shrink: 0; padding: 16px 16px 0; }
+.sftp-breadcrumb-top { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; font-size: 12.5px; color: var(--text-secondary); }
+.sftp-bc-sep { opacity: 0.5; }
+.sftp-bc-cur { color: var(--text-primary); font-weight: 500; }
+.sftp-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.sftp-title { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
+.sftp-head-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.sftp-act-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, filter 0.15s;
+}
+.sftp-act-btn:hover { background: var(--hover-bg); border-color: var(--primary-color); }
+.sftp-act-btn svg { width: 15px; height: 15px; }
+.sftp-act-btn.primary { background: var(--gradient-accent); color: var(--accent-contrast); border-color: transparent; }
+.sftp-act-btn.primary:hover { filter: brightness(1.06); }
+
+.sftp-pathbar { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 16px 12px; }
+.sftp-nav-controls { display: flex; gap: 4px; }
+.sftp-nav-btn {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.sftp-nav-btn:hover { background: var(--hover-bg); color: var(--text-primary); border-color: var(--primary-color); }
+.sftp-pathbar .sftp-breadcrumb-bar { flex: 1; min-width: 0; height: 34px; }
+.sftp-search {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 240px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.sftp-search:focus-within { border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-glow); }
+.sftp-search svg { flex-shrink: 0; }
+.sftp-search input { flex: 1; min-width: 0; border: 0; background: transparent; outline: 0; color: var(--text-primary); font-size: 13px; font-family: inherit; }
+.sftp-search input::placeholder { color: var(--text-secondary); }
+
+/* ──── 主体：文件表格 + 详情侧栏 ──── */
+.sftp-body { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+.sftp-body .sftp-file-list-container { flex: 1; min-width: 0; overflow: auto; }
+
+/* 表格新列宽 + 现代化（名称列不设宽，吃掉剩余空间）*/
+.sftp-table .sftp-col-check, .sftp-table .sftp-td-check { width: 34px; text-align: center; }
+.sftp-table .sftp-col-name { width: auto; min-width: 120px; }
+.sftp-table .file-icon-cell { overflow: hidden; }
+.sftp-table .sftp-col-type, .sftp-table .sftp-td-type { width: 56px; color: var(--text-secondary); }
+.sftp-table .sftp-col-size, .sftp-table .sftp-td-size { width: 64px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.sftp-table .sftp-col-perms, .sftp-table .perms-cell { width: 90px; font-family: var(--font-mono), monospace; font-size: 11px; }
+.sftp-table .sftp-col-owner, .sftp-table .owner-cell { width: 82px; }
+.sftp-table .sftp-col-time, .sftp-table .sftp-td-time { width: 104px; color: var(--text-secondary); }
+.sftp-table .sftp-col-risk, .sftp-table .sftp-td-risk { width: 72px; }
+.sftp-table td { font-size: 12px; }
+.sftp-table .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sftp-row-check, #sftp-check-all { width: 14px; height: 14px; accent-color: var(--primary-color); cursor: pointer; }
+.sftp-file-row.selected td { background: color-mix(in srgb, var(--primary-color) 8%, transparent) !important; }
+.sftp-file-row.selected td:first-child { box-shadow: inset 3px 0 0 var(--primary-color); }
+
+/* 风险列徽章 */
+.sftp-risk-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.sftp-risk-tag.high { background: var(--sev-critical-bg); color: var(--sev-critical-fg); }
+.sftp-risk-tag.warn { background: var(--sev-warn-bg); color: var(--sev-warn-fg); }
+.sftp-risk-tag.info { background: var(--surface-tertiary, var(--bg-tertiary)); color: var(--text-secondary); }
+.sftp-risk-none { color: var(--text-secondary); opacity: 0.5; }
+
+/* ──── 文件详情侧栏（常驻可收缩，复用 .pd-* 样式）──── */
+.sftp-side {
+  flex-shrink: 0;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  overflow: hidden;
+  transition: width 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.sftp-side.collapsed { width: 44px; }
+.sftp-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  height: 46px;
+  padding: 0 10px 0 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+.sftp-side-title { font-size: 14px; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+.sftp-side-toggle {
+  width: 28px; height: 28px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.22s;
+}
+.sftp-side-toggle:hover { background: var(--hover-bg); color: var(--text-primary); }
+.sftp-side.collapsed .sftp-side-toggle { transform: rotate(180deg); }
+.sftp-side.collapsed .sftp-side-head {
+  flex-direction: column-reverse;
+  justify-content: flex-start;
+  gap: 10px;
+  height: auto;
+  padding: 10px 0;
+  border-bottom: none;
+}
+.sftp-side.collapsed .sftp-side-title { writing-mode: vertical-rl; letter-spacing: 0.12em; font-weight: 600; color: var(--text-secondary); }
+.sftp-side.collapsed .sftp-side-body { display: none; }
+.sftp-side-body { flex: 1; overflow-y: auto; padding: 16px; }
+
+.sftp-side-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.sftp-side-empty-icon { opacity: 0.35; }
+.sftp-side-empty p { margin: 0; font-size: 13px; }
+
+.sftp-detail-id { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.sftp-detail-fileicon { font-size: 26px; flex-shrink: 0; }
+.sftp-detail-idtext { min-width: 0; flex: 1; }
+.sftp-detail-name { font-size: 15px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sftp-detail-sub { font-size: 12px; color: var(--text-secondary); }
+.sftp-detail-preview {
+  margin: 0;
+  max-height: 160px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-primary);
+  font-family: var(--font-mono), monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.sftp-detail-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.sftp-detail-tag {
+  padding: 2px 9px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--sev-info-bg-hover, rgba(99,102,241,0.16));
+  color: var(--sev-info-fg, #4338ca);
+}
+.sftp-detail-actions { display: flex; gap: 8px; margin-top: 18px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sftp-side { transition-duration: 0.01ms; }
+}
+
+/* ──── 敏感目录审计横幅 ──── */
+.sftp-audit-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 16px 12px;
+  padding: 9px 14px;
+  border: 1px solid color-mix(in srgb, var(--sev-warn-fg) 35%, var(--border-color));
+  border-radius: 10px;
+  background: var(--sev-warn-bg);
+  font-size: 13px;
+}
+.sftp-audit-icon { display: inline-flex; flex-shrink: 0; color: var(--sev-warn-fg); }
+.sftp-audit-text { flex: 1; color: var(--text-primary); }
+.sftp-audit-text strong { color: var(--sev-warn-fg); }
+.sftp-audit-link {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sev-warn-fg);
+  font-size: 12.5px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sftp-audit-link:hover { text-decoration: underline; }
+
 /* Container Layout */
 .sftp-page-container {
   height: 100%;

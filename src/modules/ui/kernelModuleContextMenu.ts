@@ -20,7 +20,7 @@ export class KernelModuleContextMenu extends BaseContextMenu {
     if (action === 'copy-name') {
       try {
         await navigator.clipboard.writeText(this.currentModule.name || '')
-        ;(window as any).showNotification?.('模块名已复制', 'success')
+        ;window.showNotification?.('模块名已复制', 'success')
       } catch { /* ignore */ }
       return true
     }

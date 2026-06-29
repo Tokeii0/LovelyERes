@@ -143,3 +143,54 @@
   from { opacity: 1; transform: translateY(0) scale(1); }
   to { opacity: 0; transform: translateY(-4px) scale(0.995); }
 }
+
+/* ── LovelySpark-inspired micro-animations ── */
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--primary-glow); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes subtlePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes floatBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.15); }
+}
+
+/* Functional loading indicator (LovelySpark parity) */
+.spin {
+  animation: spin 1s linear infinite;
+  transform-origin: center center;
+  transform-box: fill-box;
+  display: inline-block;
+  will-change: transform;
+}
+
+/* Reduced motion — keep functional spinners visible but slow, kill decorative motion */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.spin),
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .spin {
+    animation-duration: 2s !important;
+  }
+}

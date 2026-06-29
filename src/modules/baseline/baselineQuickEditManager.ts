@@ -10,6 +10,7 @@ import {
   type BaselineConfigItem,
 } from './baselineConfigs';
 import { SystemDetector, type SystemInfo } from '../utils/systemDetector';
+import { showAlert, showConfirm } from '../ui/confirmDialog';
 
 interface ChangeHistoryEntry {
   timestamp: string;
@@ -296,7 +297,7 @@ export class BaselineQuickEditManager {
 
   private applyAllRecommended(): void {
     if (!this.selectedCategoryId) {
-      (window as any).showNotification?.('请先选择一个配置分类', 'warning');
+      window.showNotification?.('请先选择一个配置分类', 'warning');
       return;
     }
 
@@ -314,7 +315,7 @@ export class BaselineQuickEditManager {
 
     this.renderEditor(category);
     this.updateDiffBar();
-    (window as any).showNotification?.(`已将 ${category.title} 的配置项设为推荐值`, 'success');
+    window.showNotification?.(`已将 ${category.title} 的配置项设为推荐值`, 'success');
   }
 
   // ─── 撤销 ───
@@ -343,7 +344,7 @@ export class BaselineQuickEditManager {
 
   private async applyChanges(): Promise<void> {
     if (this.pendingChanges.size === 0) {
-      (window as any).showNotification?.('没有待应用的变更', 'info');
+      window.showNotification?.('没有待应用的变更', 'info');
       return;
     }
 
@@ -359,7 +360,7 @@ export class BaselineQuickEditManager {
     }
 
     if (changeList.length === 0) {
-      (window as any).showNotification?.('没有实际需要变更的配置项', 'info');
+      window.showNotification?.('没有实际需要变更的配置项', 'info');
       this.pendingChanges.clear();
       this.updateDiffBar();
       return;
@@ -369,7 +370,6 @@ export class BaselineQuickEditManager {
     const sshPortChange = changeList.find(c => c.item.id === 'ssh-port');
     const sshPasswordChange = changeList.find(c => c.item.id === 'ssh-password-auth' && c.newValue === 'no');
     if (sshPortChange) {
-      const { showConfirm } = await import('../ui/confirmDialog');
       const confirmed = await showConfirm({
         title: '危险操作警告',
         message: `您正在修改 SSH 端口 (${sshPortChange.oldValue} → ${sshPortChange.newValue})。\n\n如果防火墙未放行新端口，您可能会失去对服务器的访问！\n\n请确认已做好准备。`,
@@ -381,7 +381,6 @@ export class BaselineQuickEditManager {
     }
 
     if (sshPasswordChange) {
-      const { showConfirm } = await import('../ui/confirmDialog');
       const confirmed = await showConfirm({
         title: '注意',
         message: '您正在关闭 SSH 密码认证。请确保已配置密钥认证，否则可能无法登录服务器。',
@@ -394,7 +393,6 @@ export class BaselineQuickEditManager {
 
     // 确认对话框
     const summary = changeList.map(c => `  ${c.item.name}: ${c.oldValue} → ${c.newValue}`).join('\n');
-    const { showConfirm } = await import('../ui/confirmDialog');
     const confirmed = await showConfirm({
       title: '确认应用变更',
       message: `即将修改以下 ${changeList.length} 项配置：\n\n${summary}\n\n将在修改前自动备份原文件。`,
@@ -431,14 +429,14 @@ export class BaselineQuickEditManager {
       for (let i = 0; i < results.length; i++) {
         if (results[i] === null) {
           failCount++;
-          (window as any).showNotification?.(`${changeList[i].item.name} 写入失败`, 'error');
+          window.showNotification?.(`${changeList[i].item.name} 写入失败`, 'error');
         }
       }
 
       if (failCount === 0) {
-        (window as any).showNotification?.(`${changeList.length} 项配置已成功应用`, 'success');
+        window.showNotification?.(`${changeList.length} 项配置已成功应用`, 'success');
       } else {
-        (window as any).showNotification?.(`${changeList.length - failCount}/${changeList.length} 项配置已应用，${failCount} 项失败`, 'warning');
+        window.showNotification?.(`${changeList.length - failCount}/${changeList.length} 项配置已应用，${failCount} 项失败`, 'warning');
       }
 
       // 检查是否需要重启服务
@@ -464,7 +462,7 @@ export class BaselineQuickEditManager {
         if (restartConfirmed) {
           const cmds = Array.from(restartCommands.values());
           await this.executeBatchCommands(cmds);
-          (window as any).showNotification?.(`服务 ${serviceNames} 已重启`, 'success');
+          window.showNotification?.(`服务 ${serviceNames} 已重启`, 'success');
         }
       }
 
@@ -488,7 +486,7 @@ export class BaselineQuickEditManager {
       this.updateDiffBar();
 
     } catch (err) {
-      (window as any).showNotification?.(`应用变更失败: ${err}`, 'error');
+      window.showNotification?.(`应用变更失败: ${err}`, 'error');
     } finally {
       if (applyBtn) {
         applyBtn.disabled = false;
@@ -610,7 +608,10 @@ export class BaselineQuickEditManager {
       // 最多保留 100 条
       if (history.length > 100) history.length = 100;
       localStorage.setItem(key, JSON.stringify(history));
-    } catch {}
+    } catch (e) {
+      // localStorage 在隐私模式或配额已满时可能抛错, 仅记日志
+      console.warn('[Baseline] 保存历史失败:', e);
+    }
   }
 
   private async showHistory(): Promise<void> {
@@ -890,10 +891,10 @@ export class BaselineQuickEditManager {
 
       this.editorOriginalContent = newContent;
       this.editorModified = false;
-      (window as any).showNotification?.(`${this.editorFilePath} 已保存（已备份原文件）`, 'success');
+      window.showNotification?.(`${this.editorFilePath} 已保存（已备份原文件）`, 'success');
 
     } catch (err) {
-      (window as any).showNotification?.(`保存失败: ${err}`, 'error');
+      window.showNotification?.(`保存失败: ${err}`, 'error');
     } finally {
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '备份并保存'; }
     }
@@ -911,14 +912,14 @@ export class BaselineQuickEditManager {
       'query-user-chage', 'set-user-maxdays', 'set-user-warndays', 'set-user-mindays', 'expire-user-passwd',
       'set-user-nologin', 'delete-user', 'query-user-sudo-log'];
     if (needsParam.includes(actionId) && !param) {
-      (window as any).showNotification?.('请输入参数', 'warning');
+      window.showNotification?.('请输入参数', 'warning');
       paramInput?.focus();
       return;
     }
 
     // 安全校验
     if (param && /[;&|`$(){}]/.test(param)) {
-      (window as any).showNotification?.('参数包含非法字符', 'error');
+      window.showNotification?.('参数包含非法字符', 'error');
       return;
     }
 
@@ -1007,12 +1008,11 @@ export class BaselineQuickEditManager {
     };
 
     const gen = commandMap[actionId];
-    if (!gen) { (window as any).showNotification?.('未知操作', 'error'); return; }
+    if (!gen) { window.showNotification?.('未知操作', 'error'); return; }
     const { cmd, desc, dangerous } = gen();
 
     // 危险操作确认
     if (dangerous) {
-      const { showConfirm } = await import('../ui/confirmDialog');
       const ok = await showConfirm({
         title: '确认执行',
         message: `${desc}\n\n命令: ${cmd}`,
@@ -1029,18 +1029,17 @@ export class BaselineQuickEditManager {
 
     try {
       const output = await this.executeCommand(cmd);
-      (window as any).showNotification?.(`${desc} — 完成`, 'success');
+      window.showNotification?.(`${desc} — 完成`, 'success');
 
       // 对于有输出的命令（如 who-online），显示结果
       // 查询类操作展示结果
       const showResultActions = ['who-online', 'query-user-chage', 'query-ssh-version', 'query-kernel',
         'query-login-defs', 'query-user-sudo-log', 'query-malicious-ports', 'query-suspicious-users', 'query-all-listening'];
       if (output.trim() && showResultActions.includes(actionId)) {
-        const { showAlert } = await import('../ui/confirmDialog');
         await showAlert({ title: desc, message: output.substring(0, 2000), type: 'info' });
       }
     } catch (err) {
-      (window as any).showNotification?.(`${desc} — 失败: ${err}`, 'error');
+      window.showNotification?.(`${desc} — 失败: ${err}`, 'error');
     } finally {
       if (execBtn) { execBtn.disabled = false; execBtn.textContent = needsParam.includes(actionId) ? '执行' : '一键执行'; }
     }

@@ -16,6 +16,7 @@ import { KubernetesEmergencyManager } from '../kubernetes/kubernetesEmergencyMan
 import { KubernetesSecurityAuditor } from '../kubernetes/kubernetesSecurityAuditor';
 import { SystemInfoManager } from '../system/systemInfoManager';
 import { sshConnectionManager } from '../remote/sshConnectionManager';
+import { showConfirm } from '../ui/confirmDialog';
 
 export interface ServerInfo {
   name: string;
@@ -231,10 +232,11 @@ export class LovelyResApp {
 
     // 同步更新侧边栏 active 状态
     const currentPage = this.stateManager.getState().currentPage;
-    document.querySelectorAll('.activity-bar-item[data-nav-id]').forEach(item => {
+    document.querySelectorAll('.sidebar-item[data-nav-id], .activity-bar-item[data-nav-id]').forEach(item => {
       const navId = (item as HTMLElement).getAttribute('data-nav-id');
       item.classList.toggle('active', navId === currentPage);
     });
+    (window as any).syncSidebarActiveGroup && (window as any).syncSidebarActiveGroup();
   }
 
   /**
@@ -269,7 +271,7 @@ export class LovelyResApp {
       }
 
       // 导航点击事件 (activity-bar-item for VS Code style, nav-item for legacy)
-      const navItem = target.closest('.activity-bar-item[data-nav-id], .nav-item[data-nav-id]');
+      const navItem = target.closest('.sidebar-item[data-nav-id], .activity-bar-item[data-nav-id], .nav-item[data-nav-id]');
       if (navItem && navItem.getAttribute('data-nav-id')) {
         const navId = navItem.getAttribute('data-nav-id');
         if (navId && (window as any).switchPage) {
@@ -319,7 +321,6 @@ export class LovelyResApp {
     (window as any).confirmDisconnect = async () => {
       (window as any).hideSettingsDropdown?.();
       const serverName = this.stateManager.getState().serverInfo?.name || this.stateManager.getState().currentServer || '当前服务器';
-      const { showConfirm } = await import('../ui/confirmDialog');
       const confirmed = await showConfirm({
         title: '断开服务器连接',
         message: `确定要断开与 "${serverName}" 的连接吗？所有正在进行的操作将被中止。`,
@@ -339,14 +340,14 @@ export class LovelyResApp {
             await invoke('ssh_disconnect_direct').catch((e: any) => console.warn('清理操作忽略:', e));
           }
           this.stateManager.setConnected(false);
-          (window as any).showNotification?.('已断开服务器连接', 'success');
+          window.showNotification?.('已断开服务器连接', 'success');
           requestAnimationFrame(() => {
             (window as any).refreshSidebar?.();
             (window as any).refreshDashboard?.();
           });
         } catch (e) {
           console.error('断开连接失败:', e);
-          (window as any).showNotification?.(`断开失败: ${e}`, 'error');
+          window.showNotification?.(`断开失败: ${e}`, 'error');
         }
       }
     };
@@ -387,16 +388,20 @@ export class LovelyResApp {
 
   /**
    * 绑定窗口控制事件
+   *
+   * Use closest() not classList.contains() — control buttons contain
+   * inline <svg> icons, so e.target is often the SVG node, not the
+   * <button> with the marker class. classList.contains misses those.
    */
   private bindWindowControls(): void {
     document.addEventListener('click', async (e) => {
       const target = e.target as HTMLElement;
 
-      if (target.classList.contains('minimize-btn')) {
+      if (target.closest('.minimize-btn')) {
         await invoke('minimize_window');
-      } else if (target.classList.contains('maximize-btn')) {
+      } else if (target.closest('.maximize-btn')) {
         await invoke('toggle_maximize');
-      } else if (target.classList.contains('close-btn')) {
+      } else if (target.closest('.close-btn')) {
         await this.gracefulClose();
       }
     });
@@ -440,16 +445,15 @@ export class LovelyResApp {
    * 绑定SSH事件
    */
   private bindSSHEvents(): void {
-    // SSH连接按钮
     document.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
 
-      if (target.classList.contains('ssh-connect-btn')) {
+      if (target.closest('.ssh-connect-btn')) {
         this.handleSSHConnect();
         return;
       }
 
-      if (target.classList.contains('disconnect-btn') || target.closest('.disconnect-btn')) {
+      if (target.closest('.disconnect-btn')) {
         this.handleSSHDisconnect();
       }
     });
@@ -459,10 +463,9 @@ export class LovelyResApp {
    * 绑定Docker事件
    */
   private bindDockerEvents(): void {
-    // Docker管理按钮
     document.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
-      if (target.classList.contains('docker-manage-btn')) {
+      if (target.closest('.docker-manage-btn')) {
         this.handleDockerManage();
       }
     });

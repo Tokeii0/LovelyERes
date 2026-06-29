@@ -506,11 +506,14 @@ export class UserContextMenu extends BaseContextMenu {
         // id 命令返回非0 = 用户已不存在 = 删除成功
         const killInfo = hasProcesses ? '\n(已自动终止该用户的所有进程)' : ''
         this.showModal(title, `✅ 用户 ${username} 删除成功！${killInfo}`)
+        window.showNotification?.(`用户 ${username} 删除成功`, 'success')
       } else {
         this.showModal(title, `❌ 删除用户失败，用户仍然存在\n\n${verifyResult.output}\n\n💡 提示: 可在终端中手动执行:\nsudo pkill -9 -u ${username} && sudo userdel -rf ${username}`)
+        window.showNotification?.(`删除用户 ${username} 失败，用户仍然存在`, 'error')
       }
     } catch (error) {
       this.showModal(title, `❌ 删除用户失败: ${error}`)
+      window.showNotification?.(`删除用户 ${username} 失败: ${error}`, 'error')
     }
   }
 }

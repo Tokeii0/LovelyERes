@@ -1,38 +1,68 @@
 /* 深色主题 - LovelyRes */
-/* 护眼舒适的深色主题配色 */
+/* Aligned with LovelySpark dark palette: navy canvas + airy blue accent */
 
 [data-theme="dark"] {
   /* 主色调 */
-  --primary-color: #4299e1;
-  --secondary-color: #63b3ed;
-  --accent-color: #81e6d9;
-  --success-color: #48bb78;
-  --warning-color: #ed8936;
-  --error-color: #f56565;
-  --info-color: #4299e1;
+  --primary-color: #6db3ff;
+  --secondary-color: #818cf8;
+  --accent-color: #6db3ff;
+  --success-color: #4ade80;
+  --warning-color: #fbbf24;
+  --error-color: #f87171;
+  --info-color: #6db3ff;
 
   /* 背景色 */
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-tertiary: #334155;
-  --bg-dark: #475569;
-  --bg-glass: rgba(0, 0, 0, 0.3);
-  --bg-hover: rgba(148, 163, 184, 0.08);
+  --bg-primary: #0c1222;
+  --bg-secondary: #1a2332;
+  --bg-tertiary: #141c2b;
+  --bg-dark: #080d19;
+  --bg-glass: rgba(12, 18, 34, 0.8);
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --hover-bg: rgba(255, 255, 255, 0.06);
+  --active-bg: rgba(255, 255, 255, 0.10);
 
   /* 文字颜色 */
-  --text-primary: #f1f5f9;
-  --text-secondary: #cbd5e1;
-  --text-light: #94a3b8;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-light: #64748b;
   --text-white: #ffffff;
 
   /* 边框和阴影 */
-  --border-color: rgba(148, 163, 184, 0.2);
-  --border-light: rgba(255, 255, 255, 0.08);
-  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
-  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  --glow-primary: rgba(66, 153, 225, 0.5);
+  --border-color: #283548;
+  --border-color-hover: #3f4f6a;
+  --border-light: rgba(255, 255, 255, 0.06);
+  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.37);
+  --glow-primary: rgba(109, 179, 255, 0.32);
+
+  /* Extended design tokens (LovelySpark parity) */
+  --surface-primary: #0c1222;
+  --surface-secondary: #1a2332;
+  --surface-tertiary: #141c2b;
+  --primary-glow: rgba(109, 179, 255, 0.18);
+  --accent-contrast: #ffffff;
+  --gradient-accent: linear-gradient(135deg, #4a9eff, #818cf8);
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
+  --card-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --modal-backdrop: rgba(0, 0, 0, 0.65);
+  --modal-shadow: 0 20px 60px rgba(0, 0, 0, 0.50);
+  --glass-bg: rgba(12, 18, 34, 0.8);
+  --glass-border: rgba(255, 255, 255, 0.07);
+  --glass-blur: 16px;
+
+  /* Brand sparkle palette (dark variant) */
+  --brand-glow-amber: rgba(251, 191, 36, 0.28);
+  --brand-spark-soft: #fbbf24;
+  --brand-spark-soft-inner: #fde68a;
+  --brand-spark-core: #f59e0b;
+  --brand-spark-accent: #fb7185;
+  --brand-spark-neutral: #94a3b8;
+  --brand-wordmark-gradient: linear-gradient(135deg, #f8fafc 0%, #fbbf24 54%, #fb7185 100%);
+  --brand-dot-color: #fbbf24;
 
   /* Semantic Colors */
   --status-running: #10b981;
@@ -44,34 +74,74 @@
   --accent-orange: #F59E0B;
 
   /* Scrollbar */
-  --scrollbar-thumb: var(--bg-tertiary);
-  --scrollbar-thumb-hover: var(--bg-dark);
-  --scrollbar-track: var(--bg-primary);
+  --scrollbar-thumb: #283548;
+  --scrollbar-thumb-hover: var(--primary-color);
+  --scrollbar-track: transparent;
 
   /* Focus */
   --focus-ring-color: var(--primary-color);
-  --focus-ring-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+  --focus-ring-shadow: 0 0 0 3px rgba(109, 179, 255, 0.22);
 
   /* Selection */
   --selection-bg: var(--primary-color);
-  --selection-text: #ffffff;
+  --selection-text: #0c1222;
 
   /* Activity Bar — darkest layer */
-  --activitybar-bg: #0b1022;
-  --activitybar-border: rgba(148, 163, 184, 0.1);
-  --activitybar-icon-active: #e2e8f0;
+  --activitybar-bg: #080d19;
+  --activitybar-border: rgba(148, 163, 184, 0.08);
+  --activitybar-icon-active: #f8fafc;
   --activitybar-icon-inactive: rgba(148, 163, 184, 0.7);
   --activitybar-indicator: var(--primary-color);
 
-  /* Status Bar — same depth as activity bar */
-  --statusbar-bg: #0b1022;
+  /* Status Bar — low-saturation deep blue→indigo gradient that sits just
+     above bg-primary without becoming a glowing strip. */
+  --statusbar-bg: linear-gradient(135deg, #1c2742, #28284e);
   --statusbar-text: #94a3b8;
-  --statusbar-border: rgba(148, 163, 184, 0.1);
+  --statusbar-border: transparent;
+  --statusbar-border-top: rgba(255, 255, 255, 0.06);
 
   /* Tooltip */
-  --tooltip-bg: #1e293b;
-  --tooltip-text: #f1f5f9;
-  --tooltip-border: rgba(148, 163, 184, 0.2);
+  --tooltip-bg: #1a2332;
+  --tooltip-text: #f8fafc;
+  --tooltip-border: #283548;
+
+  /* Sidebar tokens (semantic aliases) */
+  --sidebar-bg: #0f1729;
+  --sidebar-hover-bg: rgba(255, 255, 255, 0.06);
+  --sidebar-active-bg: rgba(109, 179, 255, 0.1);
+
+  /* Severity (dark: pastel fg for contrast on dark surfaces) */
+  --sev-critical-fg: #fca5a5;
+  --sev-critical-bg: rgba(239, 68, 68, 0.08);
+  --sev-critical-bg-hover: rgba(239, 68, 68, 0.18);
+  --sev-critical-border: rgba(239, 68, 68, 0.45);
+  --sev-critical-border-strong: #f87171;
+  --sev-critical-tag-fg: #fee2e2;
+  --sev-critical-tag-bg: rgba(239, 68, 68, 0.30);
+
+  --sev-warn-fg: #fcd34d;
+  --sev-warn-bg: rgba(245, 158, 11, 0.08);
+  --sev-warn-bg-hover: rgba(245, 158, 11, 0.18);
+  --sev-warn-border: rgba(245, 158, 11, 0.45);
+  --sev-warn-tag-fg: #fef3c7;
+  --sev-warn-tag-bg: rgba(245, 158, 11, 0.30);
+
+  --sev-success-fg: #86efac;
+  --sev-success-bg: rgba(34, 197, 94, 0.08);
+  --sev-success-bg-hover: rgba(34, 197, 94, 0.18);
+  --sev-success-border: rgba(34, 197, 94, 0.45);
+  --sev-success-tag-fg: #dcfce7;
+  --sev-success-tag-bg: rgba(34, 197, 94, 0.30);
+
+  --sev-info-fg: #c7d2fe;
+  --sev-info-bg: rgba(99, 102, 241, 0.06);
+  --sev-info-bg-hover: rgba(99, 102, 241, 0.18);
+  --sev-info-border: rgba(99, 102, 241, 0.45);
+  --sev-info-selected-bg: rgba(99, 102, 241, 0.30);
+  --sev-info-selected-fg: #e0e7ff;
+  --sev-info-selected-border: #818cf8;
+
+  --chip-count-bg: rgba(255, 255, 255, 0.10);
 }
 
 /* Dark theme decorative effects */
@@ -83,9 +153,9 @@
 }
 
 [data-theme="dark"] .modern-btn.primary {
-  box-shadow: 0 0 10px rgba(66, 153, 225, 0.3);
+  box-shadow: 0 0 10px rgba(109, 179, 255, 0.28);
 }
 
 [data-theme="dark"] .modern-btn.primary:hover {
-  box-shadow: 0 0 15px rgba(66, 153, 225, 0.4);
+  box-shadow: 0 0 18px rgba(109, 179, 255, 0.4);
 }

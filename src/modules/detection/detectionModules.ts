@@ -5,6 +5,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import type { DetectionResult, Finding } from './quickDetectionManager';
+import { reportError } from '../utils/errorHandler';
 
 // 评分规则常量
 const SCORING_RULES = {
@@ -54,6 +55,15 @@ export class DetectionModules {
       'enhanced-process': () => this.runEnhancedProcessAnalysis(),
       'bin-tamper': () => this.runBinTamperScan(),
       'immutable-files': () => this.runImmutableFilesScan(),
+      // K8s 安全检测
+      'k8s-privileged-pod': () => this.runK8sPrivilegedPodScan(),
+      'k8s-reverse-shell': () => this.runK8sReverseShellScan(),
+      'k8s-rbac-audit': () => this.runK8sRBACAudit(),
+      'k8s-container-escape': () => this.runK8sContainerEscapeScan(),
+      'k8s-suspicious-cronjob': () => this.runK8sSuspiciousCronJobScan(),
+      'k8s-network-policy': () => this.runK8sNetworkPolicyScan(),
+      'k8s-sa-audit': () => this.runK8sSAAudit(),
+      'k8s-node-persistence': () => this.runK8sNodePersistenceScan(),
     };
     const fn = map[itemId];
     if (!fn) return this.createErrorResult(`未知检测项: ${itemId}`);
@@ -100,7 +110,7 @@ export class DetectionModules {
         rawOutput: scanResult
       };
     } catch (error) {
-      console.error('端口扫描失败:', error);
+      reportError(error, { module: 'Detection', action: '端口扫描' });
       return this.createErrorResult('端口扫描失败');
     }
   }
@@ -164,7 +174,7 @@ export class DetectionModules {
         rawOutput: auditResult
       };
     } catch (error) {
-      console.error('用户审计失败:', error);
+      reportError(error, { module: 'Detection', action: '用户审计' });
       return this.createErrorResult('用户审计失败');
     }
   }
@@ -240,7 +250,7 @@ export class DetectionModules {
         rawOutput: scanResult
       };
     } catch (error) {
-      console.error('后门检测失败:', error);
+      reportError(error, { module: 'Detection', action: '后门检测' });
       return this.createErrorResult('后门检测失败');
     }
   }
@@ -293,7 +303,7 @@ export class DetectionModules {
         rawOutput: analysisResult
       };
     } catch (error) {
-      console.error('进程分析失败:', error);
+      reportError(error, { module: 'Detection', action: '进程分析' });
       return this.createErrorResult('进程分析失败');
     }
   }
@@ -341,7 +351,7 @@ export class DetectionModules {
         rawOutput: checkResult
       };
     } catch (error) {
-      console.error('文件权限检测失败:', error);
+      reportError(error, { module: 'Detection', action: '文件权限检测' });
       return this.createErrorResult('文件权限检测失败');
     }
   }
@@ -401,7 +411,7 @@ export class DetectionModules {
         rawOutput: auditResult
       };
     } catch (error) {
-      console.error('SSH 审计失败:', error);
+      reportError(error, { module: 'Detection', action: 'SSH 审计' });
       return this.createErrorResult('SSH 审计失败');
     }
   }
@@ -450,7 +460,7 @@ export class DetectionModules {
         rawOutput: analysisResult
       };
     } catch (error) {
-      console.error('日志分析失败:', error);
+      reportError(error, { module: 'Detection', action: '日志分析' });
       return this.createErrorResult('日志分析失败');
     }
   }
@@ -499,7 +509,7 @@ export class DetectionModules {
         rawOutput: checkResult
       };
     } catch (error) {
-      console.error('防火墙检查失败:', error);
+      reportError(error, { module: 'Detection', action: '防火墙检查' });
       return this.createErrorResult('防火墙检查失败');
     }
   }
@@ -530,7 +540,7 @@ export class DetectionModules {
         rawOutput: testResult
       };
     } catch (error) {
-      console.error('CPU 测试失败:', error);
+      reportError(error, { module: 'Detection', action: 'CPU 测试' });
       return this.createErrorResult('CPU 测试失败');
     }
   }
@@ -561,7 +571,7 @@ export class DetectionModules {
         rawOutput: testResult
       };
     } catch (error) {
-      console.error('内存测试失败:', error);
+      reportError(error, { module: 'Detection', action: '内存测试' });
       return this.createErrorResult('内存测试失败');
     }
   }
@@ -592,7 +602,7 @@ export class DetectionModules {
         rawOutput: testResult
       };
     } catch (error) {
-      console.error('磁盘测试失败:', error);
+      reportError(error, { module: 'Detection', action: '磁盘测试' });
       return this.createErrorResult('磁盘测试失败');
     }
   }
@@ -623,7 +633,7 @@ export class DetectionModules {
         rawOutput: testResult
       };
     } catch (error) {
-      console.error('网络测试失败:', error);
+      reportError(error, { module: 'Detection', action: '网络测试' });
       return this.createErrorResult('网络测试失败');
     }
   }
@@ -636,7 +646,7 @@ export class DetectionModules {
       const result = await invoke('detect_password_policy') as any;
       return this.processBasicDetectionResult(result, '密码策略');
     } catch (error) {
-      console.error('密码策略检查失败:', error);
+      reportError(error, { module: 'Detection', action: '密码策略检查' });
       return this.createErrorResult('密码策略检查失败');
     }
   }
@@ -649,7 +659,7 @@ export class DetectionModules {
       const result = await invoke('detect_sudo_config') as any;
       return this.processBasicDetectionResult(result, 'Sudo 配置');
     } catch (error) {
-      console.error('Sudo 审计失败:', error);
+      reportError(error, { module: 'Detection', action: 'Sudo 审计' });
       return this.createErrorResult('Sudo 审计失败');
     }
   }
@@ -662,7 +672,7 @@ export class DetectionModules {
       const result = await invoke('detect_pam_config') as any;
       return this.processBasicDetectionResult(result, 'PAM 配置');
     } catch (error) {
-      console.error('PAM 配置检查失败:', error);
+      reportError(error, { module: 'Detection', action: 'PAM 配置检查' });
       return this.createErrorResult('PAM 配置检查失败');
     }
   }
@@ -675,7 +685,7 @@ export class DetectionModules {
       const result = await invoke('detect_account_lockout') as any;
       return this.processBasicDetectionResult(result, '账号锁定策略');
     } catch (error) {
-      console.error('账号锁定策略检查失败:', error);
+      reportError(error, { module: 'Detection', action: '账号锁定策略检查' });
       return this.createErrorResult('账号锁定策略检查失败');
     }
   }
@@ -688,7 +698,7 @@ export class DetectionModules {
       const result = await invoke('detect_selinux_status') as any;
       return this.processBasicDetectionResult(result, 'SELinux/AppArmor');
     } catch (error) {
-      console.error('SELinux 状态检查失败:', error);
+      reportError(error, { module: 'Detection', action: 'SELinux 状态检查' });
       return this.createErrorResult('SELinux 状态检查失败');
     }
   }
@@ -701,7 +711,7 @@ export class DetectionModules {
       const result = await invoke('detect_kernel_params') as any;
       return this.processBasicDetectionResult(result, '内核参数');
     } catch (error) {
-      console.error('内核参数检查失败:', error);
+      reportError(error, { module: 'Detection', action: '内核参数检查' });
       return this.createErrorResult('内核参数检查失败');
     }
   }
@@ -714,7 +724,7 @@ export class DetectionModules {
       const result = await invoke('detect_system_updates') as any;
       return this.processBasicDetectionResult(result, '系统补丁');
     } catch (error) {
-      console.error('系统补丁检查失败:', error);
+      reportError(error, { module: 'Detection', action: '系统补丁检查' });
       return this.createErrorResult('系统补丁检查失败');
     }
   }
@@ -727,7 +737,7 @@ export class DetectionModules {
       const result = await invoke('detect_unnecessary_services') as any;
       return this.processBasicDetectionResult(result, '不必要服务');
     } catch (error) {
-      console.error('不必要服务检查失败:', error);
+      reportError(error, { module: 'Detection', action: '不必要服务检查' });
       return this.createErrorResult('不必要服务检查失败');
     }
   }
@@ -740,7 +750,7 @@ export class DetectionModules {
       const result = await invoke('detect_auto_start_services') as any;
       return this.processBasicDetectionResult(result, '自启动服务');
     } catch (error) {
-      console.error('自启动服务审计失败:', error);
+      reportError(error, { module: 'Detection', action: '自启动服务审计' });
       return this.createErrorResult('自启动服务审计失败');
     }
   }
@@ -753,7 +763,7 @@ export class DetectionModules {
       const result = await invoke('detect_audit_config') as any;
       return this.processBasicDetectionResult(result, '审计配置');
     } catch (error) {
-      console.error('审计配置检查失败:', error);
+      reportError(error, { module: 'Detection', action: '审计配置检查' });
       return this.createErrorResult('审计配置检查失败');
     }
   }
@@ -766,7 +776,7 @@ export class DetectionModules {
       const result = await invoke('detect_history_audit') as any;
       return this.processBasicDetectionResult(result, '历史命令');
     } catch (error) {
-      console.error('历史命令审计失败:', error);
+      reportError(error, { module: 'Detection', action: '历史命令审计' });
       return this.createErrorResult('历史命令审计失败');
     }
   }
@@ -779,7 +789,7 @@ export class DetectionModules {
       const result = await invoke('detect_ntp_config') as any;
       return this.processBasicDetectionResult(result, 'NTP 配置');
     } catch (error) {
-      console.error('NTP 配置检查失败:', error);
+      reportError(error, { module: 'Detection', action: 'NTP 配置检查' });
       return this.createErrorResult('NTP 配置检查失败');
     }
   }
@@ -792,7 +802,7 @@ export class DetectionModules {
       const result = await invoke('detect_dns_config') as any;
       return this.processBasicDetectionResult(result, 'DNS 配置');
     } catch (error) {
-      console.error('DNS 配置检查失败:', error);
+      reportError(error, { module: 'Detection', action: 'DNS 配置检查' });
       return this.createErrorResult('DNS 配置检查失败');
     }
   }
@@ -1214,5 +1224,252 @@ export class DetectionModules {
     } catch (error) {
       return this.createErrorResult('不可变文件检测失败');
     }
+  }
+
+  // ==================== K8s 安全检测方法 ====================
+
+  private async k8sExec(cmd: string): Promise<any> {
+    try {
+      const result = await invoke('ssh_execute_dashboard_command_direct', { command: cmd }) as any;
+      if (result.exit_code !== 0) return null;
+      return JSON.parse(result.output);
+    } catch { return null; }
+  }
+
+  public async runK8sPrivilegedPodScan(): Promise<DetectionResult> {
+    try {
+      const data = await this.k8sExec('kubectl get pods -A -o json');
+      if (!data) return this.createErrorResult('kubectl 不可用或未连接 K8s 集群');
+      const findings: Finding[] = [];
+      for (const pod of data.items || []) {
+        if (pod.metadata.namespace === 'kube-system') continue;
+        for (const c of pod.spec?.containers || []) {
+          if (c.securityContext?.privileged) {
+            findings.push({ title: `特权容器: ${pod.metadata.namespace}/${pod.metadata.name}/${c.name}`,
+              description: `容器 "${c.name}" 以 privileged 模式运行，可完全访问宿主机`, severity: 'critical',
+              recommendation: '移除 securityContext.privileged: true，使用最小权限 capabilities' });
+          }
+        }
+      }
+      return { passed: findings.length === 0, score: this.calculateScore(findings),
+        severity: findings.length > 0 ? 'critical' : 'info', findings, duration: 0, timestamp: new Date() };
+    } catch { return this.createErrorResult('K8s 特权容器检测失败'); }
+  }
+
+  public async runK8sReverseShellScan(): Promise<DetectionResult> {
+    try {
+      const data = await this.k8sExec('kubectl get pods -A -o json');
+      if (!data) return this.createErrorResult('kubectl 不可用');
+      const findings: Finding[] = [];
+      const patterns = [/\/dev\/tcp\//i, /bash\s+-i\s+>&/i, /nc\s+(-e|--exec)/i, /ncat.*-e\s/i, /socat.*exec/i, /mkfifo.*\/tmp/i];
+      for (const pod of data.items || []) {
+        if (pod.metadata.namespace === 'kube-system') continue;
+        for (const c of pod.spec?.containers || []) {
+          const cmd = [...(c.command || []), ...(c.args || [])].join(' ');
+          if (patterns.some(p => p.test(cmd))) {
+            findings.push({ title: `反弹Shell Pod: ${pod.metadata.namespace}/${pod.metadata.name}`,
+              description: `容器 "${c.name}" 执行可疑命令: ${cmd.substring(0, 100)}`, severity: 'critical',
+              recommendation: '立即删除该 Pod: kubectl delete pod <name> -n <namespace> --force' });
+          }
+        }
+        for (const ic of pod.spec?.initContainers || []) {
+          const cmd = [...(ic.command || []), ...(ic.args || [])].join(' ');
+          if (patterns.some(p => p.test(cmd))) {
+            findings.push({ title: `反弹Shell InitContainer: ${pod.metadata.namespace}/${pod.metadata.name}/init:${ic.name}`,
+              description: `Init容器执行可疑命令: ${cmd.substring(0, 100)}`, severity: 'critical',
+              recommendation: '立即调查并删除该 Pod' });
+          }
+        }
+      }
+      return { passed: findings.length === 0, score: this.calculateScore(findings),
+        severity: findings.length > 0 ? 'critical' : 'info', findings, duration: 0, timestamp: new Date() };
+    } catch { return this.createErrorResult('K8s 反弹Shell检测失败'); }
+  }
+
+  public async runK8sRBACAudit(): Promise<DetectionResult> {
+    try {
+      const crbs = await this.k8sExec('kubectl get clusterrolebindings -o json');
+      if (!crbs) return this.createErrorResult('kubectl 不可用');
+      const findings: Finding[] = [];
+      for (const crb of crbs.items || []) {
+        if (crb.roleRef?.name === 'cluster-admin') {
+          for (const s of crb.subjects || []) {
+            if (s.name?.startsWith('system:') || s.namespace === 'kube-system') continue;
+            findings.push({ title: `cluster-admin 绑定: ${crb.metadata.name}`,
+              description: `${s.kind} "${s.name}" (ns:${s.namespace || 'cluster'}) 拥有 cluster-admin 权限`,
+              severity: 'critical', recommendation: '审查是否需要 cluster-admin 权限，建议使用最小权限 ClusterRole' });
+          }
+        }
+      }
+      const roles = await this.k8sExec('kubectl get clusterroles -o json');
+      if (roles) {
+        for (const r of roles.items || []) {
+          if (r.metadata.name.startsWith('system:')) continue;
+          for (const rule of r.rules || []) {
+            if ((rule.verbs || []).includes('*') && (rule.resources || []).includes('*')) {
+              findings.push({ title: `通配符权限 ClusterRole: ${r.metadata.name}`,
+                description: `ClusterRole 拥有 */* 权限`, severity: 'high',
+                recommendation: '替换通配符为具体的 resources 和 verbs' });
+            }
+          }
+        }
+      }
+      return { passed: findings.length === 0, score: this.calculateScore(findings),
+        severity: findings.some(f => f.severity === 'critical') ? 'critical' : findings.length > 0 ? 'high' : 'info',
+        findings, duration: 0, timestamp: new Date() };
+    } catch { return this.createErrorResult('K8s RBAC 审计失败'); }
+  }
+
+  public async runK8sContainerEscapeScan(): Promise<DetectionResult> {
+    try {
+      const data = await this.k8sExec('kubectl get pods -A -o json');
+      if (!data) return this.createErrorResult('kubectl 不可用');
+      const findings: Finding[] = [];
+      const dangerousCaps = ['SYS_ADMIN', 'SYS_PTRACE', 'SYS_MODULE', 'DAC_READ_SEARCH', 'NET_ADMIN'];
+      for (const pod of data.items || []) {
+        if (pod.metadata.namespace === 'kube-system') continue;
+        const ns = pod.metadata.namespace, name = pod.metadata.name;
+        if (pod.spec?.hostPID) {
+          findings.push({ title: `hostPID: ${ns}/${name}`, description: 'Pod 共享宿主机 PID 命名空间，可通过 nsenter 逃逸',
+            severity: 'critical', recommendation: '移除 hostPID: true' });
+        }
+        if (pod.spec?.hostIPC) {
+          findings.push({ title: `hostIPC: ${ns}/${name}`, description: 'Pod 共享宿主机 IPC 命名空间',
+            severity: 'high', recommendation: '移除 hostIPC: true' });
+        }
+        for (const c of pod.spec?.containers || []) {
+          const caps = c.securityContext?.capabilities?.add || [];
+          const dangerous = caps.filter((cap: string) => dangerousCaps.includes(cap));
+          if (dangerous.length > 0) {
+            findings.push({ title: `危险Capabilities: ${ns}/${name}/${c.name}`,
+              description: `容器拥有危险能力: ${dangerous.join(', ')}`, severity: 'high',
+              recommendation: '移除不必要的 capabilities，使用 drop ALL + 最小 add' });
+          }
+        }
+      }
+      return { passed: findings.length === 0, score: this.calculateScore(findings),
+        severity: findings.some(f => f.severity === 'critical') ? 'critical' : findings.length > 0 ? 'high' : 'info',
+        findings, duration: 0, timestamp: new Date() };
+    } catch { return this.createErrorResult('K8s 容器逃逸检测失败'); }
+  }
+
+  public async runK8sSuspiciousCronJobScan(): Promise<DetectionResult> {
+    try {
+      const data = await this.k8sExec('kubectl get cronjobs -A -o json');
+      if (!data) return this.createErrorResult('kubectl 不可用');
+      const findings: Finding[] = [];
+      const patterns = [/\/dev\/tcp\//i, /bash\s+-i\s+>&/i, /nc\s+(-e|--exec)/i, /curl.*\|\s*(bash|sh)/i, /wget.*\|\s*(bash|sh)/i];
+      for (const cj of data.items || []) {
+        const containers = cj.spec?.jobTemplate?.spec?.template?.spec?.containers || [];
+        for (const c of containers) {
+          const cmd = [...(c.command || []), ...(c.args || [])].join(' ');
+          if (patterns.some(p => p.test(cmd))) {
+            findings.push({ title: `恶意CronJob: ${cj.metadata.namespace}/${cj.metadata.name}`,
+              description: `定时任务执行可疑命令: ${cmd.substring(0, 100)}`, severity: 'critical',
+              recommendation: '立即暂停/删除: kubectl delete cronjob <name> -n <namespace>' });
+          }
+        }
+      }
+      return { passed: findings.length === 0, score: this.calculateScore(findings),
+        severity: findings.length > 0 ? 'critical' : 'info', findings, duration: 0, timestamp: new Date() };
+    } catch { return this.createErrorResult('K8s CronJob 检测失败'); }
+  }
+
+  public async runK8sNetworkPolicyScan(): Promise<DetectionResult> {
+    try {
+      const pods = await this.k8sExec('kubectl get pods -A -o json');
+      const nps = await this.k8sExec('kubectl get networkpolicies -A -o json');
+      if (!pods) return this.createErrorResult('kubectl 不可用');
+      const findings: Finding[] = [];
+      const nsWithPolicy = new Set((nps?.items || []).map((np: any) => np.metadata.namespace));
+      const podNamespaces = new Set((pods.items || []).map((p: any) => p.metadata.namespace)
+        .filter((ns: string) => ns !== 'kube-system'));
+      for (const ns of podNamespaces) {
+        if (!nsWithPolicy.has(ns)) {
+          findings.push({ title: `无NetworkPolicy: ${ns}`, description: `命名空间 "${ns}" 没有定义 NetworkPolicy，所有 Pod 流量不受限制`,
+            severity: 'medium', recommendation: '创建 default-deny NetworkPolicy 并显式放行必要流量' });
+        }
+      }
+      return { passed: findings.length === 0, score: this.calculateScore(findings),
+        severity: findings.length > 0 ? 'medium' : 'info', findings, duration: 0, timestamp: new Date() };
+    } catch { return this.createErrorResult('K8s 网络策略检测失败'); }
+  }
+
+  public async runK8sSAAudit(): Promise<DetectionResult> {
+    try {
+      const crbs = await this.k8sExec('kubectl get clusterrolebindings -o json');
+      const rbs = await this.k8sExec('kubectl get rolebindings -A -o json');
+      if (!crbs) return this.createErrorResult('kubectl 不可用');
+      const findings: Finding[] = [];
+      // Check non-system SAs with cluster-admin
+      for (const crb of crbs.items || []) {
+        if (crb.roleRef?.name !== 'cluster-admin') continue;
+        for (const s of crb.subjects || []) {
+          if (s.kind === 'ServiceAccount' && !s.name?.startsWith('system:') && s.namespace !== 'kube-system') {
+            findings.push({ title: `高权限SA: ${s.namespace || 'default'}/${s.name}`,
+              description: `ServiceAccount 拥有 cluster-admin 权限，可能为攻击者持久化`, severity: 'critical',
+              recommendation: '删除 SA 及绑定: kubectl delete sa <name> -n <ns> && kubectl delete clusterrolebinding <binding>' });
+          }
+        }
+      }
+      // Check wildcard roles in namespace scope
+      if (rbs) {
+        const roles = await this.k8sExec('kubectl get roles -A -o json');
+        if (roles) {
+          for (const rb of rbs.items || []) {
+            const role = (roles.items || []).find((r: any) => r.metadata.name === rb.roleRef?.name && r.metadata.namespace === rb.metadata.namespace);
+            if (!role) continue;
+            const hasWildcard = (role.rules || []).some((r: any) => (r.verbs || []).includes('*') && (r.resources || []).includes('*'));
+            if (hasWildcard) {
+              for (const s of rb.subjects || []) {
+                if (s.kind === 'ServiceAccount' && s.name !== 'default' && !s.name?.startsWith('system:')) {
+                  findings.push({ title: `通配符权限SA: ${rb.metadata.namespace}/${s.name}`,
+                    description: `SA 绑定到 Role "${rb.roleRef.name}" 拥有 */* 权限`, severity: 'high',
+                    recommendation: '审查并删除不必要的 SA/Role/RoleBinding' });
+                }
+              }
+            }
+          }
+        }
+      }
+      return { passed: findings.length === 0, score: this.calculateScore(findings),
+        severity: findings.some(f => f.severity === 'critical') ? 'critical' : findings.length > 0 ? 'high' : 'info',
+        findings, duration: 0, timestamp: new Date() };
+    } catch { return this.createErrorResult('K8s SA 审计失败'); }
+  }
+
+  public async runK8sNodePersistenceScan(): Promise<DetectionResult> {
+    try {
+      const result = await invoke('ssh_execute_dashboard_command_direct', {
+        command: `echo "=== SYSTEMD ===" && systemctl list-unit-files --type=service --state=enabled 2>/dev/null | grep -vE 'snap|systemd|network|docker|containerd|ssh|cron|rsyslog|apparmor|udev|dbus|accounts-daemon|getty|grub|polkit|irqbalance|fstrim|logrotate|lvm|multipathd|open-vm|blk-availability|ModemManager|gpu-manager|keyboard|console|finalrd|open-iscsi|pollinate|one-context' | head -15 && echo "=== CRONTAB ===" && crontab -l 2>&1 | grep -v "^#" | grep -v "^$" | head -10 && echo "=== SUSPICIOUS BINS ===" && find /usr/local/bin /usr/bin -newer /etc/hostname -type f -executable 2>/dev/null | head -10 && echo "=== STATIC PODS ===" && ls /etc/kubernetes/manifests/ 2>/dev/null || echo "N/A"`
+      }) as any;
+      const findings: Finding[] = [];
+      const output = result?.output || '';
+
+      // Parse systemd section
+      const systemdSection = output.split('=== CRONTAB ===')[0].split('=== SYSTEMD ===')[1] || '';
+      const suspiciousServices = systemdSection.trim().split('\n').filter((l: string) =>
+        l.trim() && !l.includes('UNIT FILE') && !l.includes('unit files listed'));
+      if (suspiciousServices.length > 0) {
+        for (const svc of suspiciousServices.slice(0, 5)) {
+          const svcName = svc.trim().split(/\s+/)[0] || '';
+          if (svcName) {
+            findings.push({ title: `非标准自启服务: ${svcName}`, description: `可能为攻击者创建的持久化服务`,
+              severity: 'medium', recommendation: `检查服务: systemctl cat ${svcName}` });
+          }
+        }
+      }
+
+      // Parse crontab
+      const crontabSection = output.split('=== SUSPICIOUS BINS ===')[0].split('=== CRONTAB ===')[1] || '';
+      if (crontabSection.trim() && !crontabSection.includes('no crontab')) {
+        findings.push({ title: 'root 用户存在 crontab', description: `内容: ${crontabSection.trim().substring(0, 100)}`,
+          severity: 'high', recommendation: '检查 crontab 内容: crontab -l' });
+      }
+
+      return { passed: findings.length === 0, score: this.calculateScore(findings),
+        severity: findings.some(f => f.severity === 'high') ? 'high' : findings.length > 0 ? 'medium' : 'info',
+        findings, duration: 0, timestamp: new Date(), rawOutput: output };
+    } catch { return this.createErrorResult('K8s 节点持久化检测失败'); }
   }
 }

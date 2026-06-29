@@ -50,6 +50,37 @@ impl WindowManager {
         Ok(window)
     }
 
+    /// 创建外部 URL 窗口（用于 Web 终端等）
+    pub fn create_external_window(
+        app: &tauri::AppHandle,
+        label: &str,
+        title: &str,
+        url: &str,
+        width: f64,
+        height: f64,
+    ) -> Result<WebviewWindow, String> {
+        let external_url = url.parse::<tauri::Url>()
+            .map_err(|e| format!("无效的 URL: {}", e))?;
+
+        let window = tauri::WebviewWindowBuilder::new(
+            app,
+            label,
+            tauri::WebviewUrl::External(external_url),
+        )
+        .title(title)
+        .inner_size(width, height)
+        .center()
+        .resizable(true)
+        .minimizable(true)
+        .maximizable(true)
+        .closable(true)
+        .build()
+        .map_err(|e| format!("创建外部窗口失败: {}", e))?;
+
+        println!("✅ 创建外部窗口: {}", title);
+        Ok(window)
+    }
+
     /// 获取主窗口
     pub fn get_main_window(app: &tauri::AppHandle) -> Option<WebviewWindow> {
         app.get_webview_window("main")

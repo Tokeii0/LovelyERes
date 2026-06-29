@@ -184,7 +184,7 @@ export class ModernUIRenderer {
    * 重新渲染连接面板
    */
   private rerenderConnectionPanel(): void {
-    // 更新用户面板 (左下角)
+    // 更新连接面板 (左下角)
     const sidebar = document.querySelector('.modern-sidebar');
     if (sidebar) {
       const wrapper = sidebar.querySelector('.connection-card-wrapper');
@@ -299,7 +299,7 @@ export class ModernUIRenderer {
                 </g>
               </svg>
             </div>
-            <span class="app-name" style="font-size: 13px; font-weight: 600; color: var(--text-primary);">LovelyRes</span>
+            <span class="app-name">LovelyRes</span>
           </div>
 
         </div>
@@ -334,36 +334,42 @@ export class ModernUIRenderer {
    */
   renderSidebar(): string {
     return `
-      <div class="activity-bar">
-        <div class="activity-bar-top">
+      <nav class="sidebar-nav">
+        <!-- 搜索 -->
+        <div class="sidebar-head">
+          <div class="sidebar-search">
+            <span class="sidebar-search-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </span>
+            <input id="sidebar-filter" type="text" placeholder="搜索功能…" spellcheck="false" autocomplete="off"
+                   oninput="window.filterSidebar && window.filterSidebar(this.value)" />
+          </div>
+        </div>
+
+        <!-- 分组导航树 -->
+        <div class="sidebar-tree">
           ${this.renderNavigationMenu()}
         </div>
 
-        <div class="activity-bar-bottom">
-          <!-- 展开/收缩按钮 -->
-          <div class="activity-bar-toggle" onclick="window.toggleActivityBar()" data-tooltip="展开菜单">
-            <span class="toggle-icon">
-              ${Right({ theme: 'outline', size: '16', fill: 'currentColor' })}
-            </span>
-          </div>
-
-          <!-- 设置按钮 -->
-          <div class="sidebar-settings-container">
-            ${this.renderSettingsMenu()}
-            <div class="activity-bar-item" data-tooltip="设置" onclick="window.toggleSettingsDropdown()">
-              <span class="nav-item-icon">
-                ${SettingTwo({ theme: 'outline', size: '22', fill: 'currentColor' })}
-              </span>
-              <span class="nav-item-label">设置</span>
-            </div>
-          </div>
-
-          <!-- 连接状态 -->
+        <!-- 底部：连接面板 + 操作按钮 -->
+        <div class="sidebar-foot">
           <div class="connection-card-wrapper">
             ${this.renderConnectionPanel()}
           </div>
+          <div class="sidebar-foot-actions">
+            <div class="sidebar-settings-container">
+              ${this.renderSettingsMenu()}
+              <button class="sidebar-foot-btn" type="button" title="设置" onclick="window.toggleSettingsDropdown()">
+                ${SettingTwo({ theme: 'outline', size: '18', fill: 'currentColor' })}
+              </button>
+            </div>
+            <div class="sidebar-foot-spacer"></div>
+            <button class="sidebar-foot-btn sidebar-collapse-btn" type="button" title="折叠侧边栏" onclick="window.toggleSidebar && window.toggleSidebar()">
+              ${Left({ theme: 'outline', size: '18', fill: 'currentColor' })}
+            </button>
+          </div>
         </div>
-      </div>
+      </nav>
     `;
   }
 
@@ -459,17 +465,17 @@ export class ModernUIRenderer {
       : '';
 
     return `
-      <!-- 用户面板 -->
+      <!-- 连接面板 -->
       <div class="user-panel" onclick="window.toggleUserDropdown?.()">
         <img class="user-panel-avatar" src="/logo.png" alt="avatar" />
         <div class="user-panel-info">
-          <span class="user-panel-name">DevUser</span>
+          <span class="user-panel-name">LovelyRes</span>
           <span class="user-panel-status">${isConnected ? serverName : '未连接'}</span>
         </div>
         ${isConnected ? '<span class="user-panel-dot connected"></span>' : '<span class="user-panel-dot"></span>'}
       </div>
 
-      <!-- 用户下拉菜单 -->
+      <!-- 连接下拉菜单 -->
       <div id="user-dropdown-menu" class="user-dropdown-menu" style="display:none;">
         ${isConnected ? `
           <div class="user-dropdown-item" onclick="window.confirmDisconnect?.(); document.getElementById('user-dropdown-menu').style.display='none';">
@@ -495,106 +501,131 @@ export class ModernUIRenderer {
    */
   private renderNavigationMenu(): string {
     const currentPage = this.state.currentPage;
-    const menuItems = [
+    const ico = { theme: 'outline' as const, size: '18', fill: 'currentColor' };
+
+    // 14 个页面归入 5 个分组；每组的 --accent 为主题中性的字面色（唯一允许的硬编码颜色）
+    const navGroups = [
       {
-        id: 'system-info',
-        icon: ApplicationMenu({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: '系统信息',
-        active: currentPage === 'system-info'
+        id: 'overview', label: '概览', accent: '#6db3ff', icon: System(ico),
+        items: [
+          { id: 'system-info', icon: ApplicationMenu(ico), title: '系统信息' },
+          { id: 'remote-operations', icon: FolderOpen(ico), title: 'SFTP文件' },
+        ],
       },
       {
-        id: 'remote-operations',
-        icon: FolderOpen({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: 'SFTP文件',
-        active: currentPage === 'remote-operations'
+        id: 'containers', label: '容器编排', accent: '#06b6d4', icon: Whale(ico),
+        items: [
+          { id: 'docker', icon: Whale(ico), title: 'Docker容器' },
+          { id: 'kubernetes', icon: LinkCloud(ico), title: 'Kubernetes' },
+        ],
       },
       {
-        id: 'docker',
-        icon: Whale({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: 'Docker容器',
-        active: currentPage === 'docker'
+        id: 'emergency', label: '应急响应', accent: '#f87171', icon: Shield(ico),
+        items: [
+          { id: 'emergency-commands', icon: Code(ico), title: '命令执行' },
+          { id: 'packet-capture', icon: NetworkTree(ico), title: '网络抓包' },
+          { id: 'log-analysis', icon: Log(ico), title: '日志审计' },
+          { id: 'check-audit', icon: Bug(ico), title: 'Check审计' },
+        ],
       },
       {
-        id: 'kubernetes',
-        icon: LinkCloud({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: 'Kubernetes',
-        active: currentPage === 'kubernetes'
+        id: 'operations', label: '运维操作', accent: '#a855f7', icon: SettingConfig(ico),
+        items: [
+          { id: 'database', icon: Data(ico), title: '数据库' },
+          { id: 'java-hot-update', icon: Fire(ico), title: 'Java热更新' },
+          { id: 'baseline-quick-edit', icon: SettingConfig(ico), title: '快速编辑' },
+        ],
       },
       {
-        id: 'database',
-        icon: Data({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: '数据库',
-        active: currentPage === 'database'
+        id: 'knowledge', label: '资料', accent: '#34d399', icon: DocDetail(ico),
+        items: [
+          { id: 'notes', icon: DocDetail(ico), title: '笔记' },
+          { id: 'secfix', icon: Protection(ico), title: '安全速查' },
+          { id: 'ai-history', icon: History(ico), title: 'AI历史' },
+        ],
       },
-      {
-        id: 'java-hot-update',
-        icon: Fire({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: 'Java热更新',
-        active: currentPage === 'java-hot-update'
-      },
-      {
-        id: 'emergency-commands',
-        icon: Code({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: '命令执行',
-        active: currentPage === 'emergency-commands'
-      },
-      {
-        id: 'packet-capture',
-        icon: NetworkTree({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: '网络抓包',
-        active: currentPage === 'packet-capture'
-      },
-      {
-        id: 'baseline-quick-edit',
-        icon: SettingConfig({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: '快速编辑',
-        active: currentPage === 'baseline-quick-edit'
-      },
-      {
-        id: 'log-analysis',
-        icon: Log({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: '日志审计',
-        active: currentPage === 'log-analysis'
-      },
-      {
-        id: 'notes',
-        icon: DocDetail({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: '笔记',
-        active: currentPage === 'notes'
-      },
-      {
-        id: 'secfix',
-        icon: Protection({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: '安全速查',
-        active: currentPage === 'secfix'
-      },
-      {
-        id: 'check-audit',
-        icon: Bug({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: 'Check审计',
-        active: currentPage === 'check-audit'
-      },
-      {
-        id: 'ai-history',
-        icon: History({ theme: 'outline', size: '18', fill: 'currentColor' }),
-        title: 'AI历史',
-        active: currentPage === 'ai-history'
-      }
     ];
 
-    return menuItems.map(item => {
-      const isActive = item.active;
-      const isDisabled = (item as any).disabled;
+    const chevSmall = Right({ theme: 'outline', size: '13', fill: 'currentColor' });
+
+    return navGroups.map(group => {
+      const hasActive = group.items.some(it => it.id === currentPage);
+      const itemsHtml = group.items.map(it => {
+        const active = it.id === currentPage;
+        // 有「页内子导航」的页面（系统信息 / SFTP）在选中后，将其子菜单嵌套在本项下方（二级），
+        // 而非在侧边栏插入新的一级分组。
+        const hasSub = it.id === 'system-info' || it.id === 'remote-operations';
+        const btn = `
+          <button class="sidebar-item ${active ? 'active' : ''}${hasSub ? ' has-sub' : ''}" type="button" data-nav-id="${it.id}" title="${it.title}">
+            <span class="sidebar-item-icon">${it.icon}</span>
+            <span class="sidebar-item-label">${it.title}</span>
+            ${hasSub ? `<span class="sidebar-item-chev">${chevSmall}</span>` : ''}
+          </button>`;
+        if (active && hasSub) {
+          const sub = it.id === 'system-info'
+            ? this.systemInfoRenderer.renderSidebarSubtree(this.state)
+            : this.renderSftpSubtree();
+          return `<div class="sidebar-item-wrap expanded">${btn}<div class="sidebar-subtree">${sub}</div></div>`;
+        }
+        return btn;
+      }).join('');
 
       return `
-        <div class="activity-bar-item ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}" data-nav-id="${item.id}" data-tooltip="${item.title}">
-          <span class="nav-item-icon">
-            ${item.icon}
-          </span>
-          <span class="nav-item-label">${item.title}</span>
-          ${isDisabled ? `<span class="activity-bar-badge"></span>` : ''}
-        </div>
-      `;
+        <div class="sidebar-group ${hasActive ? 'open' : ''}" data-group-id="${group.id}" style="--accent:${group.accent}">
+          <button class="sidebar-group-row ${hasActive ? 'active' : ''}" type="button" title="${group.label}"
+                  onclick="window.toggleSidebarGroup && window.toggleSidebarGroup('${group.id}')">
+            <span class="sidebar-gicon">${group.icon}</span>
+            <span class="sidebar-glabel">${group.label}</span>
+            <span class="sidebar-gchev">${Right({ theme: 'outline', size: '14', fill: 'currentColor' })}</span>
+            <span class="sidebar-gdot"></span>
+          </button>
+          <div class="sidebar-items"><div class="sidebar-items-inner">
+            ${itemsHtml}
+          </div></div>
+        </div>`;
+    }).join('');
+  }
+
+  /** SFTP「文件调查」页内子导航（嵌套在「SFTP文件」项下方，二级）。叶子点击导航到对应路径。 */
+  private renderSftpSubtree(): string {
+    const ico = { theme: 'outline' as const, size: '18', fill: 'currentColor' };
+    const folder = FolderOpen(ico);
+    const cur = String((window as any).sftpManager?.currentPath || '');
+
+    const groups: Array<{ id: string; label: string; accent: string; items: Array<{ path: string; label: string; risk?: string }> }> = [
+      { id: 'sftp-common', label: '常用位置', accent: '#6db3ff', items: [
+        { path: '/', label: '根目录' },
+        { path: '/root', label: '/root' },
+        { path: '/home', label: '/home' },
+        { path: '/tmp', label: '/tmp' },
+        { path: '/var/log', label: '/var/log' },
+      ]},
+      { id: 'sftp-sensitive', label: '敏感目录', accent: '#f87171', items: [
+        { path: '/root/.ssh', label: '/root/.ssh', risk: 'warn' },
+        { path: '/etc/cron.d', label: '/etc/cron.d', risk: 'warn' },
+        { path: '/var/spool/cron', label: '/var/spool/cron', risk: 'warn' },
+        { path: '/etc/init.d', label: '/etc/init.d', risk: 'warn' },
+        { path: '/dev/shm', label: '/dev/shm', risk: 'high' },
+      ]},
+      { id: 'sftp-fav', label: '收藏位置', accent: '#34d399', items: [
+        { path: '/var/www', label: '/var/www' },
+        { path: '/opt', label: '/opt' },
+        { path: '/usr/local/bin', label: '/usr/local/bin' },
+      ]},
+    ];
+
+    return groups.map(g => {
+      const items = g.items.map(it => {
+        const active = it.path === cur;
+        const dot = it.risk ? `<span class="sftp-loc-dot ${it.risk}"></span>` : '';
+        return `
+          <button class="sidebar-item sidebar-subitem${active ? ' active' : ''}" type="button" data-path="${it.path}" title="${it.path}" onclick="window.sftpManager && window.sftpManager.navigateToPath('${it.path}')">
+            <span class="sidebar-item-icon">${folder}</span>
+            <span class="sidebar-item-label">${it.label}</span>
+            ${dot}
+          </button>`;
+      }).join('');
+      return `<div class="sidebar-subsec" style="--accent:${g.accent}">${g.label}</div>${items}`;
     }).join('');
   }
 
@@ -952,19 +983,32 @@ export class ModernUIRenderer {
       ModernUIRenderer.remoteOperationsInitTimer = null;
     }, 100);
 
+    const sideCollapsed = (() => { try { return localStorage.getItem('sftp-side-collapsed') === 'true'; } catch { return false; } })();
+
     return `
       <div class="sftp-page-container">
-        <!-- Compact Toolbar: nav + breadcrumb + actions -->
-        <div class="sftp-toolbar">
-          <div class="sftp-nav-controls">
-            <button class="modern-btn icon-only secondary" onclick="sftpManager.navigateToParent()" title="返回上一级">
-              ${Up({ theme: 'outline', size: '16', fill: 'currentColor' })}
-            </button>
-            <button class="modern-btn icon-only secondary" onclick="sftpManager.navigateToPath('/')" title="返回根目录">
-              ${Home({ theme: 'outline', size: '16', fill: 'currentColor' })}
-            </button>
+        <!-- 头部：面包屑 + 标题 + 操作 -->
+        <div class="sftp-header">
+          <div class="sftp-breadcrumb-top"><span>文件调查</span><span class="sftp-bc-sep">/</span><span class="sftp-bc-cur">SFTP文件</span></div>
+          <div class="sftp-head-row">
+            <h2 class="sftp-title">远程文件</h2>
+            <div class="sftp-head-actions">
+              <button class="sftp-act-btn" onclick="window.sftpRefresh && window.sftpRefresh()">${Refresh({ theme: 'outline', size: '15', fill: 'currentColor' })}<span>刷新</span></button>
+              <button class="sftp-act-btn" onclick="window.sftpOpenCreateFolder && window.sftpOpenCreateFolder()">${FolderPlus({ theme: 'outline', size: '15', fill: 'currentColor' })}<span>新建文件夹</span></button>
+              <button class="sftp-act-btn" onclick="window.sftpCreateFile && window.sftpCreateFile()">${FileText({ theme: 'outline', size: '15', fill: 'currentColor' })}<span>新建文件</span></button>
+              <button class="sftp-act-btn" onclick="window.sftpIntegritySnapshot && window.sftpIntegritySnapshot()">${Shield({ theme: 'outline', size: '15', fill: 'currentColor' })}<span>完整性快照</span></button>
+              <button class="sftp-act-btn" onclick="window.toggleSftpHistory && window.toggleSftpHistory()">${History({ theme: 'outline', size: '15', fill: 'currentColor' })}<span>历史记录</span></button>
+              <button id="sftp-upload-btn" class="sftp-act-btn primary" onclick="window.sftpOpenUpload && window.sftpOpenUpload()">${Upload({ theme: 'outline', size: '15', fill: 'currentColor' })}<span>上传</span></button>
+            </div>
           </div>
+        </div>
 
+        <!-- 路径栏：导航 + 路径面包屑 + 搜索 -->
+        <div class="sftp-pathbar">
+          <div class="sftp-nav-controls">
+            <button class="sftp-nav-btn" onclick="sftpManager.navigateToParent()" title="返回上一级">${Up({ theme: 'outline', size: '16', fill: 'currentColor' })}</button>
+            <button class="sftp-nav-btn" onclick="sftpManager.navigateToPath('/')" title="根目录">${Home({ theme: 'outline', size: '16', fill: 'currentColor' })}</button>
+          </div>
           <div class="sftp-breadcrumb-bar">
             <div id="sftp-breadcrumb" class="sftp-breadcrumb">
               <span class="breadcrumb-segment breadcrumb-root" onclick="sftpManager.navigateToPath('/')" title="根目录">/</span>
@@ -979,80 +1023,62 @@ export class ModernUIRenderer {
               onblur="this.parentElement.classList.remove('editing')"
             />
           </div>
-
-          <div class="sftp-actions">
-            <button class="modern-btn icon-only secondary" onclick="window.sftpRefresh && window.sftpRefresh()" title="刷新列表">
-              ${Refresh({ theme: 'outline', size: '16', fill: 'currentColor' })}
-            </button>
-            <button class="modern-btn icon-only secondary" onclick="window.sftpOpenCreateFolder && window.sftpOpenCreateFolder()" title="新建文件夹">
-              ${FolderPlus({ theme: 'outline', size: '16', fill: 'currentColor' })}
-            </button>
-            <button class="modern-btn icon-only secondary" onclick="window.sftpCreateFile && window.sftpCreateFile()" title="新建文件">
-              ${FileText({ theme: 'outline', size: '16', fill: 'currentColor' })}
-            </button>
-            <button class="modern-btn icon-only secondary" onclick="window.sftpIntegritySnapshot && window.sftpIntegritySnapshot()" title="完整性快照">
-              ${Shield({ theme: 'outline', size: '16', fill: 'currentColor' })}
-            </button>
-            <button class="modern-btn icon-only secondary" onclick="window.toggleSftpHistory && window.toggleSftpHistory()" title="传输历史">
-              ${History({ theme: 'outline', size: '16', fill: 'currentColor' })}
-            </button>
-            <button id="sftp-upload-btn" class="modern-btn primary small" onclick="window.sftpOpenUpload && window.sftpOpenUpload()" title="上传文件">
-              ${Upload({ theme: 'outline', size: '14', fill: 'currentColor' })}
-              <span>上传</span>
-            </button>
+          <div class="sftp-search">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
+            <input type="text" id="sftp-search-input" placeholder="搜索当前目录..." oninput="window.sftpFilterFiles && window.sftpFilterFiles(this.value)" />
           </div>
         </div>
 
-        <!-- Quick Jump Bar for Emergency Response -->
-        <div class="sftp-quick-jump-bar">
-          <span class="quick-jump-label">快速跳转</span>
-          <div class="quick-jump-buttons">
-            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/')" title="根目录">/</button>
-            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/tmp')" title="临时文件">/tmp</button>
-            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/var/log')" title="系统日志">/var/log</button>
-            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/etc')" title="配置文件">/etc</button>
-            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/etc/cron.d')" title="计划任务">/etc/cron.d</button>
-            <button class="quick-jump-btn risk-highlight" onclick="sftpManager.navigateToPath('/root/.ssh')" title="Root SSH密钥">/root/.ssh</button>
-            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/home')" title="用户主目录">/home</button>
-            <button class="quick-jump-btn risk-highlight" onclick="sftpManager.navigateToPath('/var/spool/cron')" title="用户计划任务">/var/spool/cron</button>
-            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/etc/init.d')" title="启动脚本">/etc/init.d</button>
-            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/var/www')" title="Web根目录">/var/www</button>
-            <button class="quick-jump-btn risk-highlight" onclick="sftpManager.navigateToPath('/dev/shm')" title="内存文件系统(常被利用)">/dev/shm</button>
-            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/opt')" title="第三方软件">/opt</button>
-            <button class="quick-jump-btn" onclick="sftpManager.navigateToPath('/usr/local/bin')" title="本地二进制">/usr/local/bin</button>
-          </div>
+        <!-- 敏感目录审计横幅 -->
+        <div class="sftp-audit-banner" id="sftp-audit-banner" style="display:none;">
+          <span class="sftp-audit-icon">${Shield({ theme: 'outline', size: '15', fill: 'currentColor' })}</span>
+          <span class="sftp-audit-text"><strong>敏感目录</strong> · 操作将记录到审计日志</span>
+          <button class="sftp-audit-link" onclick="window.toggleSftpHistory && window.toggleSftpHistory()">查看日志 ↗</button>
         </div>
 
-        <!-- File List -->
-        <div class="sftp-file-list-container">
-          <table class="sftp-table">
-            <thead>
-              <tr>
-                <th class="sftp-th-sortable" style="width: 38%;" onclick="window.setSftpSortMode(sftpManager.getSortMode() === 'name-asc' ? 'name-desc' : 'name-asc')" id="sftp-th-name">
-                  名称 <span class="sort-indicator" id="sort-ind-name">▲</span>
-                </th>
-                <th class="sftp-th-sortable" style="width: 10%;" onclick="window.setSftpSortMode(sftpManager.getSortMode() === 'size-asc' ? 'size-desc' : 'size-asc')" id="sftp-th-size">
-                  大小 <span class="sort-indicator" id="sort-ind-size"></span>
-                </th>
-                <th style="width: 12%;">权限</th>
-                <th style="width: 12%;">所有者</th>
-                <th class="sftp-th-sortable" style="width: 16%;" onclick="window.setSftpSortMode(sftpManager.getSortMode() === 'modified-asc' ? 'modified-desc' : 'modified-asc')" id="sftp-th-modified">
-                  修改时间 <span class="sort-indicator" id="sort-ind-modified"></span>
-                </th>
-              </tr>
-            </thead>
-            <tbody id="sftp-file-list">
-              <!-- File list content will be injected here -->
-              <tr>
-                <td colspan="5" style="text-align: center; padding: 40px; color: var(--text-secondary);">
-                  <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
-                    <div class="loading-spinner" style="width: 24px; height: 24px;"></div>
-                    <span>正在加载文件列表...</span>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <!-- Body: 文件表格 + 文件详情侧栏 -->
+        <div class="sftp-body">
+          <div class="sftp-file-list-container">
+            <table class="sftp-table">
+              <thead>
+                <tr>
+                  <th class="sftp-col-check"><input type="checkbox" id="sftp-check-all" onclick="window.sftpToggleAll && window.sftpToggleAll(this.checked)"></th>
+                  <th class="sftp-th-sortable sftp-col-name" onclick="window.setSftpSortMode(sftpManager.getSortMode() === 'name-asc' ? 'name-desc' : 'name-asc')" id="sftp-th-name">名称 <span class="sort-indicator" id="sort-ind-name">▲</span></th>
+                  <th class="sftp-col-type">类型</th>
+                  <th class="sftp-th-sortable sftp-col-size" onclick="window.setSftpSortMode(sftpManager.getSortMode() === 'size-asc' ? 'size-desc' : 'size-asc')" id="sftp-th-size">大小 <span class="sort-indicator" id="sort-ind-size"></span></th>
+                  <th class="sftp-col-perms">权限</th>
+                  <th class="sftp-col-owner">所有者</th>
+                  <th class="sftp-th-sortable sftp-col-time" onclick="window.setSftpSortMode(sftpManager.getSortMode() === 'modified-asc' ? 'modified-desc' : 'modified-asc')" id="sftp-th-modified">修改时间 <span class="sort-indicator" id="sort-ind-modified"></span></th>
+                  <th class="sftp-col-risk">风险</th>
+                </tr>
+              </thead>
+              <tbody id="sftp-file-list">
+                <tr>
+                  <td colspan="8" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                      <div class="loading-spinner" style="width: 24px; height: 24px;"></div>
+                      <span>正在加载文件列表...</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <aside class="sftp-side${sideCollapsed ? ' collapsed' : ''}" id="sftp-side">
+            <div class="sftp-side-head">
+              <span class="sftp-side-title">文件详情</span>
+              <button class="sftp-side-toggle" onclick="window.toggleSftpSide && window.toggleSftpSide()" title="收起 / 展开">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+              </button>
+            </div>
+            <div class="sftp-side-body" id="sftp-side-body">
+              <div class="sftp-side-empty">
+                <span class="sftp-side-empty-icon"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M14 3v5h5"/><path d="M6 3h8l5 5v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/></svg></span>
+                <p>选择文件查看详情</p>
+              </div>
+            </div>
+          </aside>
         </div>
 
         <!-- Status Bar -->
@@ -1909,9 +1935,6 @@ export class ModernUIRenderer {
     `;
   }
 
-  /**
-   * 渲染SSH终端标题栏按钮
-   */
   renderSSHTerminalTitleButton(): string {
     return `
       <button id="ssh-terminal-title-btn" class="modern-btn secondary" style="padding: 6px 12px; font-size: 11px; margin-right: var(--spacing-sm); display: flex; align-items: center; gap: 6px;" title="打开SSH终端">
@@ -1921,6 +1944,14 @@ export class ModernUIRenderer {
           <path d="M23 32H36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="bevel"/>
         </svg>
         终端
+      </button>
+      <button class="modern-btn secondary" style="padding: 6px 12px; font-size: 11px; margin-right: var(--spacing-sm); display: flex; align-items: center; gap: 6px;" title="连接 Web 终端 (ttyd/wetty)" onclick="window.openWebTerminal?.()">
+        <svg width="14" height="14" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" stroke-width="4"/>
+          <path d="M14 20L22 28L14 36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M26 34H38" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+        Web终端
       </button>
     `;
   }

@@ -301,7 +301,7 @@ export class ExtractModal {
       });
 
       console.log('文件解压成功:', targetDir);
-      (window as any).showNotification && (window as any).showNotification('文件解压成功', 'success');
+      window.showNotification && window.showNotification('文件解压成功', 'success');
 
       // 刷新文件列表
       if ((window as any).sftpManager && (window as any).sftpManager.refreshCurrentDirectory) {
@@ -312,7 +312,7 @@ export class ExtractModal {
 
     } catch (error) {
       console.error('文件解压失败:', error);
-      (window as any).showNotification && (window as any).showNotification(`文件解压失败: ${error}`, 'error');
+      window.showNotification && window.showNotification(`文件解压失败: ${error}`, 'error');
     } finally {
       // 恢复按钮状态
       confirmBtn.textContent = '开始解压';

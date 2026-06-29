@@ -252,6 +252,17 @@ export class KubernetesRenderer {
     private updateContentArea(): void {
         const el = document.getElementById('k8s-content-area');
         if (el) el.innerHTML = this.loading ? this.renderLoading() : this.renderCurrentTab();
+
+        // Sync tab button active states
+        document.querySelectorAll('.k8s-tab-btn').forEach(btn => {
+            const tabId = btn.getAttribute('data-tab');
+            btn.classList.toggle('active', tabId === this.currentTab);
+        });
+        // Sync sub-tab active states
+        document.querySelectorAll('.k8s-sub-tab-btn').forEach(btn => {
+            const subTabId = btn.getAttribute('data-sub-tab');
+            btn.classList.toggle('active', subTabId === this.currentSubTab);
+        });
     }
 
     // ============================================================

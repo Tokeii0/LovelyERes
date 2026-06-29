@@ -20,7 +20,7 @@ export class LoginHistoryContextMenu extends BaseContextMenu {
     if (action === 'copy-ip') {
       try {
         await navigator.clipboard.writeText(this.currentEntry.source || '')
-        ;(window as any).showNotification?.('IP地址已复制', 'success')
+        ;window.showNotification?.('IP地址已复制', 'success')
       } catch { /* ignore */ }
       return true
     }

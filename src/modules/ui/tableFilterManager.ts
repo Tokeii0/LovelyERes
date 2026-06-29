@@ -19,7 +19,7 @@ function debounce(key: string, fn: () => void, delay = 150): void {
 function checkCategoryFilter(tableType: string, row: Element, filterValue: string): boolean {
   const cells = row.querySelectorAll('td');
   switch (tableType) {
-    case 'processes': return cells[1]?.textContent?.toLowerCase().includes(filterValue) || false;
+    case 'processes': return cells[3]?.textContent?.toLowerCase().includes(filterValue) || false;
     case 'services':  return cells[1]?.textContent?.toLowerCase().includes(filterValue) || false;
     case 'network':   return cells[3]?.textContent?.toLowerCase().includes(filterValue) || false;
     case 'users':     return cells[4]?.textContent?.toLowerCase().includes(filterValue) || false;
@@ -30,7 +30,7 @@ function checkCategoryFilter(tableType: string, row: Element, filterValue: strin
 function checkStatusFilter(tableType: string, row: Element, statusValue: string): boolean {
   const cells = row.querySelectorAll('td');
   switch (tableType) {
-    case 'processes': return cells[2]?.textContent?.includes(statusValue) || false;
+    case 'processes': return cells[4]?.textContent?.includes(statusValue) || false;
     default: return true;
   }
 }
@@ -62,6 +62,15 @@ function applyFilters(tableType: string, tbody: HTMLElement, searchTerm: string,
     // 状态筛选
     if (shouldShow && statValue) {
       shouldShow = checkStatusFilter(tableType, row, statValue);
+    }
+
+    // 风险筛选（可疑切换，目前用于进程表）
+    if (shouldShow) {
+      const riskBtn = document.querySelector(`#${tableType}-risk-toggle .sys-seg-opt.active`);
+      const riskMode = riskBtn?.getAttribute('data-risk') || 'all';
+      if (riskMode === 'suspicious' && (row as HTMLElement).getAttribute('data-suspicious') !== '1') {
+        shouldShow = false;
+      }
     }
 
     (row as HTMLElement).style.display = shouldShow ? '' : 'none';
@@ -110,5 +119,20 @@ export function initTableFilterManager(): void {
     const searchTerm = searchInput ? searchInput.value : '';
     const categoryValue = categoryFilter ? categoryFilter.value : '';
     applyFilters(tableType, tbody, searchTerm, categoryValue, statusValue);
+  };
+
+  // 风险切换（全部 / 可疑）— 立即执行
+  (window as any).filterByRisk = (tableType: string, mode: string, btn?: HTMLElement) => {
+    const toggle = document.getElementById(`${tableType}-risk-toggle`);
+    if (toggle) {
+      toggle.querySelectorAll('.sys-seg-opt').forEach(b =>
+        b.classList.toggle('active', btn ? b === btn : b.getAttribute('data-risk') === mode));
+    }
+    const tbody = document.getElementById(`${tableType}-table-body`);
+    if (!tbody) return;
+    const searchInput = document.getElementById(`${tableType}-search`) as HTMLInputElement;
+    const filterSelect = document.getElementById(`${tableType}-filter`) as HTMLSelectElement;
+    const statFilter = document.getElementById(`${tableType}-stat-filter`) as HTMLSelectElement;
+    applyFilters(tableType, tbody, searchInput?.value || '', filterSelect?.value || '', statFilter?.value || '');
   };
 }

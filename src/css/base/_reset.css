@@ -5,17 +5,56 @@
   padding: 0;
 }
 
+html, body {
+  height: 100%;
+}
+
 body {
   font-family: var(--font-family);
   font-size: var(--font-size);
   background: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.6;
+  overflow: hidden;
+  user-select: text;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
 ::selection {
   background: var(--selection-bg);
   color: var(--selection-text);
+}
+
+/* Keep buttons, toolbars, and chrome non-selectable */
+button,
+.tool-btn,
+.tab-btn,
+.top-toolbar,
+.titlebar,
+.modern-title-bar,
+.status-bar,
+.activity-bar {
+  user-select: none;
+}
+
+/* Glassmorphism Utility (LovelySpark-parity) */
+.glass-surface {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+}
+
+/* Focus Visible */
+:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
 }

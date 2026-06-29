@@ -3,7 +3,7 @@
  * 一键采集系统状态快照，支持快照对比
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { executeEmergencyCommand, formatCommandResult } from './commandExecution';
 
 // ========== 数据类型 ==========
 
@@ -32,13 +32,13 @@ export interface SnapshotData {
 // 快照采集命令
 const SNAPSHOT_COMMANDS: Record<keyof SnapshotData, string> = {
   processes:            'ps auxf 2>/dev/null | head -200',
-  networkConnections:   'ss -tunap 2>/dev/null || netstat -tunap 2>/dev/null | head -100',
-  listeningPorts:       'ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null',
+  networkConnections:   '(ss -tunap 2>/dev/null || netstat -tunap 2>/dev/null || echo "ss/netstat not available") | head -100',
+  listeningPorts:       'ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null || echo "ss/netstat not available"',
   loginHistory:         'last -20 2>/dev/null; echo "---"; w 2>/dev/null',
-  cronJobs:             '(crontab -l 2>/dev/null; echo "===root==="; sudo crontab -l 2>/dev/null; echo "===/etc/crontab==="; cat /etc/crontab 2>/dev/null) | head -100',
-  startupServices:      'systemctl list-unit-files --type=service --state=enabled 2>/dev/null || chkconfig --list 2>/dev/null | head -50',
+  cronJobs:             '(crontab -l 2>/dev/null; echo "===root==="; sudo -n crontab -l 2>/dev/null || true; echo "===/etc/crontab==="; cat /etc/crontab 2>/dev/null) | head -100',
+  startupServices:      '(systemctl list-unit-files --type=service --state=enabled 2>/dev/null || chkconfig --list 2>/dev/null || rc-status -a 2>/dev/null || echo "service manager not available") | head -50',
   authorizedKeys:       'find /home /root -name authorized_keys -exec echo "=== {} ===" \\; -exec cat {} \\; 2>/dev/null | head -50',
-  sudoers:              'sudo cat /etc/sudoers 2>/dev/null | grep -v "^#" | grep -v "^$" | head -30',
+  sudoers:              '(sudo -n cat /etc/sudoers 2>/dev/null || cat /etc/sudoers 2>/dev/null || echo "sudoers not readable") | grep -v "^#" | grep -v "^$" | head -30',
   runningUsers:         'who 2>/dev/null; echo "---"; id 2>/dev/null',
   loadedModules:        'lsmod 2>/dev/null | head -50',
   recentModifiedFiles:  'find /etc /usr/bin /usr/sbin -mtime -3 -type f 2>/dev/null | head -50',
@@ -55,18 +55,21 @@ export class ForensicManager {
     const keys = Object.keys(SNAPSHOT_COMMANDS) as (keyof SnapshotData)[];
     const data: Partial<SnapshotData> = {};
 
+    onProgress?.(5, '准备采集');
+
     for (let i = 0; i < keys.length; i++) {
       const key = keys[i];
-      const label = key.replace(/([A-Z])/g, ' $1').trim();
-      onProgress?.(Math.round((i / keys.length) * 100), label);
-
+      onProgress?.(Math.round((i / keys.length) * 95) + 5, key);
       try {
-        const result: any = await invoke('ssh_execute_dashboard_command_direct', {
+        const result = await executeEmergencyCommand({
           command: SNAPSHOT_COMMANDS[key],
+          timeoutSec: 90,
         });
-        data[key] = result?.output?.trim() || '(empty)';
-      } catch {
-        data[key] = '(failed to collect)';
+        data[key] = result.success
+          ? (result.output.trim() || '(empty)')
+          : formatCommandResult(result);
+      } catch (error) {
+        data[key] = `(failed to collect: ${error})`;
       }
     }
     onProgress?.(100, '完成');

@@ -42,14 +42,34 @@ interface KubectlPod {
     spec: {
         nodeName?: string;
         hostNetwork?: boolean;
+        hostPID?: boolean;
+        hostIPC?: boolean;
         serviceAccountName?: string;
+        automountServiceAccountToken?: boolean;
+        initContainers?: Array<{
+            name: string;
+            image: string;
+            command?: string[];
+            args?: string[];
+            securityContext?: {
+                privileged?: boolean;
+                capabilities?: { add?: string[]; drop?: string[] };
+                runAsUser?: number;
+            };
+        }>;
         containers: Array<{
             name: string;
             image: string;
+            command?: string[];
+            args?: string[];
             securityContext?: {
                 privileged?: boolean;
                 runAsRoot?: boolean;
                 runAsUser?: number;
+                capabilities?: { add?: string[]; drop?: string[] };
+                allowPrivilegeEscalation?: boolean;
+                readOnlyRootFilesystem?: boolean;
+                seccompProfile?: { type: string };
             };
             resources?: {
                 limits?: Record<string, string>;
@@ -211,15 +231,24 @@ export class KubernetesManager {
                 node: item.spec.nodeName || 'N/A',
                 ip: item.status.podIP || '',
                 restarts: containerStatuses.reduce((sum, c) => sum + c.restartCount, 0),
-                containers: containerStatuses.map(c => ({
-                    name: c.name,
-                    image: c.image,
-                    ready: c.ready,
-                    restarts: c.restartCount
-                })),
+                containers: containerStatuses.map(c => {
+                    const specContainer = item.spec.containers.find(sc => sc.name === c.name);
+                    return {
+                        name: c.name,
+                        image: c.image,
+                        ready: c.ready,
+                        restarts: c.restartCount,
+                        command: specContainer?.command,
+                        args: specContainer?.args
+                    };
+                }),
                 hostNetwork: item.spec.hostNetwork || false,
+                hostPID: item.spec.hostPID || false,
+                hostIPC: item.spec.hostIPC || false,
                 serviceAccount: item.spec.serviceAccountName || 'default',
-                qosClass: item.status.qosClass || 'BestEffort'
+                qosClass: item.status.qosClass || 'BestEffort',
+                isStaticPod: !!(item.metadata.annotations?.['kubernetes.io/config.source'] === 'file' ||
+                    item.metadata.annotations?.['kubernetes.io/config.mirror'])
             };
         });
     }
@@ -881,5 +910,72 @@ export class KubernetesManager {
 
         const data = await this.executeKubectl(cmd) as KubectlList<KubectlPod>;
         return data?.items || [];
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    public async getRawCronJobSpecs(namespace?: string): Promise<any[]> {
+        const cmd = namespace
+            ? `kubectl get cronjobs -n ${namespace}`
+            : `kubectl get cronjobs --all-namespaces`;
+
+        const data = await this.executeKubectl(cmd);
+        return data?.items || [];
+    }
+
+    public async deleteServiceAccount(name: string, namespace: string): Promise<{ success: boolean; output: string }> {
+        return this.deleteResource('serviceaccount', name, namespace);
+    }
+
+    public async suspendCronJob(name: string, namespace: string): Promise<{ success: boolean; output: string }> {
+        const cmd = `kubectl patch cronjob ${name} -n ${namespace} -p '{"spec":{"suspend":true}}'`;
+        const result = await this.executeKubectlRaw(cmd);
+        return {
+            success: result?.exit_code === 0,
+            output: result?.output || ''
+        };
+    }
+
+    public async getServiceAccounts(namespace?: string): Promise<any[]> {
+        const cmd = namespace
+            ? `kubectl get serviceaccounts -n ${namespace}`
+            : `kubectl get serviceaccounts --all-namespaces`;
+
+        const data = await this.executeKubectl(cmd);
+        if (!data || !data.items) return [];
+
+        return data.items.map((item: any) => ({
+            name: item.metadata.name,
+            namespace: item.metadata.namespace,
+            creationTimestamp: item.metadata.creationTimestamp,
+            automountServiceAccountToken: item.automountServiceAccountToken,
+            secrets: (item.secrets || []).map((s: any) => s.name),
+        }));
+    }
+
+    public async isolateNamespace(namespace: string): Promise<{ success: boolean; output: string }> {
+        const policyYaml = `apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: lovelyres-deny-all
+  namespace: ${namespace}
+  labels:
+    lovelyres-emergency: "true"
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress`;
+        return this.applyYaml(policyYaml);
+    }
+
+    public async etcdDeletePod(_podName: string, namespace: string): Promise<{ success: boolean; output: string }> {
+        // This requires etcdctl access inside the control plane node
+        // Used when a pod's etcd key has been tampered with and kubectl delete doesn't work
+        const cmd = `docker exec minikube /bin/sh -c 'ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/var/lib/minikube/certs/etcd/ca.crt --cert=/var/lib/minikube/certs/etcd/healthcheck-client.crt --key=/var/lib/minikube/certs/etcd/healthcheck-client.key del /registry/pods/${namespace}/ --prefix --keys-only 2>&1' | while read key; do echo "Found key: $key"; done`;
+        const result = await this.executeKubectlRaw(cmd);
+        return {
+            success: result?.exit_code === 0,
+            output: result?.output || ''
+        };
     }
 }

@@ -1,4 +1,4 @@
-/* Modern Input */
+/* Modern Input — refined to match LovelySpark's focus treatment */
 .modern-input {
   width: 100%;
   padding: var(--spacing-sm) var(--spacing-md);
@@ -7,13 +7,23 @@
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: 14px;
-  transition: all 0.3s ease;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+}
+
+.modern-input::placeholder {
+  color: var(--text-tertiary, var(--text-secondary));
+  opacity: 0.7;
+}
+
+.modern-input:hover:not(:focus) {
+  border-color: var(--border-color-hover, var(--border-color));
 }
 
 .modern-input:focus {
   outline: none;
   border-color: var(--primary-color);
   box-shadow: var(--focus-ring-shadow);
+  background: var(--bg-primary);
 }
 
 /* System Input */
@@ -25,11 +35,14 @@
   color: var(--text-primary);
   font-size: 13px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
-.system-input:focus { border-color: var(--primary-color); }
+.system-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: var(--focus-ring-shadow);
+}
 
-/* System Select — 基础样式由 dropdowns.css 提供，此处仅做尺寸覆盖 */
+/* System Select — base from dropdowns.css; only size overrides here */
 .system-select {
   padding: 5px 28px 5px 8px;
   font-size: 12px;
@@ -43,8 +56,9 @@
   left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--text-tertiary);
+  color: var(--text-tertiary, var(--text-secondary));
   display: flex;
+  pointer-events: none;
 }
 
 .modern-search-input {
@@ -52,10 +66,10 @@
   padding: 8px 12px 8px 36px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--text-primary);
   font-size: 13px;
-  transition: all 0.2s;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
 }
 
 .modern-search-input:focus {

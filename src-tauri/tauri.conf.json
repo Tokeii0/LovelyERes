@@ -34,7 +34,7 @@
         "enable": true,
         "scope": ["**"]
       },
-      "capabilities": ["default", "ssh-terminal"]
+      "capabilities": ["default", "ssh-terminal", "web-terminal"]
     }
   },
   "bundle": {

@@ -5,6 +5,7 @@
 
 import { SettingsManager } from './settingsManager';
 import { aiService, AIProvider } from '../ai/aiService';
+import { busyboxManager } from '../core/busyboxManager';
 import { showConfirm } from '../ui/confirmDialog';
 
 export class SettingsPageManager {
@@ -994,63 +995,67 @@ export class SettingsPageManager {
     };
 
     // 检测状态
-    import('../core/busyboxManager').then(({ busyboxManager }) => {
-      busyboxManager.detect().then(({ status, path }) => {
-        if (statusEl) {
-          const labels: Record<string, string> = {
-            'enabled': '已启用',
-            'installed': '已安装 (未启用)',
-            'not-installed': '未安装',
-            'unknown': '未知',
-          };
-          statusEl.textContent = '状态: ' + (labels[status] || status);
-          statusEl.style.color = status === 'enabled' ? '#22c55e' : status === 'installed' ? '#3b82f6' : 'var(--text-secondary)';
-        }
-        if (pathEl && path) pathEl.textContent = path;
-      });
-
-      // 上传按钮
-      (window as any).__settingsBusyboxUpload = async () => {
-        if (statusEl) statusEl.textContent = '状态: 上传中...';
-        try {
-          const log = await busyboxManager.uploadFromLocal();
-          showLog(log);
-          if (statusEl) { statusEl.textContent = '状态: 已安装'; statusEl.style.color = '#3b82f6'; }
-          if (pathEl) pathEl.textContent = busyboxManager.getPath();
-          window.showNotification?.('busybox 上传成功', 'success');
-        } catch (e: any) {
-          showLog(String(e));
-          if (statusEl) { statusEl.textContent = '状态: 上传失败'; statusEl.style.color = '#ef4444'; }
-          if (e?.message?.includes('未选择文件')) {
-            // 用户取消了文件选择，静默处理
-            if (statusEl) statusEl.textContent = '状态: 未安装';
-          } else {
-            window.showNotification?.(`上传失败: ${e}`, 'error');
-          }
-        }
-      };
-
-      // 启用按钮
-      (window as any).__settingsBusyboxEnable = async () => {
-        try {
-          await busyboxManager.enable();
-          if (statusEl) { statusEl.textContent = '状态: 已启用'; statusEl.style.color = '#22c55e'; }
-          window.showNotification?.('busybox 可信模式已启用', 'success');
-        } catch (e) {
-          window.showNotification?.(`启用失败: ${e}`, 'error');
-        }
-      };
-
-      // 禁用按钮
-      (window as any).__settingsBusyboxDisable = async () => {
-        try {
-          await busyboxManager.disable();
-          if (statusEl) { statusEl.textContent = '状态: 已安装 (未启用)'; statusEl.style.color = '#3b82f6'; }
-          window.showNotification?.('busybox 模式已禁用', 'info');
-        } catch (e) {
-          window.showNotification?.(`禁用失败: ${e}`, 'error');
-        }
-      };
+    busyboxManager.detect().then(({ status, path }) => {
+      if (statusEl) {
+        const labels: Record<string, string> = {
+          'enabled': '已启用',
+          'installed': '已安装 (未启用)',
+          'not-installed': '未安装',
+          'unknown': '未知',
+        };
+        statusEl.textContent = '状态: ' + (labels[status] || status);
+        statusEl.style.color = status === 'enabled' ? '#22c55e' : status === 'installed' ? '#3b82f6' : 'var(--text-secondary)';
+      }
+      if (pathEl && path) pathEl.textContent = path;
+    }).catch((e) => {
+      if (statusEl) {
+        statusEl.textContent = '状态: 检测失败';
+        statusEl.style.color = '#ef4444';
+      }
+      showLog(String(e));
     });
+
+    // 上传按钮
+    (window as any).__settingsBusyboxUpload = async () => {
+      if (statusEl) statusEl.textContent = '状态: 上传中...';
+      try {
+        const log = await busyboxManager.uploadFromLocal();
+        showLog(log);
+        if (statusEl) { statusEl.textContent = '状态: 已安装'; statusEl.style.color = '#3b82f6'; }
+        if (pathEl) pathEl.textContent = busyboxManager.getPath();
+        window.showNotification?.('busybox 上传成功', 'success');
+      } catch (e: any) {
+        showLog(String(e));
+        if (statusEl) { statusEl.textContent = '状态: 上传失败'; statusEl.style.color = '#ef4444'; }
+        if (e?.message?.includes('未选择文件')) {
+          // 用户取消了文件选择，静默处理
+          if (statusEl) statusEl.textContent = '状态: 未安装';
+        } else {
+          window.showNotification?.(`上传失败: ${e}`, 'error');
+        }
+      }
+    };
+
+    // 启用按钮
+    (window as any).__settingsBusyboxEnable = async () => {
+      try {
+        await busyboxManager.enable();
+        if (statusEl) { statusEl.textContent = '状态: 已启用'; statusEl.style.color = '#22c55e'; }
+        window.showNotification?.('busybox 可信模式已启用', 'success');
+      } catch (e) {
+        window.showNotification?.(`启用失败: ${e}`, 'error');
+      }
+    };
+
+    // 禁用按钮
+    (window as any).__settingsBusyboxDisable = async () => {
+      try {
+        await busyboxManager.disable();
+        if (statusEl) { statusEl.textContent = '状态: 已安装 (未启用)'; statusEl.style.color = '#3b82f6'; }
+        window.showNotification?.('busybox 模式已禁用', 'info');
+      } catch (e) {
+        window.showNotification?.(`禁用失败: ${e}`, 'error');
+      }
+    };
   }
 }

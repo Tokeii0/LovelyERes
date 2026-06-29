@@ -1803,85 +1803,6 @@ body {
   animation: cardFlip 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 用户头像样式 */
-.user-avatar-container {
-  position: relative;
-}
-
-.user-avatar-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-/* 已登录状态 - 彩色头像 */
-.user-avatar-logged-in {
-  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-  color: white;
-}
-
-/* 未登录状态 - 灰色头像 */
-.user-avatar-guest {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color);
-}
-
-.user-avatar-btn:hover .user-avatar {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.user-avatar-btn:active .user-avatar {
-  transform: scale(0.95);
-}
-
-/* 用户下拉菜单样式 */
-.user-dropdown {
-  animation: dropdownSlideIn 0.2s ease-out;
-}
-
-@keyframes dropdownSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.user-dropdown-header {
-  user-select: none;
-}
-
-.user-menu-item {
-  transition: all 0.2s ease;
-  user-select: none;
-}
-
-.user-menu-item:active {
-  transform: scale(0.98);
-}
-
 /* 下拉菜单通用样式 */
 .dropdown-menu {
   backdrop-filter: blur(10px);
@@ -3538,4 +3459,3 @@ body {
 .card-tilt:active {
   transform: perspective(800px) scale(0.98);
 }
-

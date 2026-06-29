@@ -20,6 +20,8 @@ pub struct TerminalOutput {
     pub output: String,
     pub exit_code: Option<i32>,
     pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub duration_ms: u64,
+    pub timed_out: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,6 +39,24 @@ impl TerminalOutput {
             output: output.to_string(),
             exit_code,
             timestamp: chrono::Utc::now(),
+            duration_ms: 0,
+            timed_out: false,
+        }
+    }
+
+    pub fn with_duration(mut self, duration: std::time::Duration) -> Self {
+        self.duration_ms = duration.as_millis().min(u128::from(u64::MAX)) as u64;
+        self
+    }
+
+    pub fn timeout(command: &str, duration: std::time::Duration) -> Self {
+        Self {
+            command: command.to_string(),
+            output: format!("命令执行超时（{} 秒）", duration.as_secs()),
+            exit_code: None,
+            timestamp: chrono::Utc::now(),
+            duration_ms: duration.as_millis().min(u128::from(u64::MAX)) as u64,
+            timed_out: true,
         }
     }
 }
@@ -109,6 +129,10 @@ impl Handler for ClientHandler {
     }
 }
 
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
 // ================== Worker Thread Messages ==================
 
 enum WorkerCommand {
@@ -123,6 +147,7 @@ enum WorkerCommand {
     ExecuteCommand {
         session_id: String,
         command: String,
+        timeout: std::time::Duration,
         response_tx: mpsc::Sender<Result<TerminalOutput, String>>,
     },
     ListSftpFiles {
@@ -239,8 +264,8 @@ use tauri::Emitter;
 
 struct TerminalSession {
     channel: russh::Channel<Msg>,
-    session_id: String,
-    window: tauri::Window,
+    _session_id: String,
+    _window: tauri::Window,
 }
 
 // ================== Async Helper Functions ==================
@@ -669,11 +694,18 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                     }
                 }
                 
-                WorkerCommand::ExecuteCommand { session_id, command, response_tx } => {
+                WorkerCommand::ExecuteCommand { session_id, command, timeout, response_tx } => {
                     if let Some(session) = sessions.get(&session_id) {
                         let handle = Arc::clone(&session.handle);
                         tokio::spawn(async move {
-                            let result = execute_command_async(&handle, &command).await;
+                            let start = std::time::Instant::now();
+                            let result = match tokio::time::timeout(
+                                timeout,
+                                execute_command_async(&handle, &command),
+                            ).await {
+                                Ok(result) => result.map(|output| output.with_duration(start.elapsed())),
+                                Err(_) => Ok(TerminalOutput::timeout(&command, timeout)),
+                            };
                             let _ = response_tx.send(result);
                         });
                     } else {
@@ -754,7 +786,7 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                 }
                 
                 WorkerCommand::Disconnect { session_id, response_tx } => {
-                    let result = if let Some(mut session) = sessions.remove(&session_id) {
+                    let result = if let Some(session) = sessions.remove(&session_id) {
                         let _ = session.handle.disconnect(Disconnect::ByApplication, "User disconnected", "en").await;
                         Ok(())
                     } else {
@@ -764,7 +796,7 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                 }
                 
                 WorkerCommand::DisconnectAll { response_tx } => {
-                    for (_, mut session) in sessions.drain() {
+                    for (_, session) in sessions.drain() {
                         let _ = session.handle.disconnect(Disconnect::ByApplication, "User disconnected", "en").await;
                     }
                     let _ = response_tx.send(Ok(()));
@@ -816,8 +848,8 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                                 // Create terminal session
                                 let terminal_session = TerminalSession {
                                     channel,
-                                    session_id: session_id.clone(),
-                                    window: window.clone(),
+                                    _session_id: session_id.clone(),
+                                    _window: window.clone(),
                                 };
                                 
                                 // Store it
@@ -925,7 +957,7 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                 
                 WorkerCommand::CloseTerminalSession { terminal_id, response_tx } => {
                     let mut terminals = terminal_sessions.lock().await;
-                    let result = if let Some(mut term) = terminals.remove(&terminal_id) {
+                    let result = if let Some(term) = terminals.remove(&terminal_id) {
                         let _ = term.channel.eof().await;
                         let _ = term.channel.close().await;
                         Ok(())
@@ -938,7 +970,7 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                 
                 WorkerCommand::CloseAllTerminalSessions { response_tx } => {
                     let mut terminals = terminal_sessions.lock().await;
-                    for (_, mut term) in terminals.drain() {
+                    for (_, term) in terminals.drain() {
                         let _ = term.channel.eof().await;
                         let _ = term.channel.close().await;
                     }
@@ -1074,7 +1106,7 @@ fn run_worker(rx: mpsc::Receiver<WorkerCommand>) {
                 
                 WorkerCommand::Shutdown => {
                     // Disconnect all sessions before shutdown
-                    for (_, mut session) in sessions.drain() {
+                    for (_, session) in sessions.drain() {
                         let _ = session.handle.disconnect(Disconnect::ByApplication, "Shutdown", "en").await;
                     }
                     break;
@@ -1170,9 +1202,13 @@ impl SSHManagerRussh {
     /// Execute command on current session (backward compatible)
     /// 如果启用了 busybox 模式，自动用 busybox sh -c 包裹命令
     pub fn execute_command(&self, command: &str) -> Result<TerminalOutput, String> {
+        self.execute_command_with_timeout(command, std::time::Duration::from_secs(60))
+    }
+
+    pub fn execute_command_with_timeout(&self, command: &str, timeout: std::time::Duration) -> Result<TerminalOutput, String> {
         let session_id = self.get_current_session()?;
         let final_command = self.wrap_with_busybox(command);
-        self.execute_command_on_session(&session_id, &final_command)
+        self.execute_command_on_session_with_timeout(&session_id, &final_command, timeout)
     }
 
     /// 如果 busybox 已启用，用 busybox sh -c 执行命令
@@ -1182,11 +1218,13 @@ impl SSHManagerRussh {
             if let Some(ref bb) = *guard {
                 // 用 busybox sh -c 执行，确保 PATH 优先使用 busybox 自带命令
                 // 设置 PATH 让 busybox 内置命令优先于系统命令
+                let quoted_busybox = shell_quote(bb);
+                let quoted_command = shell_quote(command);
                 return format!(
-                    "export BUSYBOX='{}'; {} sh -c '{}'",
-                    bb,
-                    bb,
-                    command.replace('\'', "'\\''")
+                    "export BUSYBOX={}; {} sh -c {}",
+                    quoted_busybox,
+                    quoted_busybox,
+                    quoted_command,
                 );
             }
         }
@@ -1209,18 +1247,28 @@ impl SSHManagerRussh {
     
     /// Execute command on specific session
     pub fn execute_command_on_session(&self, session_id: &str, command: &str) -> Result<TerminalOutput, String> {
+        self.execute_command_on_session_with_timeout(session_id, command, std::time::Duration::from_secs(60))
+    }
+
+    pub fn execute_command_on_session_with_timeout(
+        &self,
+        session_id: &str,
+        command: &str,
+        timeout: std::time::Duration,
+    ) -> Result<TerminalOutput, String> {
         let (response_tx, response_rx) = mpsc::channel();
         
         self.send_to_worker(WorkerCommand::ExecuteCommand {
-                session_id: session_id.to_string(),
-                command: command.to_string(),
-                response_tx,
-            })
-?;
+            session_id: session_id.to_string(),
+            command: command.to_string(),
+            timeout,
+            response_tx,
+        })?;
         
+        let wait_timeout = timeout + std::time::Duration::from_secs(2);
         response_rx
-            .recv_timeout(std::time::Duration::from_secs(60))
-            .map_err(|_| "命令执行超时（60 秒）".to_string())?
+            .recv_timeout(wait_timeout)
+            .map_err(|_| format!("命令执行超时（{} 秒）", timeout.as_secs()))?
     }
 
     /// Execute multiple commands in parallel on the current session
@@ -1510,24 +1558,39 @@ impl SSHManagerRussh {
     pub fn execute_dashboard_command(&self, command: &str) -> Result<TerminalOutput, String> {
         self.execute_command(command)
     }
+
+    pub fn execute_dashboard_command_with_timeout(&self, command: &str, timeout: std::time::Duration) -> Result<TerminalOutput, String> {
+        self.execute_command_with_timeout(command, timeout)
+    }
     
     /// Execute dashboard command as specific user
     pub fn execute_dashboard_command_as_user(&self, command: &str, username: Option<&str>) -> Result<TerminalOutput, String> {
+        self.execute_dashboard_command_as_user_with_timeout(command, username, std::time::Duration::from_secs(60))
+    }
+
+    pub fn execute_dashboard_command_as_user_with_timeout(
+        &self,
+        command: &str,
+        username: Option<&str>,
+        timeout: std::time::Duration,
+    ) -> Result<TerminalOutput, String> {
         let final_command = if let Some(user) = username {
             // Use sudo -u to switch user for command execution
             // Use su -c as fallback if sudo is not available
+            let quoted_user = shell_quote(user);
+            let quoted_command = shell_quote(command);
             format!(
-                "if command -v sudo &>/dev/null; then sudo -u {} bash -c '{}'; else su - {} -c '{}'; fi",
-                user,
-                command.replace("'", "'\\''"),
-                user,
-                command.replace("'", "'\\''")
+                "if command -v sudo >/dev/null 2>&1; then sudo -n -u {} sh -c {}; else su - {} -c {}; fi",
+                quoted_user,
+                quoted_command,
+                quoted_user,
+                quoted_command,
             )
         } else {
             command.to_string()
         };
         
-        self.execute_command(&final_command)
+        self.execute_command_with_timeout(&final_command, timeout)
     }
     
     /// Get connection status (backward compatibility)

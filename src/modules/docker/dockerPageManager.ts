@@ -602,6 +602,7 @@ export class DockerPageManager {
             <div class="docker-audit-finding-desc">${f.description}</div>
             <div class="docker-audit-finding-remediation">${f.remediation}</div>
           </div>
+          ${f.category === 'privileged' ? `<button class="modern-btn danger" style="flex-shrink:0;font-size:11px;padding:4px 10px;" data-docker-action="remove-privileged" data-container="${f.container}">取消特权</button>` : ''}
         </div>
       `).join('')}
     </div>`;
@@ -734,6 +735,11 @@ export class DockerPageManager {
 
         // Security
         case 'run-audit': await this.runAudit(); break;
+        case 'remove-privileged': {
+          const name = el.getAttribute('data-container');
+          if (name) await this.removePrivileged(name);
+          break;
+        }
       }
     } catch (error) {
       window.showNotification?.(`操作失败: ${error}`, 'error');
@@ -793,6 +799,34 @@ export class DockerPageManager {
     if (!container) return;
     await dockerManager.createContainerTerminalWindow(container.name, container.id);
     window.showNotification?.(`已打开容器 ${name} 的终端窗口`, 'success');
+  }
+
+  // ============================================================
+  // Privileged Container Removal
+  // ============================================================
+
+  private async removePrivileged(containerName: string): Promise<void> {
+    const confirmed = await showConfirm({
+      title: '取消特权模式',
+      message: `确定要将容器 "${containerName}" 从特权模式重建为非特权模式？\n\n操作过程：停止容器 → 删除 → 以相同配置(去除 --privileged)重建\n\n⚠️ 容器将短暂中断服务`,
+      dangerous: true
+    });
+    if (!confirmed) return;
+
+    window.showNotification?.(`正在重建容器 ${containerName}...`, 'warning');
+
+    const result = await dockerManager.removePrivileged(containerName);
+    if (result.success) {
+      window.showNotification?.(`容器 ${containerName} 已重建为非特权模式`, 'success');
+    } else {
+      window.showNotification?.(`取消特权失败: ${result.output.split('\n').pop()}`, 'error');
+    }
+
+    // 显示详细日志
+    this.logsModal.show(`取消特权 — ${containerName}`, result.output);
+
+    // 刷新数据
+    await this.refresh(false);
   }
 
   // ============================================================

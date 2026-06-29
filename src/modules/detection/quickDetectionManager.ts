@@ -767,6 +767,11 @@ export class QuickDetectionManager {
       'hidden-cron': '隐藏计划任务', 'ssh-key-audit': 'SSH 密钥审计',
       'timestomp-check': '时间戳篡改检测', 'enhanced-process': '增强进程分析',
       'bin-tamper': '命令篡改检测(bin/sbin)', 'immutable-files': '文件不可变属性检测',
+      // K8s 安全检测
+      'k8s-privileged-pod': 'K8s 特权容器检测', 'k8s-reverse-shell': 'K8s 反弹Shell检测',
+      'k8s-rbac-audit': 'K8s RBAC 审计', 'k8s-container-escape': 'K8s 容器逃逸检测',
+      'k8s-suspicious-cronjob': 'K8s 恶意CronJob检测', 'k8s-network-policy': 'K8s 网络策略检测',
+      'k8s-sa-audit': 'K8s SA 审计', 'k8s-node-persistence': 'K8s 节点持久化检测',
       // 性能检测
       'cpu-test': 'CPU 压力测试', 'memory-test': '内存性能测试',
       'disk-test': '磁盘 I/O 测试', 'network-test': '网络性能测试',
@@ -796,6 +801,14 @@ export class QuickDetectionManager {
       'hidden-cron': '深度扫描所有 cron 目录和 at 队列', 'ssh-key-audit': '审计所有 SSH 密钥和 sshd 配置',
       'timestomp-check': '检测 mtime 与 ctime 异常的文件', 'enhanced-process': '扩大进程扫描范围，检测可疑二进制',
       'bin-tamper': '检测 /bin /sbin 中被替换为脚本的命令(命令劫持)', 'immutable-files': '检测 chattr +i 不可变文件(rootkit隐藏手段)',
+      'k8s-privileged-pod': '检测以 privileged 模式运行的容器',
+      'k8s-reverse-shell': '检测 Pod 中的反弹Shell命令',
+      'k8s-rbac-audit': '检测 cluster-admin 绑定和通配符权限',
+      'k8s-container-escape': '检测 hostPID/hostIPC/危险 Capabilities',
+      'k8s-suspicious-cronjob': '检测恶意定时任务(CronJob)',
+      'k8s-network-policy': '检测缺少 NetworkPolicy 的命名空间',
+      'k8s-sa-audit': '检测高权限 ServiceAccount',
+      'k8s-node-persistence': '检测节点上的可疑服务和 crontab',
       'cpu-test': '测试 CPU 性能和频率', 'memory-test': '测试内存读写速度',
       'disk-test': '测试磁盘读写性能', 'network-test': '测试带宽和延迟',
     };
@@ -811,6 +824,9 @@ export class QuickDetectionManager {
       'webshell-scan', 'rootkit-scan', 'persistence-scan', 'log-tamper',
       'network-backdoor', 'enhanced-user', 'hidden-cron', 'ssh-key-audit',
       'timestomp-check', 'enhanced-process', 'bin-tamper', 'immutable-files',
+      'k8s-privileged-pod', 'k8s-reverse-shell', 'k8s-rbac-audit',
+      'k8s-container-escape', 'k8s-suspicious-cronjob', 'k8s-network-policy',
+      'k8s-sa-audit', 'k8s-node-persistence',
     ];
     if (performanceChecks.includes(id)) return 'performance';
     if (competitionChecks.includes(id)) return 'competition';
@@ -828,10 +844,13 @@ export class QuickDetectionManager {
       'pam-config', 'account-lockout', 'selinux-status', 'kernel-params', 'system-updates',
       'unnecessary-services', 'auto-start-services', 'audit-config', 'history-audit',
       'ntp-config', 'dns-config',
-      // 竞赛级检测 12 项
+      // 竞赛级检测 20 项
       'webshell-scan', 'rootkit-scan', 'persistence-scan', 'log-tamper',
       'network-backdoor', 'enhanced-user', 'hidden-cron', 'ssh-key-audit',
       'timestomp-check', 'enhanced-process', 'bin-tamper', 'immutable-files',
+      'k8s-privileged-pod', 'k8s-reverse-shell', 'k8s-rbac-audit',
+      'k8s-container-escape', 'k8s-suspicious-cronjob', 'k8s-network-policy',
+      'k8s-sa-audit', 'k8s-node-persistence',
       // 性能检测 4 项
       'cpu-test', 'memory-test', 'disk-test', 'network-test',
     ];

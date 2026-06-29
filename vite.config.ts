@@ -4,9 +4,13 @@ import vitePluginBundleObfuscator from 'vite-plugin-bundle-obfuscator';
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
+// @ts-expect-error process is a nodejs global
+const isProd = process.env.NODE_ENV === 'production' || process.env.TAURI_ENV_DEBUG !== 'true';
+// @ts-expect-error process is a nodejs global
+const isDebugBuild = process.env.TAURI_ENV_DEBUG === 'true' || process.env.VITE_DEBUG_SOURCEMAP === 'true';
 
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(async ({ command }) => ({
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent vite from obscuring rust errors
@@ -28,12 +32,28 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
-
+  esbuild: isProd
+    ? {
+        drop: ['console', 'debugger'],
+      }
+    : undefined,
   // 配置多页面应用
   build: {
-    sourcemap: true, // 启用source map便于调试
+    sourcemap: isDebugBuild,
     minify: 'esbuild' as const, // 使用 esbuild 进行基本压缩（更快，不混淆）
+    chunkSizeWarningLimit: 3500,
     rollupOptions: {
+      treeshake: isProd
+        ? {
+            manualPureFunctions: [
+              'console.debug',
+              'console.error',
+              'console.info',
+              'console.log',
+              'console.warn',
+            ],
+          }
+        : undefined,
       input: {
         main: 'index.html',
         'ssh-terminal': 'ssh-terminal.html',
@@ -52,11 +72,15 @@ export default defineConfig(async () => ({
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
-        // 代码分块优化
+        // 代码分块优化：按重型库单独拆分 chunk, 降低首屏体积
         manualChunks(id: string) {
-          if (id.indexOf('node_modules') !== -1) {
-            return 'vendor';
-          }
+          if (id.indexOf('node_modules') === -1) return undefined;
+          if (/[\\/]node_modules[\\/](xterm|xterm-addon-)/.test(id)) return 'xterm';
+          if (/[\\/]node_modules[\\/]@tauri-apps[\\/]/.test(id)) return 'tauri';
+          if (/[\\/]node_modules[\\/]@icon-park[\\/]/.test(id)) return 'icons';
+          if (/[\\/]node_modules[\\/]monaco-editor[\\/]/.test(id)) return 'monaco';
+          if (/[\\/]node_modules[\\/](vue|@vue|pinia)[\\/]/.test(id)) return 'vue';
+          return 'vendor';
         },
       },
     },
@@ -65,39 +89,41 @@ export default defineConfig(async () => ({
   // 使用自定义插件
   plugins: [
     vue(),
-    // JavaScript 混淆插件（仅在生产构建时启用）
-    vitePluginBundleObfuscator({
-      enable: true, // 启用混淆
-      log: true, // 显示混淆日志
-      autoExcludeNodeModules: true, // 自动排除 node_modules
-      // 混淆选项 - 使用保守配置避免破坏代码
-      options: {
-        compact: true, // 压缩代码
-        controlFlowFlattening: false, // 不使用控制流扁平化（可能破坏代码）
-        deadCodeInjection: false, // 不注入死代码（可能破坏代码）
-        debugProtection: false, // 不启用调试保护（可能影响开发）
-        debugProtectionInterval: 0,
-        disableConsoleOutput: false, // 允许 console 输出
-        identifierNamesGenerator: 'hexadecimal', // 使用十六进制标识符
+    // JavaScript 混淆插件: 仅在 `vite build` (production) 启用
+    // dev 与 `tauri dev` 场景禁用以保证 sourcemap 可调试 + 构建速度
+    ...(command === 'build' && isProd ? [
+      vitePluginBundleObfuscator({
+        enable: true,
         log: false,
-        numbersToExpressions: false, // 不转换数字为表达式（可能破坏代码）
-        renameGlobals: false, // 不重命名全局变量（避免破坏外部引用）
-        selfDefending: false, // 不启用自我防御（可能破坏代码）
-        simplify: true, // 简化代码
-        splitStrings: false, // 不分割字符串（可能破坏代码）
-        stringArray: true, // 使用字符串数组
-        stringArrayCallsTransform: false, // 不转换字符串数组调用（避免性能问题）
-        stringArrayEncoding: ['base64'], // 使用 base64 编码字符串
-        stringArrayIndexShift: true,
-        stringArrayRotate: true,
-        stringArrayShuffle: true,
-        stringArrayWrappersCount: 1,
-        stringArrayWrappersChainedCalls: true,
-        stringArrayWrappersParametersMaxCount: 2,
-        stringArrayWrappersType: 'variable',
-        stringArrayThreshold: 0.75,
-        unicodeEscapeSequence: false, // 不使用 Unicode 转义（保持可读性）
-      }
-    })
+        autoExcludeNodeModules: true,
+        options: {
+          compact: true,
+          controlFlowFlattening: false,
+          deadCodeInjection: false,
+          debugProtection: false,
+          debugProtectionInterval: 0,
+          disableConsoleOutput: true,
+          identifierNamesGenerator: 'hexadecimal',
+          log: false,
+          numbersToExpressions: false,
+          renameGlobals: false,
+          selfDefending: false,
+          simplify: true,
+          splitStrings: false,
+          stringArray: true,
+          stringArrayCallsTransform: false,
+          stringArrayEncoding: ['base64'],
+          stringArrayIndexShift: true,
+          stringArrayRotate: true,
+          stringArrayShuffle: true,
+          stringArrayWrappersCount: 1,
+          stringArrayWrappersChainedCalls: true,
+          stringArrayWrappersParametersMaxCount: 2,
+          stringArrayWrappersType: 'variable',
+          stringArrayThreshold: 0.75,
+          unicodeEscapeSequence: false,
+        }
+      })
+    ] : [])
   ],
 }));

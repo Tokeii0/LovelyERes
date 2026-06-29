@@ -5,6 +5,16 @@
 
 import { eventBus } from '../core/eventBus';
 
+declare global {
+  interface Window {
+    /** 全局通知; 由 initNotificationManager 在启动时挂载 */
+    showNotification?: (
+      message: string,
+      type?: 'success' | 'error' | 'info' | 'warning',
+    ) => void;
+  }
+}
+
 const typeColorMap: Record<string, string> = {
   success: 'var(--success-color)',
   error: 'var(--error-color)',
@@ -19,13 +29,32 @@ const typeIconMap: Record<string, string> = {
   warning: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>'
 };
 
+const TOP_LAYER_Z_INDEX = 2147483647;
+
 function ensureContainer(): HTMLElement {
   let container = document.getElementById('notification-container');
   if (!container) {
     container = document.createElement('div');
     container.id = 'notification-container';
+  }
+
+  if (container.parentElement !== document.body || container !== document.body.lastElementChild) {
     document.body.appendChild(container);
   }
+
+  container.style.position = 'fixed';
+  container.style.zIndex = String(TOP_LAYER_Z_INDEX);
+  container.style.top = '24px';
+  container.style.bottom = 'auto';
+  container.style.left = '50%';
+  container.style.transform = 'translateX(-50%)';
+  container.style.display = 'flex';
+  container.style.flexDirection = 'column';
+  container.style.alignItems = 'center';
+  container.style.gap = '8px';
+  container.style.maxWidth = '90vw';
+  container.style.pointerEvents = 'none';
+  container.style.isolation = 'isolate';
   return container;
 }
 
@@ -62,6 +91,8 @@ export function showNotification(message: string, type: 'success' | 'error' | 'i
   const notification = document.createElement('div');
   notification.className = 'modern-notification';
   notification.style.cssText = `
+    position: relative;
+    z-index: ${TOP_LAYER_Z_INDEX};
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -111,7 +142,7 @@ function escapeHtml(str: string): string {
  * 初始化通知管理器，注册全局函数和 EventBus 监听
  */
 export function initNotificationManager(): void {
-  (window as any).showNotification = showNotification;
+  window.showNotification = showNotification;
 
   eventBus.on('notification', ({ message, type }) => {
     showNotification(message, type);

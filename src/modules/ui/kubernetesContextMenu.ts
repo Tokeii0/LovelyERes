@@ -7,7 +7,7 @@ import { showConfirm } from './confirmDialog';
 
 const icon = (fn: any, size = '14') => fn({ theme: 'outline', size, fill: 'currentColor' });
 
-type K8sResourceKind = 'pod' | 'deployment' | 'service' | 'node' | 'daemonset' | 'statefulset' | 'networkpolicy' | 'configmap' | 'secret';
+type K8sResourceKind = 'pod' | 'deployment' | 'service' | 'node' | 'daemonset' | 'statefulset' | 'networkpolicy' | 'configmap' | 'secret' | 'cronjob' | 'serviceaccount';
 
 export class KubernetesContextMenu extends BaseContextMenu {
     private currentKind: K8sResourceKind = 'pod';
@@ -32,6 +32,8 @@ export class KubernetesContextMenu extends BaseContextMenu {
             case 'deployment': return this.getDeploymentMenuHTML();
             case 'service': return this.getServiceMenuHTML();
             case 'node': return this.getNodeMenuHTML();
+            case 'cronjob': return this.getCronJobMenuHTML();
+            case 'serviceaccount': return this.getServiceAccountMenuHTML();
             default: return this.getGenericMenuHTML();
         }
     }
@@ -75,6 +77,19 @@ export class KubernetesContextMenu extends BaseContextMenu {
             'node-drain': { command: `kubectl drain ${name} --ignore-daemonsets --delete-emptydir-data --force`, title: `排空节点 — ${name}`, actionName: '排空节点' },
             'node-top': { command: `kubectl top node ${name}`, title: `节点资源 — ${name}`, actionName: '查看资源使用' },
 
+            // CronJob actions
+            'cronjob-yaml': { command: `kubectl get cronjob ${name} -n ${ns} -o yaml`, title: `CronJob YAML — ${name}`, actionName: '查看 YAML' },
+            'cronjob-describe': { command: `kubectl describe cronjob ${name} -n ${ns}`, title: `Describe CronJob — ${name}`, actionName: 'Describe' },
+            'cronjob-delete': { command: `kubectl delete cronjob ${name} -n ${ns}`, title: `删除 CronJob — ${name}`, actionName: '删除 CronJob' },
+
+            // ServiceAccount actions
+            'sa-yaml': { command: `kubectl get sa ${name} -n ${ns} -o yaml`, title: `SA YAML — ${name}`, actionName: '查看 YAML' },
+            'sa-describe': { command: `kubectl describe sa ${name} -n ${ns}`, title: `Describe SA — ${name}`, actionName: 'Describe' },
+            'sa-bindings': { command: `kubectl get rolebindings,clusterrolebindings -A -o json | python3 -c "import sys,json;d=json.load(sys.stdin);[print(f'{i[\"metadata\"][\"name\"]} -> {i[\"roleRef\"][\"name\"]}') for i in d['items'] for s in i.get('subjects',[]) if s.get('name')=='${name}' and s.get('kind')=='ServiceAccount']"`, title: `SA 绑定 — ${name}`, actionName: '查看绑定' },
+
+            // Pod command inspection
+            'pod-check-cmd': { command: `kubectl get pod ${name} -n ${ns} -o jsonpath='{range .spec.containers[*]}Container: {.name}\\nCommand: {.command}\\nArgs: {.args}\\n---\\n{end}'`, title: `Pod 启动命令 — ${name}`, actionName: '检查启动命令' },
+
             // Generic
             'generic-yaml': { command: `kubectl get ${this.currentKind} ${name} -n ${ns} -o yaml`, title: `${this.currentKind} YAML — ${name}`, actionName: '查看 YAML' },
             'generic-describe': { command: `kubectl describe ${this.currentKind} ${name} -n ${ns}`, title: `Describe ${this.currentKind} — ${name}`, actionName: 'Describe' },
@@ -103,6 +118,38 @@ export class KubernetesContextMenu extends BaseContextMenu {
                         } else {
                             window.showNotification?.(`隔离失败: ${result.error}`, 'error');
                         }
+                    }
+                }
+            }
+            return true;
+        }
+
+        if (action === 'cronjob-suspend') {
+            const emergencyMgr = (window as any).app?.kubernetesEmergencyManager;
+            if (emergencyMgr) {
+                const confirmed = await showConfirm({ title: '暂停 CronJob', message: `确定要暂停 CronJob "${this.currentName}"？暂停后不再触发新的 Job。`, dangerous: true });
+                if (confirmed) {
+                    const result = await emergencyMgr.suspendCronJob(this.currentName, this.currentNamespace);
+                    if (result.status === 'completed') {
+                        window.showNotification?.(`CronJob ${this.currentName} 已暂停`, 'success');
+                    } else {
+                        window.showNotification?.(`暂停失败: ${result.error}`, 'error');
+                    }
+                }
+            }
+            return true;
+        }
+
+        if (action === 'sa-delete') {
+            const emergencyMgr = (window as any).app?.kubernetesEmergencyManager;
+            if (emergencyMgr) {
+                const confirmed = await showConfirm({ title: '删除 ServiceAccount', message: `确定要删除 ServiceAccount "${this.currentName}" 及其关联的 RoleBinding/ClusterRoleBinding？`, dangerous: true });
+                if (confirmed) {
+                    const result = await emergencyMgr.deleteServiceAccount(this.currentName, this.currentNamespace);
+                    if (result.status === 'completed') {
+                        window.showNotification?.(`ServiceAccount ${this.currentName} 已删除`, 'success');
+                    } else {
+                        window.showNotification?.(`删除失败: ${result.error}`, 'error');
                     }
                 }
             }
@@ -186,6 +233,9 @@ export class KubernetesContextMenu extends BaseContextMenu {
             <div class="context-menu-item" data-action="pod-check-netpol">
                 <span class="context-menu-icon">${icon(Shield)}</span> 检查网络策略
             </div>
+            <div class="context-menu-item" data-action="pod-check-cmd">
+                <span class="context-menu-icon">${icon(Terminal)}</span> 检查启动命令
+            </div>
         </div>`;
     }
 
@@ -260,6 +310,52 @@ export class KubernetesContextMenu extends BaseContextMenu {
             </div>
             <div class="context-menu-item danger" data-action="node-drain">
                 <span class="context-menu-icon">${icon(Delete)}</span> 排空节点
+            </div>
+        </div>`;
+    }
+
+    private getCronJobMenuHTML(): string {
+        return `
+        <div class="context-menu-group">
+            <div class="context-menu-group-title">基本信息</div>
+            <div class="context-menu-item" data-action="cronjob-yaml">
+                <span class="context-menu-icon">${icon(FileText)}</span> 查看 YAML
+            </div>
+            <div class="context-menu-item" data-action="cronjob-describe">
+                <span class="context-menu-icon">${icon(Analysis)}</span> Describe
+            </div>
+        </div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-group">
+            <div class="context-menu-group-title" style="color:var(--error-color);">应急</div>
+            <div class="context-menu-item danger" data-action="cronjob-suspend">
+                <span class="context-menu-icon">${icon(Lock)}</span> 暂停 CronJob
+            </div>
+            <div class="context-menu-item danger" data-action="cronjob-delete">
+                <span class="context-menu-icon">${icon(Delete)}</span> 删除 CronJob
+            </div>
+        </div>`;
+    }
+
+    private getServiceAccountMenuHTML(): string {
+        return `
+        <div class="context-menu-group">
+            <div class="context-menu-group-title">基本信息</div>
+            <div class="context-menu-item" data-action="sa-yaml">
+                <span class="context-menu-icon">${icon(FileText)}</span> 查看 YAML
+            </div>
+            <div class="context-menu-item" data-action="sa-describe">
+                <span class="context-menu-icon">${icon(Analysis)}</span> Describe
+            </div>
+            <div class="context-menu-item" data-action="sa-bindings">
+                <span class="context-menu-icon">${icon(Shield)}</span> 查看绑定
+            </div>
+        </div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-group">
+            <div class="context-menu-group-title" style="color:var(--error-color);">应急</div>
+            <div class="context-menu-item danger" data-action="sa-delete">
+                <span class="context-menu-icon">${icon(Delete)}</span> 删除 ServiceAccount
             </div>
         </div>`;
     }

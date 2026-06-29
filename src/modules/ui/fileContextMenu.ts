@@ -330,9 +330,11 @@ export class FileContextMenu extends BaseContextMenu {
       this.currentAnalysisContent = result
 
       this.showModal(title, result)
+      window.showNotification?.(`${title}完成`, 'success')
     } catch (error) {
       this.showModal('错误', `${error}`)
       console.error('文件分析失败:', error)
+      window.showNotification?.(`${title}失败: ${error}`, 'error')
     }
 
     return true

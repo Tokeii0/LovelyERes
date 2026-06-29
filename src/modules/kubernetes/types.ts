@@ -19,6 +19,8 @@ export interface K8sContainer {
     image: string;
     ready: boolean;
     restarts: number;
+    command?: string[];
+    args?: string[];
 }
 
 export interface K8sPod extends K8sResource {
@@ -28,8 +30,16 @@ export interface K8sPod extends K8sResource {
     restarts: number;
     containers: K8sContainer[];
     hostNetwork?: boolean;
+    hostPID?: boolean;
+    hostIPC?: boolean;
     serviceAccount?: string;
     qosClass?: string;
+    isStaticPod?: boolean;
+}
+
+export interface K8sServiceAccount extends K8sResource {
+    automountServiceAccountToken?: boolean;
+    secrets: string[];
 }
 
 export interface K8sDeployment extends K8sResource {
@@ -257,14 +267,14 @@ export type SecuritySeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export interface K8sSecurityFinding {
     id: string;
     severity: SecuritySeverity;
-    category: 'rbac' | 'privileged' | 'hostPath' | 'network' | 'image' | 'serviceAccount' | 'resourceLimits' | 'rootUser';
+    category: 'rbac' | 'privileged' | 'hostPath' | 'network' | 'image' | 'serviceAccount' | 'resourceLimits' | 'rootUser' | 'cronJob' | 'etcdTamper' | 'persistence' | 'containerEscape' | 'tokenMount';
     resource: string;
     namespace: string;
     description: string;
     remediation: string;
 }
 
-export type AnomalyType = 'restart_spike' | 'crash_loop' | 'unauthorized_image' | 'suspicious_exec' | 'host_network' | 'resource_spike';
+export type AnomalyType = 'restart_spike' | 'crash_loop' | 'unauthorized_image' | 'suspicious_exec' | 'host_network' | 'resource_spike' | 'reverse_shell_pod' | 'suspicious_cronjob' | 'suspicious_sa';
 
 export interface K8sAnomalyAlert {
     id: string;
@@ -291,7 +301,16 @@ export interface K8sPodForensicReport {
     fileSystemSnapshot: string;
 }
 
-export type EmergencyActionType = 'isolate' | 'scale_zero' | 'cordon' | 'uncordon' | 'drain' | 'delete_pod' | 'remove_isolation';
+export type EmergencyActionType = 'isolate' | 'scale_zero' | 'cordon' | 'uncordon' | 'drain' | 'delete_pod' | 'remove_isolation' | 'delete_sa' | 'suspend_cronjob' | 'etcd_delete_pod' | 'isolate_namespace' | 'batch_delete';
+
+export interface K8sForensicTimelineEntry {
+    timestamp: string;
+    type: 'pod_created' | 'rbac_change' | 'sa_created' | 'event_warning' | 'cronjob_created' | 'node_change';
+    severity: SecuritySeverity;
+    resource: string;
+    namespace: string;
+    details: string;
+}
 
 export interface K8sEmergencyAction {
     id: string;

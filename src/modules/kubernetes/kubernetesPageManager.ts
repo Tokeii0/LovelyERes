@@ -391,16 +391,110 @@ export class KubernetesPageManager {
     // ============================================================
 
     private async execInPod(podName: string, namespace: string): Promise<void> {
-        const command = await showPrompt({ title: '执行命令', message: `在 Pod "${podName}" 中执行命令:`, defaultValue: 'sh -c "ps aux"' });
-        if (!command) return;
-
-        try {
-            window.showNotification?.(`正在执行命令...`, 'info');
-            const output = await this.manager.execInPod(podName, namespace, '', command);
-            this.showLogModal(`${podName} — exec`, output);
-        } catch (e) {
-            window.showNotification?.(`执行失败: ${e}`, 'error');
+        // 检查是否已经展开了终端
+        const existingTerminal = document.getElementById(`k8s-terminal-${podName}`);
+        if (existingTerminal) {
+            existingTerminal.remove();
+            return; // toggle: 点击关闭
         }
+
+        // 找到 Pod 所在的 <tr>
+        const podRow = document.querySelector(`tr[data-name="${podName}"][data-namespace="${namespace}"]`);
+        if (!podRow) {
+            // fallback: 用老方式弹 prompt
+            const command = await showPrompt({ title: '执行命令', message: `在 Pod "${podName}" 中执行命令:`, defaultValue: 'sh -c "ps aux"' });
+            if (!command) return;
+            try {
+                const output = await this.manager.execInPod(podName, namespace, '', command);
+                this.showLogModal(`${podName} — exec`, output);
+            } catch (e) {
+                window.showNotification?.(`执行失败: ${e}`, 'error');
+            }
+            return;
+        }
+
+        // 在该行下方插入内嵌终端
+        const colCount = podRow.querySelectorAll('td').length;
+        const terminalRow = document.createElement('tr');
+        terminalRow.id = `k8s-terminal-${podName}`;
+        terminalRow.innerHTML = `
+          <td colspan="${colCount}" style="padding:0;border:none;">
+            <div style="background:var(--bg-primary);border:1px solid var(--primary-color);border-radius:0 0 var(--border-radius) var(--border-radius);margin:0 4px 4px 4px;overflow:hidden;">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:var(--bg-secondary);border-bottom:1px solid var(--border-color);">
+                <span style="font-size:12px;font-weight:600;color:var(--primary-color);font-family:var(--font-mono);">
+                  ▶ kubectl exec ${podName} -n ${namespace} --
+                </span>
+                <button onclick="document.getElementById('k8s-terminal-${podName}')?.remove()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;padding:0 4px;" title="关闭">✕</button>
+              </div>
+              <pre id="k8s-term-output-${podName}" style="padding:8px 12px;margin:0;font-family:var(--font-mono);font-size:12px;line-height:1.5;max-height:300px;overflow:auto;color:var(--text-primary);white-space:pre-wrap;word-break:break-all;min-height:40px;background:var(--bg-primary);"></pre>
+              <div style="display:flex;gap:6px;padding:6px 8px;border-top:1px solid var(--border-color);background:var(--bg-secondary);">
+                <span style="color:var(--text-secondary);font-family:var(--font-mono);font-size:12px;line-height:28px;flex-shrink:0;">$</span>
+                <input id="k8s-term-input-${podName}" type="text" value="ps aux" placeholder="输入命令..." style="flex:1;padding:4px 8px;border:1px solid var(--border-color);border-radius:var(--border-radius);background:var(--bg-primary);color:var(--text-primary);font-family:var(--font-mono);font-size:12px;outline:none;" />
+                <button id="k8s-term-run-${podName}" style="padding:4px 12px;background:var(--primary-color);color:#fff;border:none;border-radius:var(--border-radius);font-size:12px;cursor:pointer;white-space:nowrap;">执行</button>
+              </div>
+            </div>
+          </td>`;
+
+        podRow.insertAdjacentElement('afterend', terminalRow);
+
+        // 命令历史
+        const cmdHistory: string[] = [];
+        let historyIdx = -1;
+
+        // 绑定事件
+        const input = document.getElementById(`k8s-term-input-${podName}`) as HTMLInputElement;
+        const output = document.getElementById(`k8s-term-output-${podName}`) as HTMLPreElement;
+        const runBtn = document.getElementById(`k8s-term-run-${podName}`) as HTMLButtonElement;
+
+        const runCommand = async () => {
+            const cmd = input.value.trim();
+            if (!cmd) return;
+            cmdHistory.unshift(cmd);
+            historyIdx = -1;
+
+            output.textContent += `$ ${cmd}\n`;
+            input.value = '';
+            runBtn.disabled = true;
+            runBtn.textContent = '执行中...';
+
+            try {
+                const result = await this.manager.execInPod(podName, namespace, '', cmd);
+                output.textContent += (result || '(无输出)') + '\n';
+            } catch (e) {
+                output.textContent += `ERROR: ${e}\n`;
+            }
+
+            runBtn.disabled = false;
+            runBtn.textContent = '执行';
+            output.scrollTop = output.scrollHeight;
+            input.focus();
+        };
+
+        runBtn.addEventListener('click', runCommand);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                runCommand();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (cmdHistory.length > 0) {
+                    historyIdx = Math.min(historyIdx + 1, cmdHistory.length - 1);
+                    input.value = cmdHistory[historyIdx];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIdx > 0) {
+                    historyIdx--;
+                    input.value = cmdHistory[historyIdx];
+                } else {
+                    historyIdx = -1;
+                    input.value = '';
+                }
+            }
+        });
+
+        input.focus();
+        input.select();
     }
 
     // ============================================================

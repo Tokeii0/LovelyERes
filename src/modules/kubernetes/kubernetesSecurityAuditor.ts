@@ -16,6 +16,28 @@ export class KubernetesSecurityAuditor {
     // High-risk ClusterRole names
     private readonly HIGH_RISK_ROLES = ['cluster-admin', 'admin', 'edit'];
 
+    // Dangerous Linux capabilities that allow container escape
+    private readonly DANGEROUS_CAPABILITIES = [
+        'SYS_ADMIN', 'SYS_PTRACE', 'SYS_MODULE', 'DAC_READ_SEARCH',
+        'NET_ADMIN', 'NET_RAW', 'SYS_RAWIO', 'MKNOD', 'SETUID', 'SETGID',
+    ];
+
+    // Suspicious command patterns in pod/cronjob specs (reverse shells, C2 callbacks)
+    private readonly SUSPICIOUS_CMD_PATTERNS = [
+        /\/dev\/tcp\//i,
+        /bash\s+-i\s+>&/i,
+        /nc\s+(-e|--exec)\s/i,
+        /ncat\s.*-e\s/i,
+        /python.*socket/i,
+        /perl.*socket/i,
+        /ruby.*socket/i,
+        /php\s+-r.*fsockopen/i,
+        /socat\s+.*exec/i,
+        /mkfifo.*\/tmp/i,
+        /curl.*\|\s*(bash|sh)/i,
+        /wget.*\|\s*(bash|sh)/i,
+    ];
+
     constructor(manager: KubernetesManager) {
         this.manager = manager;
     }
@@ -32,35 +54,27 @@ export class KubernetesSecurityAuditor {
         const nextId = () => `finding-${++findingId}`;
 
         // Run all audit checks in parallel
-        const [
-            privilegedFindings,
-            hostPathFindings,
-            rbacFindings,
-            imageFindings,
-            networkFindings,
-            resourceLimitFindings,
-            rootUserFindings
-        ] = await Promise.allSettled([
+        const results = await Promise.allSettled([
             this.auditPrivilegedContainers(namespace, nextId),
             this.auditHostPathMounts(namespace, nextId),
             this.auditRBAC(nextId),
             this.auditImages(namespace, nextId),
             this.auditNetworkExposure(namespace, nextId),
             this.auditResourceLimits(namespace, nextId),
-            this.auditRootUsers(namespace, nextId)
+            this.auditRootUsers(namespace, nextId),
+            this.auditSuspiciousCronJobs(namespace, nextId),
+            this.auditSuspiciousPodCommands(namespace, nextId),
+            this.auditHighPrivilegeServiceAccounts(nextId),
+            this.auditContainerEscape(namespace, nextId),
+            this.auditSATokenMount(namespace, nextId),
+            this.auditStaticPods(namespace, nextId),
+            this.auditRBACEscalation(nextId),
+            this.auditInitContainers(namespace, nextId),
         ]);
 
-        const collectFindings = (result: PromiseSettledResult<K8sSecurityFinding[]>) => {
+        for (const result of results) {
             if (result.status === 'fulfilled') allFindings.push(...result.value);
-        };
-
-        collectFindings(privilegedFindings);
-        collectFindings(hostPathFindings);
-        collectFindings(rbacFindings);
-        collectFindings(imageFindings);
-        collectFindings(networkFindings);
-        collectFindings(resourceLimitFindings);
-        collectFindings(rootUserFindings);
+        }
 
         // Sort by severity
         const severityOrder: Record<SecuritySeverity, number> = {
@@ -359,6 +373,331 @@ export class KubernetesSecurityAuditor {
                         description: `Container "${container.name}" explicitly runs as root (runAsUser: 0)`,
                         remediation: 'Set runAsNonRoot: true and specify a non-root runAsUser in the security context.'
                     });
+                }
+            }
+        }
+        return findings;
+    }
+
+    // ============================================================
+    // Suspicious CronJobs (reverse shells, C2 callbacks)
+    // ============================================================
+
+    private async auditSuspiciousCronJobs(namespace: string | undefined, nextId: () => string): Promise<K8sSecurityFinding[]> {
+        const findings: K8sSecurityFinding[] = [];
+        const rawCronJobs = await this.manager.getRawCronJobSpecs(namespace);
+
+        for (const cj of rawCronJobs) {
+            const containers = cj.spec?.jobTemplate?.spec?.template?.spec?.containers || [];
+            for (const container of containers) {
+                const fullCmd = [...(container.command || []), ...(container.args || [])].join(' ');
+                for (const pattern of this.SUSPICIOUS_CMD_PATTERNS) {
+                    if (pattern.test(fullCmd)) {
+                        findings.push({
+                            id: nextId(),
+                            severity: 'critical',
+                            category: 'cronJob',
+                            resource: `${cj.metadata.name}/${container.name}`,
+                            namespace: cj.metadata.namespace,
+                            description: `CronJob "${cj.metadata.name}" has suspicious command pattern (possible reverse shell/C2): ${fullCmd.substring(0, 120)}`,
+                            remediation: 'Review and delete this CronJob immediately. Use: kubectl delete cronjob <name> -n <namespace>'
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+        return findings;
+    }
+
+    // ============================================================
+    // Suspicious Pod Commands (reverse shells in running pods)
+    // ============================================================
+
+    private async auditSuspiciousPodCommands(namespace: string | undefined, nextId: () => string): Promise<K8sSecurityFinding[]> {
+        const findings: K8sSecurityFinding[] = [];
+        const rawPods = await this.manager.getRawPodSpecs(namespace);
+
+        for (const pod of rawPods) {
+            if (pod.metadata.namespace === 'kube-system') continue;
+
+            for (const container of pod.spec.containers) {
+                const fullCmd = [...(container.command || []), ...(container.args || [])].join(' ');
+                for (const pattern of this.SUSPICIOUS_CMD_PATTERNS) {
+                    if (pattern.test(fullCmd)) {
+                        findings.push({
+                            id: nextId(),
+                            severity: 'critical',
+                            category: 'cronJob',
+                            resource: `${pod.metadata.name}/${container.name}`,
+                            namespace: pod.metadata.namespace,
+                            description: `Pod "${pod.metadata.name}" runs suspicious command (possible reverse shell): ${fullCmd.substring(0, 120)}`,
+                            remediation: 'Investigate this pod immediately. Check if it was created by an attacker. Delete with: kubectl delete pod <name> -n <namespace> --force'
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+        return findings;
+    }
+
+    // ============================================================
+    // High-Privilege Service Accounts (non-system SA with wildcard or cluster-admin)
+    // ============================================================
+
+    private async auditHighPrivilegeServiceAccounts(nextId: () => string): Promise<K8sSecurityFinding[]> {
+        const findings: K8sSecurityFinding[] = [];
+
+        const [clusterRoleBindings, roleBindings, roles] = await Promise.all([
+            this.manager.getClusterRoleBindings(),
+            this.manager.getRoleBindings(),
+            this.manager.getRoles()
+        ]);
+
+        // Check non-system SA with cluster-admin ClusterRoleBinding
+        for (const binding of clusterRoleBindings) {
+            if (binding.roleRef.name === 'cluster-admin') {
+                for (const subject of binding.subjects) {
+                    if (subject.kind === 'ServiceAccount' &&
+                        !subject.name.startsWith('system:') &&
+                        subject.namespace !== 'kube-system') {
+                        findings.push({
+                            id: nextId(),
+                            severity: 'critical',
+                            category: 'serviceAccount',
+                            resource: `${subject.name}`,
+                            namespace: subject.namespace || 'default',
+                            description: `ServiceAccount "${subject.name}" in "${subject.namespace || 'default'}" has cluster-admin privileges — potential attacker persistence`,
+                            remediation: 'Delete this ServiceAccount and its bindings: kubectl delete sa <name> -n <namespace> && kubectl delete clusterrolebinding <binding-name>'
+                        });
+                    }
+                }
+            }
+        }
+
+        // Check namespace-scoped RoleBindings with wildcard Roles
+        for (const rb of roleBindings) {
+            const matchingRole = roles.find(r => r.name === rb.roleRef.name && r.namespace === rb.namespace);
+            if (matchingRole) {
+                const hasWildcard = matchingRole.rules.some(
+                    rule => rule.verbs.includes('*') && rule.resources.includes('*')
+                );
+                if (hasWildcard) {
+                    for (const subject of rb.subjects) {
+                        if (subject.kind === 'ServiceAccount' &&
+                            !subject.name.startsWith('system:') &&
+                            subject.name !== 'default') {
+                            findings.push({
+                                id: nextId(),
+                                severity: 'high',
+                                category: 'serviceAccount',
+                                resource: `${subject.name}`,
+                                namespace: rb.namespace,
+                                description: `ServiceAccount "${subject.name}" bound to Role "${rb.roleRef.name}" with wildcard permissions (*/*) in namespace "${rb.namespace}"`,
+                                remediation: 'Review if this ServiceAccount is legitimate. Delete SA, Role, and RoleBinding if unauthorized.'
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        return findings;
+    }
+
+    // ============================================================
+    // Container Escape Risk (hostPID/hostIPC/Capabilities)
+    // ============================================================
+
+    private async auditContainerEscape(namespace: string | undefined, nextId: () => string): Promise<K8sSecurityFinding[]> {
+        const findings: K8sSecurityFinding[] = [];
+        const rawPods = await this.manager.getRawPodSpecs(namespace);
+
+        for (const pod of rawPods) {
+            if (pod.metadata.namespace === 'kube-system') continue;
+
+            // hostPID
+            if (pod.spec.hostPID) {
+                findings.push({
+                    id: nextId(), severity: 'critical', category: 'containerEscape',
+                    resource: pod.metadata.name, namespace: pod.metadata.namespace,
+                    description: `Pod "${pod.metadata.name}" has hostPID: true — can see and signal host processes (nsenter escape risk)`,
+                    remediation: 'Remove hostPID: true. If process visibility is needed, use a sidecar with limited capabilities.'
+                });
+            }
+
+            // hostIPC
+            if (pod.spec.hostIPC) {
+                findings.push({
+                    id: nextId(), severity: 'high', category: 'containerEscape',
+                    resource: pod.metadata.name, namespace: pod.metadata.namespace,
+                    description: `Pod "${pod.metadata.name}" has hostIPC: true — can access host shared memory`,
+                    remediation: 'Remove hostIPC: true unless absolutely required.'
+                });
+            }
+
+            // Dangerous capabilities
+            for (const container of pod.spec.containers) {
+                const addCaps = container.securityContext?.capabilities?.add || [];
+                const dangerousCaps = addCaps.filter(c => this.DANGEROUS_CAPABILITIES.includes(c));
+
+                if (dangerousCaps.length > 0) {
+                    findings.push({
+                        id: nextId(), severity: dangerousCaps.includes('SYS_ADMIN') ? 'critical' : 'high',
+                        category: 'containerEscape',
+                        resource: `${pod.metadata.name}/${container.name}`, namespace: pod.metadata.namespace,
+                        description: `Container "${container.name}" has dangerous capabilities: ${dangerousCaps.join(', ')}`,
+                        remediation: `Remove dangerous capabilities. Drop ALL and only add specific needed caps. Current dangerous: ${dangerousCaps.join(', ')}`
+                    });
+                }
+
+                // allowPrivilegeEscalation not set to false
+                if (container.securityContext?.allowPrivilegeEscalation !== false && !container.securityContext?.privileged) {
+                    findings.push({
+                        id: nextId(), severity: 'medium', category: 'containerEscape',
+                        resource: `${pod.metadata.name}/${container.name}`, namespace: pod.metadata.namespace,
+                        description: `Container "${container.name}" allows privilege escalation (default or explicit true)`,
+                        remediation: 'Set allowPrivilegeEscalation: false in securityContext.'
+                    });
+                }
+            }
+        }
+        return findings;
+    }
+
+    // ============================================================
+    // SA Token Auto-Mount Detection
+    // ============================================================
+
+    private async auditSATokenMount(namespace: string | undefined, nextId: () => string): Promise<K8sSecurityFinding[]> {
+        const findings: K8sSecurityFinding[] = [];
+        const rawPods = await this.manager.getRawPodSpecs(namespace);
+
+        for (const pod of rawPods) {
+            if (pod.metadata.namespace === 'kube-system') continue;
+
+            const saName = pod.spec.serviceAccountName || 'default';
+            const autoMount = pod.spec.automountServiceAccountToken;
+
+            // If not explicitly disabled and using a non-default SA
+            if (autoMount !== false && saName !== 'default') {
+                findings.push({
+                    id: nextId(), severity: 'medium', category: 'tokenMount',
+                    resource: `${pod.metadata.name} (SA: ${saName})`, namespace: pod.metadata.namespace,
+                    description: `Pod "${pod.metadata.name}" auto-mounts token for SA "${saName}" — if compromised, attacker gets SA permissions`,
+                    remediation: 'Set automountServiceAccountToken: false if the pod does not need API access. Use projected volumes with audience/expiry for required access.'
+                });
+            }
+        }
+        return findings;
+    }
+
+    // ============================================================
+    // Static Pod Detection (persistence technique)
+    // ============================================================
+
+    private async auditStaticPods(namespace: string | undefined, nextId: () => string): Promise<K8sSecurityFinding[]> {
+        const findings: K8sSecurityFinding[] = [];
+        const rawPods = await this.manager.getRawPodSpecs(namespace);
+
+        for (const pod of rawPods) {
+            if (pod.metadata.namespace === 'kube-system') continue;
+
+            const isStatic = pod.metadata.annotations?.['kubernetes.io/config.source'] === 'file' ||
+                             pod.metadata.annotations?.['kubernetes.io/config.mirror'];
+
+            if (isStatic) {
+                findings.push({
+                    id: nextId(), severity: 'critical', category: 'persistence',
+                    resource: pod.metadata.name, namespace: pod.metadata.namespace,
+                    description: `Pod "${pod.metadata.name}" is a STATIC POD (config.source=file) — cannot be deleted via kubectl, used for persistence`,
+                    remediation: 'Check /etc/kubernetes/manifests/ on the node. Remove the manifest file to delete the static pod. This is a known attack persistence technique.'
+                });
+            }
+        }
+        return findings;
+    }
+
+    // ============================================================
+    // RBAC Escalation Path Detection
+    // ============================================================
+
+    private async auditRBACEscalation(nextId: () => string): Promise<K8sSecurityFinding[]> {
+        const findings: K8sSecurityFinding[] = [];
+        const clusterRoles = await this.manager.getClusterRoles();
+
+        // Dangerous verbs + resources that allow self-escalation
+        const escalationPatterns = [
+            { resources: ['roles', 'clusterroles'], verbs: ['create', 'update', 'patch', 'bind', 'escalate'] },
+            { resources: ['rolebindings', 'clusterrolebindings'], verbs: ['create', 'update', 'patch'] },
+            { resources: ['serviceaccounts'], verbs: ['create', 'impersonate'] },
+            { resources: ['secrets'], verbs: ['get', 'list'] },
+            { resources: ['pods/exec', 'pods/attach'], verbs: ['create', 'get'] },
+            { resources: ['nodes/proxy', 'pods/proxy'], verbs: ['create', 'get'] },
+        ];
+
+        for (const role of clusterRoles) {
+            if (role.name.startsWith('system:')) continue;
+
+            for (const rule of role.rules) {
+                for (const pattern of escalationPatterns) {
+                    const hasResource = pattern.resources.some(r => rule.resources.includes(r) || rule.resources.includes('*'));
+                    const hasVerb = pattern.verbs.some(v => rule.verbs.includes(v) || rule.verbs.includes('*'));
+
+                    if (hasResource && hasVerb) {
+                        const matchedResources = pattern.resources.filter(r => rule.resources.includes(r) || rule.resources.includes('*'));
+                        const matchedVerbs = pattern.verbs.filter(v => rule.verbs.includes(v) || rule.verbs.includes('*'));
+
+                        findings.push({
+                            id: nextId(), severity: 'high', category: 'rbac',
+                            resource: role.name, namespace: 'cluster',
+                            description: `ClusterRole "${role.name}" has escalation-capable permissions: ${matchedVerbs.join('/')} on ${matchedResources.join('/')}`,
+                            remediation: 'Review this role. Permissions to create/modify RBAC resources or access secrets/exec allow privilege escalation.'
+                        });
+                        break; // One finding per role per pattern group
+                    }
+                }
+            }
+        }
+        return findings;
+    }
+
+    // ============================================================
+    // Init Container Audit (persistence/post-exploit)
+    // ============================================================
+
+    private async auditInitContainers(namespace: string | undefined, nextId: () => string): Promise<K8sSecurityFinding[]> {
+        const findings: K8sSecurityFinding[] = [];
+        const rawPods = await this.manager.getRawPodSpecs(namespace);
+
+        for (const pod of rawPods) {
+            if (pod.metadata.namespace === 'kube-system') continue;
+            const initContainers = pod.spec.initContainers || [];
+
+            for (const ic of initContainers) {
+                // Check for privileged init containers
+                if (ic.securityContext?.privileged) {
+                    findings.push({
+                        id: nextId(), severity: 'critical', category: 'privileged',
+                        resource: `${pod.metadata.name}/init:${ic.name}`, namespace: pod.metadata.namespace,
+                        description: `Init container "${ic.name}" in pod "${pod.metadata.name}" runs in privileged mode`,
+                        remediation: 'Review if privileged init container is needed. Remove privileged: true.'
+                    });
+                }
+
+                // Check for suspicious commands in init containers
+                const fullCmd = [...(ic.command || []), ...(ic.args || [])].join(' ');
+                for (const pattern of this.SUSPICIOUS_CMD_PATTERNS) {
+                    if (pattern.test(fullCmd)) {
+                        findings.push({
+                            id: nextId(), severity: 'critical', category: 'persistence',
+                            resource: `${pod.metadata.name}/init:${ic.name}`, namespace: pod.metadata.namespace,
+                            description: `Init container "${ic.name}" has suspicious command: ${fullCmd.substring(0, 100)}`,
+                            remediation: 'Investigate this init container immediately. It may be used for pre-exploit setup.'
+                        });
+                        break;
+                    }
                 }
             }
         }

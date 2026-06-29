@@ -1,19 +1,21 @@
 /* LovelyRes - Modular CSS Entry Point */
 
-/* 0. Themes (all loaded statically, switched via data-theme attribute) */
-@import './themes/index.css';
-
-/* 1. Design Tokens */
+/* 1. Design Tokens (defaults) — defined FIRST so themes can override
+ *    via [data-theme] selectors (equal specificity, later wins). */
 @import './tokens/_index.css';
 
-/* 2. Base Styles */
+/* 2. Themes — set theme-specific token values via [data-theme="*"] selectors.
+ *    Loaded after token defaults so they win on equal specificity. */
+@import './themes/index.css';
+
+/* 3. Base Styles */
 @import './base/_index.css';
 
-/* 3. Components */
+/* 4. Components */
 @import './components/_index.css';
 
-/* 4. Layout */
+/* 5. Layout */
 @import './layout/_index.css';
 
-/* 5. Pages */
+/* 6. Pages */
 @import './pages/_index.css';

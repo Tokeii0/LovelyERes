@@ -439,11 +439,12 @@ export class PermissionsModal {
         await (window as any).sftpManager.refreshFileList();
       }
 
+      window.showNotification && window.showNotification(`权限修改成功: ${this.currentFilePath} -> ${newMode.toString(8)}`, 'success');
       this.hide();
 
     } catch (error) {
       console.error('修改权限失败:', error);
-      (window as any).showNotification && (window as any).showNotification(`修改权限失败: ${error}`, 'error');
+      window.showNotification && window.showNotification(`修改权限失败: ${error}`, 'error');
     }
   }
 }

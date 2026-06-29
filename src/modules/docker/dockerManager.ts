@@ -13,6 +13,9 @@ import type {
   DockerOverviewStats,
 } from './types';
 import { sshConnectionManager } from '../remote/sshConnectionManager';
+import { logger } from '../core/logger';
+
+const log = logger.module('DockerManager');
 
 type DockerContainerAction = 'start' | 'stop' | 'restart' | 'kill' | 'pause' | 'unpause';
 
@@ -28,7 +31,7 @@ export class DockerManager {
     try {
       return await (window as any).__TAURI__.core.invoke('ssh_execute_dashboard_command_direct', { command });
     } catch (e) {
-      console.error(`Docker SSH command failed: ${command}`, e);
+      log.error(`SSH 命令失败: ${command}`, e);
       return null;
     }
   }
@@ -380,6 +383,118 @@ export class DockerManager {
   async getContainerEnv(containerRef: string): Promise<string> {
     const result = await this.execSSH(`docker exec ${containerRef} env 2>/dev/null`);
     return result?.output || '';
+  }
+
+  /**
+   * 取消容器特权模式：停止容器 → 提取配置 → 删除旧容器 → 用相同配置(去除 --privileged)重建
+   */
+  async removePrivileged(containerRef: string): Promise<{ success: boolean; output: string }> {
+    const logs: string[] = [];
+
+    // 1. 获取容器完整配置
+    const inspectResult = await this.execSSH(
+      `docker inspect ${containerRef} --format '{{json .}}'`
+    );
+    if (!inspectResult || inspectResult.exit_code !== 0) {
+      return { success: false, output: '无法获取容器配置' };
+    }
+
+    let config: any;
+    try { config = JSON.parse(inspectResult.output); } catch {
+      return { success: false, output: '解析容器配置失败' };
+    }
+
+    // 确认确实是特权容器
+    if (!config.HostConfig?.Privileged) {
+      return { success: false, output: '该容器并非特权模式' };
+    }
+
+    const image = config.Config?.Image || '';
+    const name = config.Name?.replace(/^\//, '') || containerRef;
+    if (!image) return { success: false, output: '无法获取容器镜像' };
+
+    // 2. 提取重建所需的参数
+    const envArgs = (config.Config?.Env || [])
+      .filter((e: string) => !e.startsWith('PATH=') && !e.startsWith('HOME=') && !e.startsWith('HOSTNAME='))
+      .map((e: string) => `-e '${e}'`).join(' ');
+
+    const portBindings = config.HostConfig?.PortBindings || {};
+    const portArgs = Object.entries(portBindings).map(([containerPort, hostBindings]: [string, any]) => {
+      return (hostBindings || []).map((hb: any) => {
+        const hostPort = hb.HostPort || '';
+        const hostIp = hb.HostIp || '';
+        const cp = containerPort.replace('/tcp', '').replace('/udp', '');
+        return hostIp ? `-p ${hostIp}:${hostPort}:${cp}` : `-p ${hostPort}:${cp}`;
+      }).join(' ');
+    }).join(' ');
+
+    const mounts = config.Mounts || [];
+    const volumeArgs = mounts.map((m: any) => {
+      if (m.Type === 'bind') return `-v ${m.Source}:${m.Destination}${m.RW === false ? ':ro' : ''}`;
+      if (m.Type === 'volume') return `-v ${m.Name}:${m.Destination}`;
+      return '';
+    }).filter(Boolean).join(' ');
+
+    const networkMode = config.HostConfig?.NetworkMode || 'bridge';
+    const networkArg = networkMode !== 'default' && networkMode !== 'bridge' ? `--network ${networkMode}` : '';
+
+    const restartPolicy = config.HostConfig?.RestartPolicy?.Name || '';
+    const restartArg = restartPolicy && restartPolicy !== 'no' ? `--restart ${restartPolicy}` : '';
+
+    const cmd = config.Config?.Cmd;
+    const entrypoint = config.Config?.Entrypoint;
+    const cmdStr = cmd && cmd.length > 0 ? cmd.map((c: string) => `'${c}'`).join(' ') : '';
+    const entrypointArg = entrypoint && entrypoint.length > 0
+      ? `--entrypoint '${entrypoint.join(' ')}'` : '';
+
+    const workdir = config.Config?.WorkingDir;
+    const workdirArg = workdir ? `-w ${workdir}` : '';
+
+    // 3. 停止并删除旧容器
+    logs.push(`[1/3] 停止容器 ${name}...`);
+    const stopResult = await this.execSSH(`docker stop ${name} --time 10`);
+    if (stopResult?.exit_code !== 0) {
+      // 强制停止
+      await this.execSSH(`docker kill ${name}`);
+    }
+    logs.push(`[2/3] 删除旧容器...`);
+    const rmResult = await this.execSSH(`docker rm ${name}`);
+    if (rmResult?.exit_code !== 0) {
+      logs.push(`删除失败: ${rmResult?.output || 'unknown'}`);
+      return { success: false, output: logs.join('\n') };
+    }
+
+    // 4. 用相同配置重建(去除 --privileged, 加 --security-opt=no-new-privileges)
+    const runCmd = [
+      'docker run -d',
+      `--name ${name}`,
+      '--security-opt=no-new-privileges:true',
+      networkArg,
+      restartArg,
+      workdirArg,
+      portArgs,
+      volumeArgs,
+      envArgs,
+      entrypointArg,
+      image,
+      cmdStr,
+    ].filter(Boolean).join(' ');
+
+    logs.push(`[3/3] 重建容器(非特权)...`);
+    logs.push(`命令: ${runCmd}`);
+
+    const runResult = await this.execSSH(runCmd);
+    if (runResult?.exit_code !== 0) {
+      logs.push(`重建失败: ${runResult?.output || 'unknown'}`);
+      // 尝试恢复: 用原始配置重建
+      logs.push('尝试恢复原容器...');
+      const recoverCmd = runCmd.replace('--security-opt=no-new-privileges:true', '--privileged');
+      await this.execSSH(recoverCmd);
+      return { success: false, output: logs.join('\n') };
+    }
+
+    logs.push(`✓ 容器 ${name} 已重建为非特权模式`);
+    return { success: true, output: logs.join('\n') };
   }
 
   async disconnectAllNetworks(containerRef: string): Promise<{ success: boolean; output: string }> {

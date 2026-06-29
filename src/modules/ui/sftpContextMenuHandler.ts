@@ -9,6 +9,10 @@ import { showConfirm, showPrompt } from './confirmDialog';
 const CTX_MENU_ID = 'sftp-context-menu';
 let sftpCtxIndex: number | null = null;
 
+function quoteShellArg(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 function getCtxEl(): HTMLElement | null {
   return document.getElementById(CTX_MENU_ID);
 }
@@ -23,11 +27,14 @@ async function withFileAction(callback: (file: any, index: number) => Promise<vo
   hideSftpContextMenu();
   try {
     const file = sftpManager.getFileByIndex(idx);
-    if (!file) return;
+    if (!file) {
+      window.showNotification && window.showNotification('未找到选中的文件，请刷新目录后重试', 'warning');
+      return;
+    }
     await callback(file, idx);
   } catch (e) {
     console.error('文件操作失败:', e);
-    (window as any).showNotification && (window as any).showNotification(`操作失败: ${e}`, 'error');
+    window.showNotification && window.showNotification(`操作失败: ${e}`, 'error');
   }
 }
 
@@ -200,7 +207,7 @@ export function initSftpContextMenuHandler(): void {
 
   (window as any).sftpQuickViewSelected = () => withFileAction(async (file) => {
     if (file.file_type === 'directory') {
-      (window as any).showNotification && (window as any).showNotification('只能查看文件，不能查看目录', 'warning');
+      window.showNotification && window.showNotification('只能查看文件，不能查看目录', 'warning');
       return;
     }
     const fileViewerModal = (window as any).fileViewerModal;
@@ -208,6 +215,7 @@ export function initSftpContextMenuHandler(): void {
       await fileViewerModal.show(file.path, true);
     } else {
       console.error('文件查看器模态未找到');
+      window.showNotification && window.showNotification('文件查看器未初始化', 'error');
     }
   });
 
@@ -217,6 +225,7 @@ export function initSftpContextMenuHandler(): void {
       permissionsModal.show(file.path, file.permissions);
     } else {
       console.error('权限编辑模态未找到');
+      window.showNotification && window.showNotification('权限编辑器未初始化', 'error');
     }
   });
 
@@ -226,6 +235,7 @@ export function initSftpContextMenuHandler(): void {
       compressModal.show(file.path, file.file_type);
     } else {
       console.error('打包模态未找到');
+      window.showNotification && window.showNotification('打包窗口未初始化', 'error');
     }
   });
 
@@ -235,12 +245,13 @@ export function initSftpContextMenuHandler(): void {
       extractModal.show(file.path);
     } else {
       console.error('解压模态未找到');
+      window.showNotification && window.showNotification('解压窗口未初始化', 'error');
     }
   });
 
   (window as any).sftpDownloadSelected = () => withFileAction(async (file) => {
     if (file.file_type === 'directory') {
-      (window as any).showNotification && (window as any).showNotification('不能下载目录，请选择文件', 'warning');
+      window.showNotification && window.showNotification('不能下载目录，请选择文件', 'warning');
       return;
     }
     const remotePath = `${sftpManager.getCurrentPath()}/${file.name}`;
@@ -250,28 +261,28 @@ export function initSftpContextMenuHandler(): void {
         filters: [{ name: '所有文件', extensions: ['*'] }]
       });
       if (savePath) {
-        (window as any).showNotification && (window as any).showNotification(`开始下载: ${file.name}`, 'info');
+        window.showNotification && window.showNotification(`开始下载: ${file.name}`, 'info');
         await (window as any).__TAURI__.core.invoke('sftp_download', {
           remotePath: remotePath,
           localPath: savePath
         });
-        (window as any).showNotification && (window as any).showNotification(`文件下载成功: ${file.name}`, 'success');
+        window.showNotification && window.showNotification(`文件下载成功: ${file.name}`, 'success');
       }
     } catch (error) {
       console.error('下载文件失败:', error);
-      (window as any).showNotification && (window as any).showNotification(`下载文件失败: ${error}`, 'error');
+      window.showNotification && window.showNotification(`下载文件失败: ${error}`, 'error');
     }
   });
 
   (window as any).sftpCopyPathSelected = () => withFileAction(async (file) => {
     const fullPath = file.path.replace(/\\/g, '/');
     await navigator.clipboard.writeText(fullPath);
-    (window as any).showNotification && (window as any).showNotification(`路径已复制到剪贴板: ${fullPath}`, 'success');
+    window.showNotification && window.showNotification(`路径已复制到剪贴板: ${fullPath}`, 'success');
   });
 
   (window as any).sftpCopyNameSelected = () => withFileAction(async (file) => {
     await navigator.clipboard.writeText(file.name);
-    (window as any).showNotification && (window as any).showNotification(`文件名已复制: ${file.name}`, 'success');
+    window.showNotification && window.showNotification(`文件名已复制: ${file.name}`, 'success');
   });
 
   (window as any).sftpRenameSelected = () => withFileAction(async (file) => {
@@ -285,10 +296,10 @@ export function initSftpContextMenuHandler(): void {
         oldPath: oldPath,
         newPath: newPath
       });
-      (window as any).showNotification && (window as any).showNotification(`重命名成功: ${file.name} → ${newName}`, 'success');
+      window.showNotification && window.showNotification(`重命名成功: ${file.name} → ${newName}`, 'success');
       sftpManager.refreshCurrentDirectory();
     } catch (error) {
-      (window as any).showNotification && (window as any).showNotification(`重命名失败: ${error}`, 'error');
+      window.showNotification && window.showNotification(`重命名失败: ${error}`, 'error');
     }
   });
 
@@ -301,19 +312,24 @@ export function initSftpContextMenuHandler(): void {
 
     const filePath = file.path.replace(/\\/g, '/');
     try {
+      window.showNotification && window.showNotification(`正在删除: ${file.name}`, 'info');
       if (isDir) {
-        await (window as any).__TAURI__.core.invoke('ssh_execute_command_direct', {
-          command: `rm -rf "${filePath}"`
-        });
+        const quotedPath = quoteShellArg(filePath);
+        const result = await (window as any).__TAURI__.core.invoke('ssh_execute_command_direct', {
+          command: `rm -rf -- ${quotedPath} 2>&1; test ! -e ${quotedPath}`
+        }) as { output?: string; exit_code?: number | null };
+        if (result?.exit_code !== 0) {
+          throw new Error(result?.output || `远端删除命令返回退出码 ${result?.exit_code ?? 'unknown'}`);
+        }
       } else {
         await (window as any).__TAURI__.core.invoke('sftp_delete', {
           path: filePath
         });
       }
-      (window as any).showNotification && (window as any).showNotification(`已删除: ${file.name}`, 'success');
+      window.showNotification && window.showNotification(`已删除: ${file.name}`, 'success');
       sftpManager.refreshCurrentDirectory();
     } catch (error) {
-      (window as any).showNotification && (window as any).showNotification(`删除失败: ${error}`, 'error');
+      window.showNotification && window.showNotification(`删除失败: ${error}`, 'error');
     }
   });
 
@@ -332,10 +348,10 @@ export function initSftpContextMenuHandler(): void {
           sshTerminalManager.sendCommand(`cd "${cleanPath}" && pwd`);
         }, 300);
       } else {
-        (window as any).showNotification && (window as any).showNotification('终端不可用', 'warning');
+        window.showNotification && window.showNotification('终端不可用', 'warning');
       }
     } catch (error) {
-      (window as any).showNotification && (window as any).showNotification(`打开终端失败: ${error}`, 'error');
+      window.showNotification && window.showNotification(`打开终端失败: ${error}`, 'error');
     }
   });
 
@@ -353,7 +369,7 @@ export function initSftpContextMenuHandler(): void {
     if (fileDetailsModal) {
       await fileDetailsModal.show(file.path);
     } else {
-      (window as any).showNotification?.('文件详情功能暂不可用', 'warning');
+      window.showNotification?.('文件详情功能暂不可用', 'warning');
     }
   });
 
@@ -370,11 +386,11 @@ export function initSftpContextMenuHandler(): void {
       if (fileContextMenu) {
         await fileContextMenu.handleAction(action, file.path);
       } else {
-        (window as any).showNotification && (window as any).showNotification('文件安全分析功能暂不可用', 'warning');
+        window.showNotification && window.showNotification('文件安全分析功能暂不可用', 'warning');
       }
     } catch (e) {
       console.error('文件安全分析失败:', e);
-      (window as any).showNotification && (window as any).showNotification(`安全分析失败: ${e}`, 'error');
+      window.showNotification && window.showNotification(`安全分析失败: ${e}`, 'error');
     }
   };
 }
