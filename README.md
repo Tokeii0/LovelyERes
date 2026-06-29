@@ -26,10 +26,6 @@
 
 ## 支持
 
-**如果觉得好用请支持我一下**
-
-<img width="228" height="312" alt="image" src="https://github.com/user-attachments/assets/1c71bb97-0a40-41ad-8012-7af5d736883f" />
-
 
 ## ✨ 功能截图
 
