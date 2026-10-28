@@ -1,3 +1,7 @@
+
+## 欢迎使用 全新 版本 
+   https://github.com/Tokeii0/LovelyHawk
+
 <div align="center">
   <img src="public/logo.png" alt="LovelyERes Logo" width="250" height="250">
 
